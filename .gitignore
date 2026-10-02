@@ -1,0 +1,38 @@
+# Environment files
+.env
+.env.local
+*.env
+
+# Secrets and credentials
+*.pem
+*.key
+*.pfx
+secrets.json
+
+# Build artifacts
+*.tfstate
+*.tfstate.*
+*.plan
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large files
+*.iso
+*.vhd
+*.vhdx
+*.vmdk
+*.ova
+
+# Temporary files
+TMP/
+tmp/
+*.tmp
