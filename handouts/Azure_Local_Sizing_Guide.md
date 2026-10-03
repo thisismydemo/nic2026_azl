@@ -10,6 +10,12 @@ Azure Local is edge infrastructure running Hyper-V on specially validated hardwa
 
 ## Workload Assessment
 
+Use [Azure Local Surveyor](https://azurelocal.cloud/azurelocal-surveyor/) for workload assessment and sizing. Collect VMware inventory using RVTools or Azure Migrate; discovery provides the inputs, while Surveyor evaluates the hardware fit.
+
+The [Surveyor planning guide](https://azurelocal.cloud/azurelocal-surveyor/docs/guide/planning-areas.html) documents RVTools workbook (`.xlsx`) and `vInfo` CSV imports. If collecting with Azure Migrate, map the inventory into Surveyor's workload inputs; do not assume a native Migrate importer. Review workload inclusion, units, allocation versus measured demand, growth and maintenance reserve.
+
+For existing equipment, use **Workload Planning > Assess existing hardware**, then review **Fit & Recommendations**, **Storage Design**, and **Reports & Exports**. Save the project and export the report. Aggregate fit does not validate application dependencies, VM placement, storage performance, networking or OEM support.
+
 Before sizing, understand your workload:
 
 **Questions to ask:**

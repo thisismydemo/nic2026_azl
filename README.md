@@ -9,7 +9,7 @@
 **Level:** 400 (Expert)  
 **Location:** Amsterdam
 
-The entire Azure Local lifecycle delivered in one hour: from initial planning and workload discovery, through cloud-driven deployment and Day-2 readiness, to ongoing Day-2 operations. This fast-paced, demo-driven session walks through a real engagement flow with every artifact available for reproduction afterward.
+This practical, demo-driven technical session is for people interested in deploying Azure Local. In one hour, learn how to assess workloads and plan the infrastructure, deploy the cluster, configure Day-2 readiness, and handle ongoing operations. Demonstrations use a real cluster, with supporting artifacts available so you can apply what you learn afterward.
 
 **No prerequisites beyond curiosity.** Familiarity with Hyper-V, Failover Clustering, VMware, or basic Azure concepts will enhance your learning, but not required.
 
@@ -18,7 +18,7 @@ The entire Azure Local lifecycle delivered in one hour: from initial planning an
 A comprehensive walkthrough of the complete Azure Local lifecycle, organized into three phases:
 
 ### Phase 1: Plan and Discover
-- **Workload Assessment** - Using Azure Migrate for accurate discovery
+- **Workload Assessment** - Using [Azure Local Surveyor](https://azurelocal.cloud/azurelocal-surveyor/) for assessment and sizing, with RVTools or Azure Migrate supplying workload inventory
 - **Sizing** - Hardware requirements against Azure Local 2604 specifications
 - **Hardware Decision Framework** - Validated solutions, Premier partnerships, or disaggregated SAN-attached architectures
 - **Topology Selection** - Cluster patterns including Rack Aware Cluster configurations
