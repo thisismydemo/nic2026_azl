@@ -1,0 +1,38 @@
+# NIC 2026 — demo support, Azure Local session (demo-azure-local)
+# Manifest per automation/CONTRACT.md §2, §10, §12. PowerShell only; everything runs from the Windows jump server over
+# PowerShell remoting / Az. Supports planning/sessions/azure-local/outline.md §2.6, §3.7, §4.1, §4.2, §4.5, §5.
+
+name: demo-azure-local
+description: Azure Local session demo helpers — Day-2 readiness gate (red/green), Day-2 control reset/restore, read-only cluster and LCM dashboards, the reversible faults with undo (drive, intent drift), ASR planned-failover start/status, and the pre-session smoke test.
+scope: azure-local
+tools: [powershell]
+depends_on: [lz-azure-local, cluster-deploy, cluster-configure, demo-shared]
+
+inputs:
+  - { name: cluster_name,              type: string, description: "Cluster name (remoting target is <cluster_name>.<identity.dns_zone>)", required: true, default: null, source: environment }
+  - { name: identity,                  type: map,    description: "identity.dns_zone for the cluster FQDN", required: true, default: null, source: environment }
+  - { name: nodes,                     type: list,   description: "Nodes with name and management_ip (WinRM targets)", required: true, default: null, source: environment }
+  - { name: intents,                   type: list,   description: "Network ATC intents; the Compute intent's first adapter is the default drift target", required: true, default: null, source: environment }
+  - { name: log_analytics_workspace_id, type: string, description: "Lab workspace (lz-azure-local output) queried for Insights heartbeats", required: true, default: null, source: environment }
+  - { name: secret_name_prefix,        type: string, description: "Key Vault secret-name prefix (CONTRACT §12)", required: true, default: null, source: environment }
+  - { name: tenant_domain,             type: string, description: "Masked by the screen-hygiene filter", required: true, default: null, source: environment }
+  - { name: subscriptions,             type: map,    description: "Masked by the screen-hygiene filter", required: true, default: null, source: environment }
+  - { name: org,                       type: string, description: "Naming segment <org>", required: true, default: null, source: environment }
+  - { name: token,                     type: string, description: "Naming segment <token>", required: true, default: null, source: environment }
+  - { name: location_short,            type: string, description: "Naming segment <region>", required: true, default: null, source: environment }
+
+outputs:
+  - { name: readiness_exit_code, type: int,  description: "0 when Test-Day2Readiness.ps1 is all green (outline §3.7), else 1." }
+  - { name: active_fault,        type: string, description: "Fault lock currently recorded (Drive | IntentDrift | none)." }
+
+secrets: []
+
+destroy: none
+
+names:
+  rg_azl:       { type: rg,  purpose: azl }        # cluster resource group (ARB lookup)
+  rg_bcdr:      { type: rg,  purpose: azl-bcdr }   # Recovery Services vault RG
+  rsv_azl:      { type: rsv, purpose: azl }        # ASR vault
+  rp_tier1:     { type: rp,  purpose: tier1 }      # recovery plan started in §4.5
+  kv_ops:       { type: kv,  purpose: ops }        # DNS smoke check
+  kv_azl:       { type: kv,  purpose: azl }        # DNS smoke check

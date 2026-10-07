@@ -1,0 +1,28 @@
+# NIC 2026 — Day-2 Ready 3.4 access with Entra PIM (cluster-configure/access-pim)
+# PIM-ELIGIBLE role assignments for the Azure Local groups at landing-zone scope (design §6.2/§6.3): admins =
+# Azure Stack HCI Administrator + Reader, operators = Azure Stack HCI VM Contributor + Reader, readers = Azure Stack HCI
+# VM Reader (active in the lz; listed here as eligible-capable). Reversible (D-014): Remove submits AdminRemove requests.
+# Role settings (8 h, MFA, justification) are a one-time step owned by the landing zone (Initialize-LzPim / portal).
+
+name: cluster-configure-access-pim
+description: Day-2 access - PIM-eligible Azure Local role assignments for the IIC groups at subscription scope (AdminAssign / AdminRemove), plus the activation helper for the live beat.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id,  type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: group_object_ids, type: map,    description: "Object IDs keyed azl_admins, azl_operators, azl_readers, lab_operators (written by the landing-zone S0 script)", required: true, default: null, source: environment }
+  - { name: pim_max_activation_hours, type: int, description: "Maximum activation (role setting; informational here)", required: false, default: 8, source: environment }
+  - { name: pim_assignments,  type: list,   description: "added: eligible rows {group, role} at subscription scope (design §6.2); built-in role NAMES only", required: false, default: [ { group: azl_admins, role: Azure Stack HCI Administrator }, { group: azl_admins, role: Reader }, { group: azl_operators, role: Azure Stack HCI VM Contributor }, { group: azl_operators, role: Reader } ], source: environment }
+  - { name: names,            type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
+
+outputs:
+  - { name: eligibility_request_names, type: list, description: "Deterministic names of the role eligibility schedule requests (one per row)" }
+  - { name: pim_scope,                 type: string, description: "Scope of the eligibilities (the landing-zone subscription)" }
+
+secrets: []
+destroy: supported   # AdminRemove requests
+
+names:
+  deployment_name: { type: dep, purpose: azl-access-pim }

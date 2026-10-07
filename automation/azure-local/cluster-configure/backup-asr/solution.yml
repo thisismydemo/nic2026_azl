@@ -1,0 +1,30 @@
+# NIC 2026 — Day-2 Ready 3.3 backup and DR (cluster-configure/backup-asr)
+# Adds the Hyper-V-to-Azure replication policy (asrpol_tier1) and the Azure VM backup policy (bkp_tier1) to the existing
+# Recovery Services vault (rsv_azl, created by lz-azure-local). Operational scripts enable replication, run a test failover
+# and check readiness. Live failover (planned/unplanned) is the owner-driven demo and is NOT scripted here.
+# OPEN OWNER DECISION: the guest-level backup route for Azure Local VMs. Only Azure VM backup is automated here.
+# Reversible (D-014): Remove = delete the two policies (never the vault).
+
+name: cluster-configure-backup-asr
+description: Day-2 backup and DR - ASR replication policy and Azure VM backup policy on the existing vault, replication enablement, test failover and readiness scripts; remove = delete the two policies.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id, type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,        type: string, description: "Region (D-010)", required: true, default: null, source: environment }
+  - { name: tags,            type: map,    description: "The seven required tags", required: true, default: null, source: environment }
+  - { name: names,           type: map,    description: "Resolved name catalog, including the landing-zone names rg_bcdr, rsv_azl, asrpol_tier1, bkp_tier1", required: true, default: null, source: generated }
+  - { name: asr_policy,      type: map,    description: "added: {replication_frequency_seconds, recovery_point_retention_hours, app_consistent_snapshot_frequency_hours} (design 8.3: 300, 24, 1)", required: false, default: { replication_frequency_seconds: 300, recovery_point_retention_hours: 24, app_consistent_snapshot_frequency_hours: 1 }, source: environment }
+  - { name: backup_policy,   type: map,    description: "added: {schedule_run_time_utc 'HH:mm', retention_days, instant_restore_days} (design 8.4: daily, 30 days)", required: false, default: { schedule_run_time_utc: "02:00", retention_days: 30, instant_restore_days: 2 }, source: environment }
+
+outputs:
+  - { name: asr_replication_policy_id, type: string, description: "Resource ID of the Hyper-V-to-Azure replication policy" }
+  - { name: backup_policy_id,          type: string, description: "Resource ID of the Azure VM backup policy" }
+
+secrets: []
+destroy: supported
+
+names:
+  deployment_name: { type: dep, purpose: azl-backup-asr }

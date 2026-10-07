@@ -1,0 +1,166 @@
+# NIC 2026 lab - Azure Local environment EXAMPLE (IIC values from the designs, all-zero GUIDs).
+# Copy to environment/azure-local/environment.yml and replace values. Shared values live in environment/shared/*.yml.
+# Schema: automation/shared/schemas/azure-local.environment.schema.json
+# Sources: design/azure-local/landing-zone.md section 10.6, design/azure-local/network-design.md sections 4, 6, 8.
+# Secrets are keyvault://<vault>/<secret> references only. The lab's registered secret org/env prefix goes in the
+# private file; this example uses the IIC placeholder prefix 'iic-nic26-'.
+
+subscription_id: 00000000-0000-0000-0000-000000000000
+
+# --- spoke network (LZ-03) ---------------------------------------------------------------------------------------------
+spoke_address_space: 10.100.6.0/24
+subnet_jump_prefix: 10.100.6.0/27
+subnet_pe_prefix: 10.100.6.32/27
+subnet_mgmt_prefix: 10.100.6.64/26
+subnet_asr_prefix: 10.100.6.128/26
+subnet_asr_test_prefix: 10.100.6.192/26
+avd_spoke_vnet_id: ""            # leave empty: lz-avd creates both sides of the spoke-to-spoke peering (a second peering would fail)
+avd_spoke_prefix: 10.100.8.0/22  # AVD spoke prefix for NSG rules (same value as avd.avd_vnet_prefix)
+enable_identity_peering: true    # P-13: direct spoke<->identity peering (owner approval for the shared VNet side)
+enable_management_peering: true  # P-13: direct spoke<->management peering
+
+# --- governance -------------------------------------------------------------------------------------------------------
+budget_monthly_amount: 2500
+budget_contact_emails:
+  - lab-owner@contoso.com
+pim_max_activation_hours: 8
+# Central Log Analytics workspace of the platform management subscription (empty = create a workload workspace)
+central_log_analytics_workspace_id: ""
+# Policy, Defender, activity-log export and peerings on platform VNets are delivered by their owners; true only for a standalone lab
+deploy_platform_scope_items: false
+law_retention_days: 30
+law_daily_cap_gb: 2
+defender_servers_plan: P2          # target plan of the Day-2 defender control (applied live in outline 3.5, Remove forces off). The landing-zone run (S1) applies this same value if it is not "off", so run S1 with the plan off and let the Day-2 control raise it
+enable_defender_keyvault: false
+enable_defender_storage: false
+rsv_storage_redundancy: LocallyRedundant
+azl_rp_app_object_id: 00000000-0000-0000-0000-000000000000
+
+# --- feature flags -----------------------------------------------------------------------------------------------------
+enable_private_endpoints: false       # D-029: no private endpoints; vaults and Azure Files on public endpoints
+enable_monitor_private_link: false      # only used when enable_private_endpoints is true
+enable_voucher_storage: false
+enable_jump_server: true
+jump_vm_size: Standard_D4s_v4
+jump_data_disk_gb: 256
+jump_private_ip: 10.100.6.4
+jump_encryption_at_host: false
+manage_pim_in_iac: false
+enabled_stages: [S1, S2, S3, S4, S5, S6, S7]
+jump_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-local-admin-username
+jump_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-local-admin-password
+
+# --- identity and groups (section 6.1) --------------------------------------------------------------------------------
+entra_groups:
+  lab_operators: grp-iic-nic26-lab-operators
+  azl_admins: grp-iic-nic26-azl-admins
+  azl_operators: grp-iic-nic26-azl-operators
+  azl_readers: grp-iic-nic26-azl-readers
+group_object_ids:                  # keyed by the lz-azure-local names-catalog keys (written by S0)
+  grp_lab_operators: 00000000-0000-0000-0000-000000000000
+  grp_azl_admins: 00000000-0000-0000-0000-000000000000
+  grp_azl_operators: 00000000-0000-0000-0000-000000000000
+  grp_azl_readers: 00000000-0000-0000-0000-000000000000
+
+# --- Key Vaults (K-1, K-4, K-5) ---------------------------------------------------------------------------------------
+kv_ops_name: kv-iic-nic26-ops-eus-01
+kv_azl_name: kv-iic-nic26-azl-eus-01
+kv_soft_delete_days: 7
+kv_public_network_access:             # only used when enable_private_endpoints is true; with D-029 both vaults stay Enabled (RBAC only)
+  ops: Disabled
+  azl: Enabled                    # private-endpoint design: Enabled through cluster Validate/Deploy, Disabled afterwards
+
+# --- cluster (D-009, D-019, D-008) -------------------------------------------------------------------------------------
+cluster_name: nic26-clus01
+release:
+  azure_local_version: 12.2609.1003.7
+  sbe_version: 4.1.2609.1
+identity:
+  model: local-identity-keyvault
+  dns_zone: nic26.iic.local
+  deployment_identity_name: id-iic-nic26-deploy-eus-01
+  local_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-local-admin-username
+  local_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-local-admin-password
+witness:
+  type: cloud
+  storage_account_name: stiicnic26witeus01
+  storage_key_secret: keyvault://kv-iic-nic26-azl-eus-01/WitnessStorageKey
+
+nodes:
+  - name: nic26-01-n01
+    management_ip: 192.168.100.11
+    storage_ips: { smb1: 172.30.71.11, smb2: 172.30.72.11 }
+    lom1_mac: 00-00-00-00-00-01
+  - name: nic26-01-n02
+    management_ip: 192.168.100.12
+    storage_ips: { smb1: 172.30.71.12, smb2: 172.30.72.12 }
+    lom1_mac: 00-00-00-00-00-02
+
+# --- VLAN plan (network-design.md 4.1) ---------------------------------------------------------------------------------
+vlans:
+  management: { id: 100, name: nic26-mgmt-100, subnet: 192.168.100.0/24, gateway: 192.168.100.1, routed: true, dhcp_range: { start: 192.168.100.100, end: 192.168.100.199 } }
+  compute:    { id: 110, name: nic26-compute-110, subnet: 192.168.110.0/24, gateway: 192.168.110.1, routed: true, dhcp_range: { start: 192.168.110.100, end: 192.168.110.199 } }
+  storage_a:  { id: 711, name: nic26-storage-a-711, subnet: 172.30.71.0/24, gateway: null, routed: false }
+  storage_b:  { id: 712, name: nic26-storage-b-712, subnet: 172.30.72.0/24, gateway: null, routed: false }
+  avd:        { id: 120, name: nic26-avd-120, subnet: 192.168.120.0/24, gateway: 192.168.120.1, routed: true, dhcp_range: { start: 192.168.120.100, end: 192.168.120.199 } }
+  tenant2:    { id: 130, name: nic26-tenant2-130, subnet: 192.168.130.0/24, gateway: 192.168.130.1, routed: true }
+  oob:        { id: 90, name: nic26-oob-90, subnet: 10.101.64.0/24, gateway: 10.101.64.1, routed: true, dhcp_range: { start: 10.101.64.50, end: 10.101.64.80 } }
+
+# --- Network ATC intents (network-design.md 6.1) -----------------------------------------------------------------------
+intents:
+  - name: Management
+    traffic_types: [Management]
+    adapters: [NIC1, NIC2]
+    overrides: { jumbo_packet: 1514 }
+  - name: Compute
+    traffic_types: [Compute]
+    adapters: ["SLOT 3 Port 1", "SLOT 6 Port 2"]
+    overrides: { jumbo_packet: 1514, rdma_enabled: false }
+  - name: Storage
+    traffic_types: [Storage]
+    adapters: ["SLOT 3 Port 2", "SLOT 6 Port 1"]
+    overrides: { jumbo_packet: 9014, rdma_protocol: null, storage_vlans: [711, 712], enable_storage_auto_ip: false }
+
+# --- IP plan (network-design.md 4.2) -----------------------------------------------------------------------------------
+ip_plan:
+  management_subnet: 192.168.100.0/24
+  default_gateway: 192.168.100.1
+  infrastructure_pool: { start: 192.168.100.20, end: 192.168.100.29 }
+  cluster_ip: 192.168.100.20
+  dns_servers: [10.100.4.36, 10.100.4.37]
+  dns_zone: nic26.iic.local
+  ntp_servers: [192.168.100.1]
+  reserved_ranges: [10.96.0.0/12, 10.244.0.0/16]
+  storage_auto_ip: false
+
+qos:
+  storage_priority: 3
+  cluster_priority: 7
+  storage_bandwidth_percent: 50
+  cluster_bandwidth_percent: 2   # 10 GbE links (S4112F-ON is SFP+); 1 only for 25 GbE
+  jumbo_frame_size: 9014
+
+logical_networks:
+  - name: lnet-iic-nic26-compute-eus
+    vlan_id: 110
+    subnet: 192.168.110.0/24
+    gateway: 192.168.110.1
+    ip_pool: { start: 192.168.110.20, end: 192.168.110.99 }
+    dns_servers: [10.100.4.36, 10.100.4.37]
+  - name: lnet-iic-nic26-avd-eus
+    vlan_id: 120
+    subnet: 192.168.120.0/24
+    gateway: 192.168.120.1
+    ip_pool: { start: 192.168.120.20, end: 192.168.120.99 }
+    dns_servers: [10.100.9.132, 10.100.4.36]
+
+storage:
+  volumes:
+    - { name: csv-nic26-m2-vmstore-01, resiliency: two-way-mirror, size_gb: 2048 }
+  storage_paths:
+    - { name: sp-nic26-m2-vmstore-01, volume: csv-nic26-m2-vmstore-01, path: C:\ClusterStorage\csv-nic26-m2-vmstore-01\vms }
+
+
+# --- secret references (names only) --------------------------------------------------------------------------------------
+secret_refs:
+  arb_application_secret: keyvault://kv-iic-nic26-azl-eus-01/DefaultARBApplication

@@ -1,0 +1,25 @@
+# Outputs = solution.yml outputs = bicep/main.bicep outputs (contract §6; tests/outputs-parity.Tests.ps1).
+output "cluster_resource_group_name" { value = var.names.rg_azl }
+output "witness_storage_account_name" { value = var.names.st_witness }
+output "witness_storage_account_id" { value = "${local.rg_id.rg_azl}/providers/Microsoft.Storage/storageAccounts/${var.names.st_witness}" }
+output "kv_ops_id" { value = local.kv_ops_id }
+output "kv_ops_uri" { value = "https://${var.names.kv_ops}.vault.azure.net/" }
+output "kv_azl_id" { value = local.kv_azl_id }
+output "kv_azl_uri" { value = "https://${var.names.kv_azl}.vault.azure.net/" }
+output "log_analytics_workspace_id" { value = local.law_id }
+output "action_group_id" { value = local.action_group_id }
+output "recovery_vault_id" { value = "${local.rg_id.rg_bcdr}/providers/Microsoft.RecoveryServices/vaults/${var.names.rsv_azl}" }
+output "dr_resource_group_name" { value = var.names.rg_dr }
+output "asr_subnet_id" { value = local.subnet_id.asr }
+output "asr_test_subnet_id" { value = local.subnet_id.asr_test }
+output "deploy_identity_principal_id" { value = local.s3 ? azurerm_user_assigned_identity.deploy[0].principal_id : "" }
+output "deploy_identity_id" { value = local.deploy_identity_id }
+output "spoke_vnet_id" { value = local.vnet_id }
+output "pe_subnet_id" { value = local.subnet_id.pe }
+output "jump_subnet_id" { value = local.subnet_id.jump }
+output "private_dns_zone_vaultcore_id" { value = local.vaultcore_zone_id }
+output "security_resource_group_name" { value = var.names.rg_sec }
+output "network_resource_group_name" { value = var.names.rg_net }
+output "monitoring_resource_group_name" { value = var.names.rg_mon }
+output "asr_cache_storage_account_name" { value = var.names.st_asr_cache }
+output "jump_vm_id" { value = var.enable_jump_server ? "${local.rg_id.rg_mgmt}/providers/Microsoft.Compute/virtualMachines/${var.names.vm_jump}" : "" }

@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nic26.contoso.com/schemas/shared.environment.schema.json",
+  "title": "NIC 2026 shared environment (environment/shared/*.yml)",
+  "description": "Tenant, subscriptions, region and naming tokens, plus references to the pre-existing shared resources the lab reuses (hub VNet, VPN gateway, identity spoke, DCs, Bastion, P2S pool). Values only; secrets are keyvault:// references. Canonical names from design/azure-local/landing-zone.md section 10.6 and design/avd/landing-zone.md section 11.5. Unknown keys are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tenant_id",
+    "management_group_id",
+    "subscriptions",
+    "location",
+    "location_short",
+    "org",
+    "token",
+    "owner_email",
+    "cost_center",
+    "tags",
+    "secret_name_prefix",
+    "hub_vnet_id",
+    "hub_vnet_name",
+    "hub_resource_group_name",
+    "hub_subscription_id",
+    "hub_address_space",
+    "vpn_gateway_id",
+    "p2s_client_pool",
+    "bastion_subnet_prefix",
+    "identity_spoke_vnet_id",
+    "identity_spoke_address_space",
+    "management_spoke_vnet_id",
+    "management_spoke_address_space",
+    "identity_dc_ips",
+    "dns_servers",
+    "onprem_prefixes",
+    "privatelink_vaultcore_zone_id",
+    "privatelink_file_zone_id",
+    "privatelink_blob_zone_id"
+  ],
+  "properties": {
+    "tenant_id": {
+      "$ref": "#/$defs/guid",
+      "description": "Entra tenant (D-002). All-zero in examples."
+    },
+    "tenant_domain": {
+      "$ref": "#/$defs/hostname",
+      "description": "Tenant primary domain (optional)."
+    },
+    "management_group_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9-_.()]{0,89}$",
+      "description": "Parent management group of both landing-zone subscriptions (D-004)."
+    },
+    "subscriptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "azure_local",
+        "avd",
+        "connectivity"
+      ],
+      "properties": {
+        "azure_local": {
+          "$ref": "#/$defs/guid",
+          "description": "Azure Local landing-zone subscription."
+        },
+        "avd": {
+          "$ref": "#/$defs/guid",
+          "description": "AVD landing-zone subscription."
+        },
+        "connectivity": {
+          "$ref": "#/$defs/guid",
+          "description": "Subscription holding the hub VNet and VPN gateway."
+        },
+        "identity": {
+          "$ref": "#/$defs/guid",
+          "description": "Subscription holding the identity spoke (DCs)."
+        },
+        "management": {
+          "$ref": "#/$defs/guid",
+          "description": "Subscription holding the management spoke."
+        }
+      }
+    },
+    "location": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{3,30}$",
+      "description": "Azure region name, e.g. eastus (D-010). Not assumed in code."
+    },
+    "location_short": {
+      "type": "string",
+      "pattern": "^[a-z]{2,6}$",
+      "description": "Region short code used in names, e.g. eus."
+    },
+    "org": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{2,8}$",
+      "description": "Organization token in names (iic, D-006)."
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{3,8}$",
+      "description": "Lab token present in every name (nic26, D-005)."
+    },
+    "owner_email": {
+      "$ref": "#/$defs/email"
+    },
+    "cost_center": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "secret_name_prefix": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{2,8}-[a-z0-9]{3,8}-$",
+      "description": "Key Vault secret-name prefix <org>-<env-name>- (HCS Key Vault standard). Canonical place; azure-local and avd inherit it. Examples use the IIC placeholder 'iic-nic26-'; the registered org/env prefix lives only in the PRIVATE environment file."
+    },
+    "tags": {
+      "type": "object",
+      "description": "Required tag set (naming standard 3a). Solutions add workload and managed-by.",
+      "required": [
+        "project",
+        "environment",
+        "owner",
+        "cost-center",
+        "lifecycle"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,127}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "properties": {
+        "project": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{3,8}$"
+        },
+        "environment": {
+          "type": "string",
+          "enum": [
+            "demo",
+            "lab",
+            "dev",
+            "test",
+            "prod"
+          ]
+        },
+        "owner": {
+          "$ref": "#/$defs/email"
+        },
+        "cost-center": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "temporary",
+            "permanent"
+          ]
+        }
+      }
+    },
+    "hub_vnet_id": {
+      "$ref": "#/$defs/resourceId",
+      "description": "Existing hub VNet (reused; never created or renamed)."
+    },
+    "hub_vnet_name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64
+    },
+    "hub_resource_group_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 90
+    },
+    "hub_subscription_id": {
+      "$ref": "#/$defs/guid"
+    },
+    "hub_address_space": {
+      "$ref": "#/$defs/cidr"
+    },
+    "vpn_gateway_id": {
+      "$ref": "#/$defs/resourceId",
+      "description": "Existing VPN gateway (S2S + P2S)."
+    },
+    "local_network_gateway_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Existing local network gateway for the rack (P-12)."
+    },
+    "vpn_gateway_bgp_asn": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "vpn_gateway_bgp_peer_ip": {
+      "$ref": "#/$defs/ipv4",
+      "description": "APIPA BGP peer address on the Azure side."
+    },
+    "p2s_client_pool": {
+      "$ref": "#/$defs/cidr",
+      "description": "Point-to-site client address pool (NSG rules)."
+    },
+    "bastion_subnet_prefix": {
+      "$ref": "#/$defs/cidr",
+      "description": "Existing AzureBastionSubnet prefix in the hub (NSG rules)."
+    },
+    "bastion_host_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty"
+    },
+    "identity_spoke_vnet_id": {
+      "$ref": "#/$defs/resourceId",
+      "description": "Existing identity spoke (domain controllers); receives private DNS zone links."
+    },
+    "identity_spoke_address_space": {
+      "$ref": "#/$defs/cidr"
+    },
+    "management_spoke_vnet_id": {
+      "$ref": "#/$defs/resourceId"
+    },
+    "management_spoke_address_space": {
+      "$ref": "#/$defs/cidr"
+    },
+    "identity_dc_ips": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/ipv4"
+      },
+      "description": "Existing domain controllers (DNS/NTP for the rack)."
+    },
+    "dns_servers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/ipv4"
+      },
+      "description": "Custom DNS servers for the lab VNets (normally the DCs)."
+    },
+    "ad_domain_fqdn": {
+      "$ref": "#/$defs/hostname",
+      "description": "AD DS domain of the existing DCs (reference only)."
+    },
+    "ad_domain_netbios": {
+      "type": "string",
+      "pattern": "^[A-Z0-9-]{1,15}$"
+    },
+    "onprem_prefixes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/cidr"
+      },
+      "description": "Rack prefixes advertised over the S2S VPN (NSG rules)."
+    },
+    "privatelink_vaultcore_zone_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Existing privatelink.vaultcore.azure.net zone to reuse; empty creates one (P-11)."
+    },
+    "privatelink_file_zone_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty"
+    },
+    "privatelink_blob_zone_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty"
+    },
+    "terraform_backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subscription_id",
+        "resource_group_name",
+        "storage_account_name",
+        "container_name"
+      ],
+      "description": "Terraform state location; passed with -backend-config, never committed.",
+      "properties": {
+        "subscription_id": {
+          "$ref": "#/$defs/guid"
+        },
+        "resource_group_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 90
+        },
+        "storage_account_name": {
+          "$ref": "#/$defs/storageAccountName"
+        },
+        "container_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$"
+        },
+        "use_azuread_auth": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "guid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "ipv4": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$"
+    },
+    "cidr": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/(3[0-2]|[12]?\\d)$"
+    },
+    "hostname": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$",
+      "maxLength": 253
+    },
+    "email": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+    },
+    "resourceId": {
+      "type": "string",
+      "pattern": "^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/[A-Za-z.]+/[^/]+/[^/]+(/.*)?$"
+    },
+    "resourceIdOrEmpty": {
+      "type": "string",
+      "pattern": "^$|^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/[A-Za-z.]+/[^/]+/[^/]+(/.*)?$"
+    },
+    "secretRef": {
+      "type": "string",
+      "pattern": "^keyvault://[a-z0-9-]{3,24}/[A-Za-z0-9-]+$"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "pattern": "^[a-zA-Z](([a-zA-Z0-9]-?)*[a-zA-Z0-9])?$",
+      "minLength": 3,
+      "maxLength": 24
+    },
+    "storageAccountName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{3,24}$"
+    }
+  }
+}

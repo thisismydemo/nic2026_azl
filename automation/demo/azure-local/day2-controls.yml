@@ -1,0 +1,98 @@
+# Day-2 control registry for the demo scripts (Reset-Day2Controls / Restore-Day2Controls / Test-Day2Readiness).
+# One row per control of planning/sessions/azure-local/outline.md section 3. The remove/apply scripts are OWNED by the
+# cluster-configure solutions (automation/azure-local/cluster-configure/<solution>/scripts/...); this file only maps
+# them. `solution` is relative to automation/azure-local/; the script paths are relative to the solution folder.
+# remove_args / apply_args are the named parameters passed to the script (plus -Execute by the demo scripts).
+# Controls with reversible: false are NEVER removed by the reset (backup data, DR replication, access eligibility and
+# the workload platform must survive the pre-session reset; the platform can still be replayed by hand, see its README).
+# Keys are the contract for Get-Day2ControlState.ps1 rows ({ Control, Status, Detail, Section }).
+# No security-baseline row: the node security baseline and drift control come from the cluster-deploy security_settings
+# and are verified by Test-ClusterPostDeployment.ps1, not by a Day-2 solution.
+version: 1
+controls:
+  - key: insights
+    outline: "3.1"
+    area: monitoring
+    name: Azure Local Insights (AMA extension and DCR association)
+    solution: cluster-configure/monitoring
+    remove_script: scripts/Enable-ClusterInsights.ps1
+    remove_args: { Action: Disable }
+    apply_script: scripts/Enable-ClusterInsights.ps1
+    apply_args: { Action: Enable, ExtraEventChannels: "Microsoft-Windows-Networking-NetworkATC/Operational!*" }
+    reversible: true
+  - key: monitoring-config
+    outline: "3.1"
+    area: monitoring
+    name: VM Insights DCR, alert rules and alert routing (node down, storage, intent drift, capacity, Key Vault backup)
+    solution: cluster-configure/monitoring
+    remove_script: scripts/Invoke-MonitoringConfigure.ps1
+    remove_args: { Action: Remove }
+    apply_script: scripts/Invoke-MonitoringConfigure.ps1
+    apply_args: { Action: Apply }
+    reversible: true
+  - key: update-manager
+    outline: "3.2"
+    area: updates
+    name: Azure Update Manager maintenance configuration and dynamic scope (guest OS)
+    solution: cluster-configure/update-manager
+    remove_script: scripts/Invoke-UpdateManagerConfigure.ps1
+    remove_args: { Action: Remove }
+    apply_script: scripts/Invoke-UpdateManagerConfigure.ps1
+    apply_args: { Action: Apply }
+    reversible: true
+  - key: backup
+    outline: "3.3"
+    area: bc-dr
+    name: Azure VM backup policy
+    solution: cluster-configure/backup-asr
+    remove_script: ""
+    apply_script: scripts/Invoke-BackupAsrConfigure.ps1
+    apply_args: { Action: Apply }
+    reversible: false          # recovery points are the evidence; never removed before the session
+  - key: site-recovery
+    outline: "3.3"
+    area: bc-dr
+    name: Site Recovery replication policy
+    solution: cluster-configure/backup-asr
+    remove_script: ""
+    apply_script: scripts/Invoke-BackupAsrConfigure.ps1
+    apply_args: { Action: Apply }
+    reversible: false          # replication established Oct 8; the planned failover (4.7) depends on it
+  - key: pim-access
+    outline: "3.4"
+    area: access
+    name: RBAC roles with PIM-eligible assignments
+    solution: cluster-configure/access-pim
+    remove_script: ""
+    apply_script: scripts/Invoke-PimEligibility.ps1
+    apply_args: { Action: Apply }
+    reversible: false          # the live beat is an activation, not a re-assignment
+  - key: defender
+    outline: "3.5"
+    area: security
+    name: Defender for Servers plan on the landing zone
+    solution: cluster-configure/defender
+    remove_script: scripts/Set-DefenderServersPlan.ps1
+    remove_args: { Action: Remove }
+    apply_script: scripts/Set-DefenderServersPlan.ps1
+    apply_args: { Action: Apply }
+    reversible: true
+  - key: policy-baseline
+    outline: "3.5"
+    area: governance
+    name: Azure Policy hybrid-baseline initiative assignment
+    solution: cluster-configure/policy
+    remove_script: scripts/Invoke-PolicyBaseline.ps1
+    remove_args: { Action: Remove }
+    apply_script: scripts/Invoke-PolicyBaseline.ps1
+    apply_args: { Action: Apply, StartComplianceScan: true }
+    reversible: true
+  - key: workload-platform
+    outline: "3.6"
+    area: workloads
+    name: Images, logical networks and storage paths
+    solution: cluster-configure/platform
+    remove_script: ""
+    apply_script: scripts/Invoke-PlatformConfigure.ps1
+    apply_args: { Action: Apply }
+    reversible: false          # session hosts and migrated VMs depend on it

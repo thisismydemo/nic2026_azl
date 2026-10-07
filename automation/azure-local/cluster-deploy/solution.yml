@@ -1,0 +1,85 @@
+# NIC 2026 — Azure Local cluster deployment (cluster-deploy)
+# Manifest per automation/CONTRACT.md §2 and §10. Implements outline §2.4–2.6, landing-zone design §5.3/§5.5/§9.2,
+# network-design §4/§6, decisions D-008 (Local Identity + Key Vault), D-019, D-024, review R-03.
+# Two passes of the SAME template: deployment_mode = Validate (creates the cluster resource, edge devices, role
+# assignments, diagnostics storage, runs the Environment Checker) then Deploy (2.5–3 h). The template receives
+# only the CLUSTER VAULT NAME; the two platform-mandated secrets are written by scripts/Set-ClusterDeploymentSecrets.ps1.
+# Canonical input names = automation/shared/schemas/azure-local.environment.schema.json. Inputs this solution adds
+# (not in design §10.6 / the schema) are marked "added:".
+
+name: cluster-deploy
+description: Validate and Deploy the two-node Azure Local instance from Azure with Local Identity + Key Vault (D-008) using the raw Microsoft.AzureStackHCI clusters + deploymentSettings resources (api 2025-09-15-preview) in Bicep and azapi.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [lz-azure-local]
+
+inputs:
+  # --- placement -------------------------------------------------------------------------------
+  - { name: tenant_id,        type: string, description: "Entra tenant ID (GUID)", required: true, default: null, source: environment }
+  - { name: subscription_id,  type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,         type: string, description: "Region of the cluster resource (D-010); never assumed in code", required: true, default: null, source: environment }
+  - { name: token,            type: string, description: "Lab token; also the deployment namingPrefix (max 8 chars)", required: true, default: null, source: environment }
+  - { name: tags,             type: map,    description: "The seven required tags (naming standard §3a)", required: true, default: null, source: environment }
+  # --- cluster identity and secrets (D-008) ---------------------------------------------------
+  - { name: cluster_name,     type: string, description: "Cluster / CNO name (for example <lab>-clus01); must differ from every node name", required: true, default: null, source: environment }
+  - { name: identity,         type: map,    description: "identity block: model (local-identity-keyvault), dns_zone, deployment_identity_name, local_admin_*_secret refs (names only)", required: true, default: null, source: environment }
+  - { name: kv_azl_name,      type: string, description: "Cluster vault name (landing-zone output kv_azl; design §5.1). The template receives only the name.", required: true, default: null, source: environment }
+  - { name: witness,          type: map,    description: "witness block: type (cloud), storage_account_name (landing-zone output), storage_key_secret ref (name only)", required: true, default: null, source: environment }
+  - { name: azl_rp_app_object_id, type: string, description: "Object ID of the Azure Local resource provider first-party app in this tenant (template hciResourceProviderObjectID)", required: true, default: null, source: environment }
+  - { name: local_admin_secret_name, type: string, description: "added: Key Vault secret NAME that carries base64(user:password) for ECE secret LocalAdminCredential; quickstart convention <cluster_name>-LocalAdminCredential. Empty = that convention", required: false, default: "", source: environment }
+  - { name: witness_key_secret_name, type: string, description: "added: Key Vault secret NAME that carries base64(storage key) for ECE secret WitnessStorageKey; quickstart convention <cluster_name>-WitnessStorageKey. Empty = that convention", required: false, default: "", source: environment }
+  # --- nodes and network (network-design §4, §6) ------------------------------------------------
+  - { name: nodes,            type: list,   description: "nodes[]: name, management_ip, storage_ips {smb1, smb2}; the Arc machine resource IDs are derived (same resource group)", required: true, default: null, source: environment }
+  - { name: intents,          type: list,   description: "Network ATC intents (Management / Compute / Storage) with adapters and overrides; three intents = networkingPattern custom (R-03)", required: true, default: null, source: environment }
+  - { name: ip_plan,          type: map,    description: "management_subnet, default_gateway, infrastructure_pool {start,end}, dns_servers, dns_zone, storage_auto_ip", required: true, default: null, source: environment }
+  - { name: vlans,            type: map,    description: "VLAN plan; storage_a / storage_b ids and subnets feed storageNetworkList; management is delivered UNTAGGED (no VLAN ID on the intent, network-design §2.6)", required: true, default: null, source: environment }
+  - { name: qos,              type: map,    description: "storage_priority, cluster_priority, storage_bandwidth_percent, jumbo_frame_size (network-design §6.2)", required: true, default: null, source: environment }
+  - { name: rdma_protocol,    type: string, description: "added (R-03): networkDirectTechnology for the Storage intent as a STRING ('RoCEv2' | 'iWARP' | 'RoCE'); empty leaves Network ATC's adapter detection. Set only from the confirmed NIC model / OEM guidance", required: false, default: "", source: environment }
+  - { name: networking_type,  type: string, description: "added: switchedMultiServerDeployment | switchlessMultiServerDeployment | singleServerDeployment", required: false, default: switchedMultiServerDeployment, source: environment }
+  - { name: networking_pattern, type: string, description: "added: custom (three intents) | hyperConverged | convergedManagementCompute | convergedComputeStorage (R-03: custom for this design)", required: false, default: custom, source: environment }
+  # --- platform settings ----------------------------------------------------------------------
+  - { name: release,          type: map,    description: "azure_local_version, sbe_version (D-019); sbe_* fields are passed to sbePartnerInfo when sbe is set", required: true, default: null, source: environment }
+  - { name: sbe,              type: map,    description: "added: Solution Builder Extension descriptor {version, family, publisher, manifest_source, manifest_creation_date}; empty map = none (the deployment downloads the SBE itself)", required: false, default: {}, source: environment }
+  - { name: security_settings, type: map,   description: "added: securityLevel Recommended = all true {drift_control_enforced, credential_guard_enforced, smb_signing_enforced, smb_cluster_encryption, bitlocker_boot_volume, bitlocker_data_volumes, wdac_enforced}", required: false, default: { drift_control_enforced: true, credential_guard_enforced: true, smb_signing_enforced: true, smb_cluster_encryption: true, bitlocker_boot_volume: true, bitlocker_data_volumes: true, wdac_enforced: true }, source: environment }
+  - { name: observability,    type: map,    description: "added: {streaming_data_client, eu_location, episodic_data_upload}", required: false, default: { streaming_data_client: true, eu_location: false, episodic_data_upload: true }, source: environment }
+  - { name: storage_configuration_mode, type: string, description: "added: Express | InfraOnly | KeepStorage. InfraOnly: workload volumes and storage paths are created by cluster-configure/platform (outline §2.6)", required: false, default: InfraOnly, source: environment }
+  - { name: logs_retention_days, type: int, description: "added: retention of the Key Vault audit logs in the diagnostics storage account (template logsRetentionInDays)", required: false, default: 30, source: environment }
+  - { name: assign_hci_rp_role, type: bool, description: "added: also assign Azure Connected Machine Resource Manager to the Azure Local RP app on the cluster resource group here. Default false because lz-azure-local S5 already owns that assignment (design §6.2)", required: false, default: false, source: environment }
+  # --- run-time -------------------------------------------------------------------------------
+  - { name: deployment_mode,  type: string, description: "Validate | Deploy. Not read from files: Invoke-ClusterDeploy.ps1 -Pass sets it per run (default Validate in the template)", required: false, default: null, source: generated }
+  - { name: names,            type: map,    description: "Resolved name catalog (contract §10)", required: true, default: null, source: generated }
+
+outputs:
+  - { name: cluster_id,              type: string, description: "Resource ID of the Microsoft.AzureStackHCI/clusters resource" }
+  - { name: cluster_name,            type: string, description: "Cluster name" }
+  - { name: deployment_settings_id,  type: string, description: "Resource ID of clusters/deploymentSettings/default (poll reportedProperties here)" }
+  - { name: custom_location_name,    type: string, description: "Custom location requested in optionalServices.customLocation (created by the deployment)" }
+  - { name: custom_location_id,      type: string, description: "Expected resource ID of the custom location (same resource group)" }
+  - { name: arc_node_resource_ids,   type: list,   description: "Arc machine resource IDs handed to the deployment" }
+  - { name: key_vault_name,          type: string, description: "Cluster vault the deployment reads the two ECE secrets from and backs up to" }
+  - { name: diagnostic_storage_account_name, type: string, description: "Key Vault audit-log storage account created by this solution (design §9.2)" }
+  - { name: deployment_mode,         type: string, description: "The pass this run executed (Validate | Deploy)" }
+  - { name: networking_pattern,      type: string, description: "Portal-equivalent network pattern recorded for the README (custom = three intents)" }
+
+secrets:
+  # LOGICAL names only (contract §12): the real ops-vault name is <secret_name_prefix><logical name>; the scripts take the
+  # complete keyvault:// references from the PRIVATE environment file (identity.local_admin_*_secret) and never build
+  # names. Read by Set-ClusterDeploymentSecrets.ps1 from the OPS vault; written to the CLUSTER vault under the
+  # platform-mandated, unprefixed names <cluster_name>-LocalAdminCredential / -WitnessStorageKey (Microsoft quickstart).
+  - azl-local-admin-username
+  - azl-local-admin-password
+  - LocalAdminCredential
+  - WitnessStorageKey
+
+destroy: none   # a cluster is decommissioned by the owner-approved runbook (P-10), never by this solution
+
+names:
+  rg_azl:         { type: rg,  purpose: azl }           # cluster resource group (landing-zone output cluster_resource_group_name)
+  rg_sec:         { type: rg,  purpose: azl-sec }       # where the cluster vault lives (design §5.2 option A)
+  kv_azl:         { type: kv,  purpose: azl }           # must equal input kv_azl_name (asserted by Invoke-ClusterDeploy.ps1)
+  st_witness:     { type: st,  purpose: wit }           # must equal witness.storage_account_name
+  st_diag:        { type: st,  purpose: diag }          # created HERE (design §9.2: "created by the cluster deployment")
+  cl_azl:         { type: cl,  purpose: azl }           # custom location name requested from the deployment
+  arb_azl:        { type: arb, purpose: azl }           # reserved; the platform names the appliance <cluster>-arcbridge (naming standard §3b)
+  deployment_name: { type: dep, purpose: azl-deploy }   # dep-<org>-<token>-azl-deploy-01 (suffix -validate / -deploy added by the script)
+  # Terraform state key: cluster-deploy.tfstate (passed with -backend-config, contract §3; not a registry type)

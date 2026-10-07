@@ -1,0 +1,52 @@
+# NIC 2026 — Day-2 Ready 3.1 monitoring (cluster-configure/monitoring)
+# Insights for Azure Local (AMA on the cluster arcSettings + DCR association on each node — the SUPPORTED enablement
+# flow, scripted; the Insights DCR itself is created once through the Insights dialog, design §7.2 option A, under the
+# reserved name dcr_insights), the VM Insights DCR for workload VMs, the cost-conscious alert rules (node down, storage
+# health, intent drift, capacity) and the alert processing rule that routes the platform's KeyVaultAccess /
+# KeyVaultDoesNotExist alerts to the action group. Reversible (D-014): Disable removes the associations; Remove deletes
+# the alert rules, the VM Insights DCR and the processing rule. Outline §3.1, landing-zone §7.1–7.2.
+
+name: cluster-configure-monitoring
+description: "Day-2 monitoring - Insights enable/disable through the supported AMA + DCR-association flow, VM Insights DCR, cost-conscious alert rules and the Key Vault backup alert routing."
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id, type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,        type: string, description: "Region (D-010)", required: true, default: null, source: environment }
+  - { name: tags,            type: map,    description: "The seven required tags", required: true, default: null, source: environment }
+  - { name: cluster_name,    type: string, description: "Cluster resource name", required: true, default: null, source: environment }
+  - { name: nodes,           type: list,   description: "nodes[] - Arc machine names receive the DCR association", required: true, default: null, source: environment }
+  - { name: log_analytics_workspace_id, type: string, description: "Workspace resource ID (landing-zone output; empty = derived from names.law in rg_mon)", required: false, default: "", source: environment }
+  - { name: action_group_id, type: string, description: "Action group resource ID (landing-zone output; empty = derived from names.ag_ops in rg_mon)", required: false, default: "", source: environment }
+  - { name: alert_evaluation_frequency, type: string, description: "added: ISO 8601 evaluation frequency of the log alerts (cost lever)", required: false, default: PT5M, source: environment }
+  - { name: alert_window_size, type: string, description: "added: ISO 8601 look-back window of the log alerts", required: false, default: PT15M, source: environment }
+  - { name: node_heartbeat_minutes, type: int, description: "added: minutes (5 to 45) without AMA heartbeat before 'node down' fires; the rule looks back one hour", required: false, default: 10, source: environment }
+  - { name: enable_vm_insights_dcr, type: bool, description: "added: author the VM Insights DCR for the workload VMs (Microsoft-InsightsMetrics + ServiceMap)", required: false, default: true, source: environment }
+  - { name: manage_insights_dcr_in_iac, type: bool, description: "added: ALSO author the Azure Local Insights DCR in IaC (Microsoft recommends letting Insights create it; default false = the dialog creates dcr_insights once, the script then associates it)", required: false, default: false, source: environment }
+  - { name: names,           type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
+
+outputs:
+  - { name: insights_dcr_id,     type: string, description: "Resource ID of the Insights DCR (created by the Insights flow or, when manage_insights_dcr_in_iac, here)" }
+  - { name: vm_insights_dcr_id,  type: string, description: "Resource ID of the VM Insights DCR (empty when disabled)" }
+  - { name: alert_rule_ids,      type: list,   description: "Resource IDs of the scheduled query rules" }
+  - { name: kv_backup_processing_rule_id, type: string, description: "Alert processing rule that routes KeyVaultAccess / KeyVaultDoesNotExist to the action group" }
+  - { name: action_group_id,     type: string, description: "Action group used by every rule" }
+
+secrets: []
+destroy: supported
+
+names:
+  rg_azl:              { type: rg,    purpose: azl }
+  rg_mon:              { type: rg,    purpose: azl-mon }
+  law:                 { type: law,   purpose: "" }         # lab-wide singleton, same name as the landing zone: law-<org>-<token>-<region>-01
+  ag_ops:              { type: ag,    purpose: ops }
+  dcr_insights:        { type: dcr,   purpose: azl-insights }
+  dcr_vminsights:      { type: dcr,   purpose: azl-vminsights }
+  alert_node_down:     { type: alert, purpose: node-down }
+  alert_storage_health: { type: alert, purpose: storage-health }
+  alert_intent_drift:  { type: alert, purpose: intent-drift }
+  alert_capacity:      { type: alert, purpose: capacity }
+  alert_kv_backup:     { type: alert, purpose: kv-backup }
+  deployment_name:     { type: dep,   purpose: azl-monitoring }

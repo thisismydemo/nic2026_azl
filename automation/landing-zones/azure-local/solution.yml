@@ -1,0 +1,206 @@
+# NIC 2026 — Azure Local landing zone (lz-azure-local)
+# Manifest per automation/CONTRACT.md §2 and §10. Implements design/azure-local/landing-zone.md §10.
+# Canonical input names = design §10.6. Inputs added by this solution (not in §10.6) are marked "added:".
+# No real tenant, subscription, address or name values live here; see bicep/main.example.bicepparam
+# and terraform/terraform.example.tfvars.json for IIC example values with all-zero GUIDs.
+
+name: lz-azure-local
+description: Azure landing zone for the Azure Local cluster — governance, spoke network, two Key Vaults, monitoring, witness storage, BC/DR foundation and the private jump server (design §10 stages S1–S7; S-1/S0/S8/S9 are scripts).
+scope: azure-local
+tools: [bicep, terraform]
+depends_on: []
+
+inputs:
+  # --- placement -------------------------------------------------------------------------------
+  - { name: tenant_id,            type: string, description: "Entra tenant ID (GUID)", required: true, default: null, source: environment }
+  - { name: subscription_id,      type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: management_group_id,  type: string, description: "Parent management group ID; the policy initiative definition is stored here (design §2.3). Empty skips the initiative definition.", required: false, default: "", source: environment }
+  - { name: location,             type: string, description: "Azure region for every resource (design D-010); no default is assumed in code", required: true, default: null, source: environment }
+  - { name: org,                  type: string, description: "Naming segment <org> (naming standard §2)", required: true, default: null, source: environment }
+  - { name: token,                type: string, description: "Naming segment <token> (naming standard §2)", required: true, default: null, source: environment }
+  - { name: region_short,         type: string, description: "Naming segment <region> (naming standard §2)", required: true, default: null, source: environment }
+  - { name: tags,                 type: map,    description: "The seven required tags (naming standard §3a); managed-by is set per track", required: true, default: null, source: environment }
+  # --- governance -----------------------------------------------------------------------------
+  - { name: budget_monthly_amount, type: int,   description: "Monthly budget amount (design §2.5); 0 skips the budget", required: true, default: null, source: environment }
+  - { name: budget_contact_emails, type: list,  description: "Budget and action-group e-mail recipients", required: true, default: null, source: environment }
+  - { name: defender_servers_plan, type: string, description: "Defender for Servers plan: P1 | P2 | off (design §7.3; applied in Day-2 Ready)", required: false, default: "off", source: environment }
+  - { name: enable_defender_keyvault, type: bool, description: "Defender for Key Vault flag (design §7.3)", required: false, default: false, source: environment }
+  - { name: enable_defender_storage,  type: bool, description: "Defender for Storage flag (design §7.3)", required: false, default: false, source: environment }
+  # --- network --------------------------------------------------------------------------------
+  - { name: spoke_address_space,    type: string, description: "Spoke VNet address space (design §4.1)", required: true, default: null, source: environment }
+  - { name: subnet_jump_prefix,     type: string, description: "Jump subnet prefix", required: true, default: null, source: environment }
+  - { name: subnet_pe_prefix,       type: string, description: "Private-endpoint subnet prefix", required: true, default: null, source: environment }
+  - { name: subnet_mgmt_prefix,     type: string, description: "Management subnet prefix", required: true, default: null, source: environment }
+  - { name: subnet_asr_prefix,      type: string, description: "ASR production failover subnet prefix", required: true, default: null, source: environment }
+  - { name: subnet_asr_test_prefix, type: string, description: "ASR test failover subnet prefix", required: true, default: null, source: environment }
+  - { name: dns_servers,            type: list,   description: "VNet custom DNS servers (the existing domain controllers)", required: true, default: null, source: environment }
+  - { name: hub_vnet_id,            type: string, description: "Existing hub VNet resource ID (shared; referenced only)", required: true, default: null, source: environment }
+  - { name: hub_resource_group_name, type: string, description: "Resource group of the hub VNet (where the hub-side peering is created)", required: true, default: null, source: environment }
+  - { name: hub_subscription_id,    type: string, description: "Subscription of the hub VNet (GUID)", required: true, default: null, source: environment }
+  - { name: bastion_subnet_prefix,  type: string, description: "Existing Bastion subnet prefix for NSG rules", required: true, default: null, source: environment }
+  - { name: p2s_client_pool,        type: string, description: "P2S client address pool for NSG rules", required: true, default: null, source: environment }
+  - { name: identity_spoke_vnet_id, type: string, description: "Existing identity spoke VNet ID (private DNS zone link; NSG rules)", required: true, default: null, source: environment }
+  - { name: management_spoke_vnet_id, type: string, description: "Existing management spoke VNet ID (NSG rules)", required: true, default: null, source: environment }
+  - { name: onprem_prefixes,        type: list,   description: "On-prem site prefixes for NSG rules (from network-design.md)", required: true, default: null, source: environment }
+  - { name: avd_spoke_vnet_id,      type: string, description: "AVD spoke VNet ID for a direct peering and zone link from this landing zone. Leave empty: the AVD landing zone (lz-avd) owns both sides of the Azure Local to AVD spoke peering (conflict A6), and no private DNS zones are built (D-029)", required: false, default: "", source: environment }
+  - { name: identity_spoke_prefix,  type: string, description: "added: address prefix of the identity spoke for the private-endpoint NSG rule (design §4.6 lists the identity spoke as a source but §10.6 has no prefix variable)", required: true, default: null, source: environment }
+  - { name: management_spoke_prefix, type: string, description: "added: address prefix of the management spoke for the private-endpoint NSG rule (same gap as identity_spoke_prefix)", required: true, default: null, source: environment }
+  - { name: avd_spoke_prefix,       type: string, description: "added: AVD spoke address prefix for NSG rules; empty until the AVD landing zone exists", required: false, default: "", source: environment }
+  - { name: enable_identity_peering, type: bool,  description: "added (P-13 / LZ-04 / MP-05): create the direct spoke<->identity VNet peerings (one resource lives on the shared identity VNet - owner change approval). false until approved", required: false, default: false, source: environment }
+  - { name: enable_management_peering, type: bool, description: "added (P-13 / LZ-04 / MP-05): create the direct spoke<->management VNet peerings (one resource lives on the shared management VNet - owner change approval). false until approved", required: false, default: false, source: environment }
+  - { name: enable_private_endpoints, type: bool, description: "Owner decision D-029: false (default) = no private endpoints; both vaults on their public endpoint (RBAC only); no privatelink zones, links or monitor private link. true restores the private-endpoint design.", required: false, default: false, source: environment }
+  - { name: enable_monitor_private_link, type: bool, description: "Deploy the DCE and the four Azure Monitor private DNS zones (design §4.5, §7.2)", required: false, default: false, source: environment }
+  - { name: privatelink_vaultcore_zone_id, type: string, description: "Existing shared privatelink.vaultcore.azure.net zone to reuse; empty creates the lab's own zone (decision P-11)", required: false, default: "", source: environment }
+  # --- identity / security --------------------------------------------------------------------
+  - { name: group_object_ids,       type: map,    description: "Object IDs of the Entra groups keyed by catalog key (grp_lab_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers); written by S0 (New-LzEntraGroups.ps1)", required: true, default: null, source: environment }
+  - { name: pim_max_activation_hours, type: int,  description: "PIM role-setting maximum activation (design §6.3)", required: false, default: 8, source: environment }
+  - { name: manage_pim_in_iac,      type: bool,   description: "added: create PIM eligible assignments from Bicep/Terraform instead of Initialize-LzPim.ps1 (roleEligibilityScheduleRequests are not re-runnable; default false)", required: false, default: false, source: environment }
+  - { name: kv_soft_delete_days,    type: int,    description: "Soft-delete retention for both vaults (K-5)", required: false, default: 7, source: environment }
+  - { name: kv_public_network_access, type: map,  description: "Per-vault phase flag {ops: Enabled|Disabled, azl: Enabled|Disabled} (design §5.3)", required: true, default: null, source: environment }
+  - { name: azl_rp_app_object_id,   type: string, description: "Object ID of the Azure Local resource provider first-party application in this tenant (design §6.2, O6)", required: true, default: null, source: environment }
+  # --- monitoring -----------------------------------------------------------------------------
+  - { name: central_log_analytics_workspace_id, type: string, description: "Resource ID of the central Log Analytics workspace of the platform management subscription; when set no workload workspace is created", required: false, default: "", source: environment }
+  - { name: deploy_platform_scope_items, type: bool, description: "Deploy subscription policy and Defender, the activity-log export and the peerings on platform-owned VNets; false (default) leaves them to their owners", required: false, default: false, source: environment }
+  - { name: law_retention_days,     type: int,    description: "Log Analytics interactive retention (design §7.1)", required: false, default: 30, source: environment }
+  - { name: law_daily_cap_gb,       type: int,    description: "Log Analytics daily cap in GB (design §7.1)", required: false, default: 2, source: environment }
+  # --- cluster prerequisites / BC-DR ----------------------------------------------------------
+  - { name: enable_voucher_storage, type: bool,   description: "Deploy the ownership-voucher storage account (design §9.2, O4)", required: false, default: false, source: environment }
+  - { name: rsv_storage_redundancy, type: string, description: "Recovery Services vault redundancy (LocallyRedundant for the lab)", required: false, default: LocallyRedundant, source: environment }
+  # --- management (jump server) ---------------------------------------------------------------
+  - { name: enable_jump_server,     type: bool,   description: "Deploy stage S7 (the secret copy runs on the jump server, K-8)", required: false, default: true, source: environment }
+  - { name: jump_vm_size,           type: string, description: "Jump server VM size (design §10.6 / management-plane MP-02 - Standard_D4s_v4)", required: false, default: Standard_D4s_v4, source: environment }
+  - { name: jump_data_disk_gb,      type: int,    description: "added (MP-02): size of the jump server data disk in GiB (Premium SSD, P15 at 256)", required: false, default: 256, source: environment }
+  - { name: jump_private_ip,        type: string, description: "added (MP-02 proposes a static address for the by-name RDP A record): static private IP in the jump subnet; empty = dynamic", required: false, default: "", source: environment }
+  - { name: jump_encryption_at_host, type: bool,  description: "added (MP-02 says encryption at host on; it needs the Microsoft.Compute/EncryptionAtHost feature, registered by Register-LzProviders.ps1)", required: false, default: false, source: environment }
+  - { name: jump_admin_username_secret, type: secret-ref, description: "keyvault:// reference to the jump local-admin username in the ops vault (name only; resolved in memory by the deploy script)", required: true, default: null, source: keyvault }
+  - { name: jump_admin_password_secret, type: secret-ref, description: "keyvault:// reference to the jump local-admin password in the ops vault (generated by Invoke-LzAzureLocalDeploy.ps1 on the first S7 run; never by IaC)", required: true, default: null, source: keyvault }
+  - { name: jump_admin_username,    type: secret-ref, description: "added: run-time secure parameter; the deploy script supplies the resolved username in memory. Not emitted by the converters, never written to disk", required: false, default: null, source: generated }
+  - { name: jump_admin_password,    type: secret-ref, description: "added: run-time secure parameter; the deploy script supplies the resolved password in memory. Not emitted by the converters, never written to disk", required: false, default: null, source: generated }
+  # --- scripts only (not read by IaC) ---------------------------------------------------------
+  # --- orchestration --------------------------------------------------------------------------
+  - { name: enabled_stages,         type: list,   description: "added: IaC stages to deploy in this run (subset of S1..S7); earlier stages are assumed present when omitted", required: false, default: [S1, S2, S3, S4, S5, S6, S7], source: environment }
+  - { name: names,                  type: map,    description: "Resolved name catalog (contract §10) produced by ConvertTo-NIC26BicepParam / ConvertTo-NIC26TfVars from the names section below", required: true, default: null, source: generated }
+
+outputs:
+  # Handoff contract, design §10.6 / §10.2
+  - { name: cluster_resource_group_name,  type: string, description: "Where the deploy solution registers machines and the cluster (rg_azl)" }
+  - { name: witness_storage_account_name, type: string, description: "Cloud witness storage account for the deploy solution" }
+  - { name: witness_storage_account_id,   type: string, description: "Cloud witness storage account resource ID" }
+  - { name: kv_ops_id,                    type: string, description: "Operations vault resource ID" }
+  - { name: kv_ops_uri,                   type: string, description: "Operations vault URI" }
+  - { name: kv_azl_id,                    type: string, description: "Cluster vault resource ID (deploy solution keyVaultName)" }
+  - { name: kv_azl_uri,                   type: string, description: "Cluster vault URI" }
+  - { name: log_analytics_workspace_id,   type: string, description: "Workspace resource ID for the deploy solution, Day-2 and AVD" }
+  - { name: action_group_id,              type: string, description: "Action group resource ID for Day-2 alerts" }
+  - { name: recovery_vault_id,            type: string, description: "Recovery Services vault resource ID" }
+  - { name: dr_resource_group_name,       type: string, description: "Post-failover resource group" }
+  - { name: asr_subnet_id,                type: string, description: "ASR production failover subnet ID" }
+  - { name: asr_test_subnet_id,           type: string, description: "ASR test failover subnet ID" }
+  - { name: deploy_identity_principal_id, type: string, description: "Principal ID of the deployment managed identity" }
+  # Additional handoff values used by the AVD landing zone and the deploy solution
+  - { name: deploy_identity_id,           type: string, description: "Resource ID of the deployment managed identity" }
+  - { name: spoke_vnet_id,                type: string, description: "Spoke VNet resource ID (AVD peering, zone links)" }
+  - { name: pe_subnet_id,                 type: string, description: "Private-endpoint subnet ID" }
+  - { name: jump_subnet_id,               type: string, description: "Jump subnet ID" }
+  - { name: private_dns_zone_vaultcore_id, type: string, description: "privatelink.vaultcore.azure.net zone used by the vault private endpoints (own or reused)" }
+  - { name: security_resource_group_name, type: string, description: "Security resource group (both vaults, deploy identity)" }
+  - { name: network_resource_group_name,  type: string, description: "Network resource group" }
+  - { name: monitoring_resource_group_name, type: string, description: "Monitoring resource group" }
+  - { name: asr_cache_storage_account_name, type: string, description: "ASR cache storage account" }
+  - { name: jump_vm_id,                   type: string, description: "Jump server VM resource ID (empty when enable_jump_server is false)" }
+
+secrets:
+  # Names only (contract §3). Both live in the ops vault; values are generated by the deploy script.
+  - jump-local-admin-username
+  - jump-local-admin-password
+
+destroy: supported
+
+# Name catalog (contract §10): logical key -> naming-standard type + purpose. Resolved ONCE by
+# New-NIC26ResourceName and passed to both tracks as the single `names` input. IaC never builds a name.
+# `fixed`/`exempt` entries are Azure-required names (naming standard §3b). `reserved` entries are
+# named by this design but created by a later solution (Day-2 Ready / cluster deployment).
+names:
+  # resource groups (design §3)
+  rg_azl:         { type: rg,   purpose: azl }
+  rg_net:         { type: rg,   purpose: azl-net }
+  rg_mon:         { type: rg,   purpose: azl-mon }
+  rg_sec:         { type: rg,   purpose: azl-sec }
+  rg_bcdr:        { type: rg,   purpose: azl-bcdr }
+  rg_dr:          { type: rg,   purpose: azl-dr }
+  rg_mgmt:        { type: rg,   purpose: azl-mgmt }
+  # network (design §4)
+  spoke_vnet:     { type: vnet, purpose: azl }
+  snet_jump:      { type: snet, purpose: jump }
+  snet_pe:        { type: snet, purpose: pe }
+  snet_mgmt:      { type: snet, purpose: mgmt }
+  snet_asr:       { type: snet, purpose: asr }
+  snet_asr_test:  { type: snet, purpose: asr-test }
+  nsg_jump:       { type: nsg,  purpose: jump }
+  nsg_pe:         { type: nsg,  purpose: pe }
+  nsg_mgmt:       { type: nsg,  purpose: mgmt }
+  nsg_asr:        { type: nsg,  purpose: asr }
+  nsg_asr_test:   { type: nsg,  purpose: asr-test }
+  rt_azl:         { type: rt,   purpose: azl }
+  peer_spoke_to_hub: { type: peer, from: spoke_vnet, to: hub }        # peer-<spoke vnet name>-to-hub
+  peer_hub_to_spoke: { type: peer, from: hub, to: spoke_vnet }        # peer-hub-to-<spoke vnet name>
+  peer_spoke_to_avd: { type: peer, from: spoke_vnet, to: avd }        # peer-<spoke vnet name>-to-avd
+  peer_spoke_to_identity: { type: peer, from: spoke_vnet, to: identity } # P-13: peer-<spoke vnet name>-to-identity
+  peer_identity_to_spoke: { type: peer, from: identity, to: spoke_vnet } # P-13: peer-identity-<spoke vnet name> (lives on the shared identity VNet)
+  peer_spoke_to_mgmt:     { type: peer, from: spoke_vnet, to: mgmt }     # P-13: peer-<spoke vnet name>-to-mgmt
+  peer_mgmt_to_spoke:     { type: peer, from: mgmt, to: spoke_vnet }     # P-13: peer-mgmt-to-<spoke vnet name> (lives on the shared management VNet)
+  pdns_vaultcore: { type: pdns, fixed: privatelink.vaultcore.azure.net, exempt: true }
+  pdns_monitor:   { type: pdns, fixed: privatelink.monitor.azure.com, exempt: true }
+  pdns_oms:       { type: pdns, fixed: privatelink.oms.opinsights.azure.com, exempt: true }
+  pdns_ods:       { type: pdns, fixed: privatelink.ods.opinsights.azure.com, exempt: true }
+  pdns_agentsvc:  { type: pdns, fixed: privatelink.agentsvc.azure-automation.net, exempt: true }
+  link_azl:       { type: link, purpose: azl }
+  link_identity:  { type: link, purpose: identity }
+  link_avd:       { type: link, purpose: avd }
+  pep_kv_ops:     { type: pep,  purpose: kvops }
+  pep_kv_azl:     { type: pep,  purpose: kvazl }
+  # security (design §5, §6)
+  kv_ops:         { type: kv,   purpose: ops }
+  kv_azl:         { type: kv,   purpose: azl }
+  id_deploy:      { type: id,   purpose: deploy }
+  grp_lab_operators: { type: grp, purpose: lab-operators }
+  grp_azl_admins:    { type: grp, purpose: azl-admins }
+  grp_azl_operators: { type: grp, purpose: azl-operators }
+  grp_azl_readers:   { type: grp, purpose: azl-readers }
+  # monitoring (design §7)
+  law:            { type: law,  purpose: "" }                          # lab-wide singleton: law-<org>-<token>-<region>-01
+  ag_ops:         { type: ag,   purpose: ops }
+  dce_azl:        { type: dce,  purpose: azl }
+  # governance (design §2.4, §2.5, §7.4)
+  budget_azl:            { type: budget, purpose: azl }                 # budget-<org>-<token>-azl-01 (global, no region)
+  asg_allowed_locations: { type: asg,  purpose: allowed-locations }
+  asg_require_tags_rg:   { type: asg,  purpose: require-tags-rg }
+  asg_inherit_tags:      { type: asg,  purpose: inherit-tags }
+  asg_activity_log:      { type: asg,  purpose: activity-log }
+  init_hybrid_baseline:  { type: init, purpose: hybrid-baseline }
+  # storage (design §9)
+  st_witness:     { type: st,   purpose: wit }
+  st_asr_cache:   { type: st,   purpose: asrcache }
+  st_voucher:     { type: st,   purpose: vchr }
+  st_tfstate:     { type: st,   purpose: tfstate }
+  st_diag:        { type: st,   purpose: diag, reserved: true }         # created by the cluster deployment
+  # BC/DR (design §8)
+  rsv_azl:        { type: rsv,  purpose: azl }
+  asrpol_tier1:   { type: asrpol, purpose: tier1, reserved: true }
+  bkp_tier1:      { type: bkp,  purpose: tier1, reserved: true }
+  rp_tier1:       { type: rp,   purpose: tier1, reserved: true }
+  # management (design §3, naming standard §4)
+  vm_jump:        { type: vm,   purpose: jump }
+  vm_jump_computer_name: { type: netbios, purpose: jmp }               # nic26-jmp-01 (NetBIOS <= 15)
+  nic_jump:       { type: nic,  parent: vm_jump }                       # nic-<vm resource name>-01
+  osdisk_jump:    { type: osdisk, parent: vm_jump }                     # osdisk-<vm resource name>
+  datadisk_jump:  { type: datadisk, parent: vm_jump }                   # datadisk-<vm resource name>-01 (MP-02)
+  # Day-2 reserved names (design §7.2, §7.4)
+  dcr_insights:   { type: dcr,  purpose: azl-insights, reserved: true }
+  dcr_vminsights: { type: dcr,  purpose: azl-vminsights, reserved: true }
+  mc_azl:         { type: mc,   purpose: azl, reserved: true }
+  alert_kv_backup: { type: alert, purpose: kv-backup, reserved: true }
+  # deployment bookkeeping (naming standard §3)
+  deployment_name: { type: dep, purpose: lz-azl }                       # dep-<org>-<token>-lz-azl-01
+  tfstate_key:     { type: tfstate, fixed: lz-azl.tfstate, exempt: true }
+  tfstate_container: { type: container, fixed: tfstate, exempt: true }  # blob container inside st_tfstate

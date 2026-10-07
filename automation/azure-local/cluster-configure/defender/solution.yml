@@ -1,0 +1,27 @@
+# NIC 2026 — Day-2 Ready 3.5 Defender for Cloud (cluster-configure/defender)
+# Defender for Servers plan toggle on the landing-zone subscription (design §7.3 option A: CSPM at build, Servers P2 in
+# Day-2 Ready, reversible). Apply sets defender_servers_plan (P2); Remove sets the plan back to off (Free). Key Vault and
+# Storage plans stay flags (default off).
+
+name: cluster-configure-defender
+description: Day-2 Defender for Servers plan toggle (P1 | P2 | off) on the landing-zone subscription, plus the Key Vault / Storage plan flags; reversible.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id,          type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: defender_servers_plan,    type: string, description: "P1 | P2 | off (design §7.3); Remove forces off", required: false, default: P2, source: environment }
+  - { name: enable_defender_keyvault, type: bool,   description: "Defender for Key Vault flag", required: false, default: false, source: environment }
+  - { name: enable_defender_storage,  type: bool,   description: "Defender for Storage flag", required: false, default: false, source: environment }
+  - { name: names,                    type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
+
+outputs:
+  - { name: servers_pricing_tier, type: string, description: "Resulting Defender for Servers tier (Standard | Free)" }
+  - { name: servers_sub_plan,     type: string, description: "Resulting sub plan (P1 | P2 | empty)" }
+
+secrets: []
+destroy: supported   # "destroy" = plan back to Free
+
+names:
+  deployment_name: { type: dep, purpose: azl-defender }

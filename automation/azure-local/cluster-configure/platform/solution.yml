@@ -1,0 +1,52 @@
+# NIC 2026 — Day-2 Ready 3.6 workload platform (cluster-configure/platform)
+# Logical networks for the workload VLANs, marketplace VM images (Win11 Enterprise multi-session + M365 for AVD, Windows
+# Server 2025), storage paths on the workload volumes, optional Azure Local NSG. Outline §2.6 / §3.6, build runbook 3.6–3.8,
+# network-design §4.4. Workload VOLUMES are created on the cluster (New-Volume over WinRM) by scripts/New-ClusterWorkloadVolume.ps1
+# because there is no ARM surface for S2D volumes. Reversible (D-014): -Action Remove deletes storage paths, images and
+# logical networks (volumes stay — removing them is a data-loss action left to the owner runbook).
+
+name: cluster-configure-platform
+description: Day-2 workload platform on the deployed cluster - logical networks (AVM), marketplace gallery images (AVM), storage paths (storageContainers) and optional NSG; volumes by on-node PowerShell.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id, type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,        type: string, description: "Region of the cluster resource (D-010)", required: true, default: null, source: environment }
+  - { name: tags,            type: map,    description: "The seven required tags (naming standard §3a)", required: true, default: null, source: environment }
+  - { name: cluster_name,    type: string, description: "Cluster name (volumes are created on this cluster)", required: true, default: null, source: environment }
+  - { name: identity,        type: map,    description: "identity block (local_admin_*_secret refs, names only) - used by the volume script for the WinRM credential", required: true, default: null, source: environment }
+  - { name: nodes,           type: list,   description: "nodes[] - the first node's management_ip is the WinRM target for the volume script", required: true, default: null, source: environment }
+  - { name: logical_networks, type: list,  description: "logical_networks[]: name, vlan_id, subnet, gateway, ip_pool {start,end}, dns_servers (network-design §4.4)", required: true, default: null, source: environment }
+  - { name: storage,         type: map,    description: "storage.volumes[] {name, resiliency, size_gb} and storage.storage_paths[] {name, volume, path}", required: true, default: null, source: environment }
+  - { name: vm_switch_name,  type: string, description: "added: Hyper-V switch created by Network ATC for the Compute intent; (verify) on the cluster with Get-VMSwitch after deployment", required: false, default: "ConvergedSwitch(compute)", source: environment }
+  - { name: marketplace_images, type: list, description: "added: images to download from Azure Marketplace {key, publisher, offer, sku, os_type, version, hyper_v_generation}; key maps to names.img_<key> (Learn: Create VM image from Marketplace, azloc-2609)", required: false, default: [ { key: win11_avd, publisher: microsoftwindowsdesktop, offer: office-365, sku: win11-25h2-avd-m365, os_type: Windows, version: "", hyper_v_generation: V2 }, { key: ws2025, publisher: microsoftwindowsserver, offer: windowsserver, sku: 2025-datacenter-azure-edition, os_type: Windows, version: "", hyper_v_generation: V2 } ], source: environment }
+  - { name: enable_network_security_group, type: bool, description: "added: create the Azure Local NSG nsg_azl_compute (design calls NSGs optional, 'where the design calls for them')", required: false, default: false, source: environment }
+  - { name: names,           type: map,    description: "Resolved name catalog (contract §10)", required: true, default: null, source: generated }
+
+outputs:
+  - { name: logical_network_ids, type: list,   description: "Resource IDs of the logical networks (inputs for AVD session hosts and VM lifecycle demos)" }
+  - { name: image_ids,           type: list,   description: "Resource IDs of the marketplace gallery images" }
+  - { name: storage_path_ids,    type: list,   description: "Resource IDs of the storage paths (storageContainers)" }
+  - { name: network_security_group_id, type: string, description: "NSG resource ID or empty when disabled" }
+  - { name: custom_location_id,  type: string, description: "Custom location the platform resources are bound to" }
+
+secrets:
+  # LOGICAL names (contract §12); the complete keyvault:// references arrive in identity.local_admin_*_secret.
+  - azl-local-admin-username
+  - azl-local-admin-password
+
+destroy: partial   # ARM resources removed by -Action Remove / terraform destroy; S2D volumes are an owner action
+
+names:
+  rg_azl:          { type: rg,   purpose: azl }
+  cl_azl:          { type: cl,   purpose: azl }
+  lnet_compute:    { type: lnet, purpose: compute }
+  lnet_avd:        { type: lnet, purpose: avd }
+  img_win11_avd:   { type: img,  purpose: win11-avd-25h2 }
+  img_ws2025:      { type: img,  purpose: ws2025-dc }
+  csv_vmstore_01:  { type: csv,  purpose: m2-vmstore }
+  sp_vmstore_01:   { type: sp,   purpose: m2-vmstore }
+  nsg_azl_compute: { type: nsg,  purpose: azl-compute }
+  deployment_name: { type: dep,  purpose: azl-platform }

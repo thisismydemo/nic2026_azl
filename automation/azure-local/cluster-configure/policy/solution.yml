@@ -1,0 +1,44 @@
+# NIC 2026 — Day-2 Ready 3.5 governance baseline (cluster-configure/policy)
+# Assigns the compliance initiative init_hybrid_baseline (DEFINED by lz-azure-local at the management group, design
+# §2.3/§7.4) at SUBSCRIPTION scope (asg_hybrid_baseline) with a system-assigned remediation identity, plus the three
+# custom definitions the landing zone deliberately left out: the two Azure Local Insights policies from Learn
+# (AMA on clusters, DCR association on nodes) and the "Key Vault backup extension present" audit. Reversible (D-014):
+# Remove deletes the assignments (and the custom definitions) so the live beat re-assigns and triggers a compliance scan.
+
+name: cluster-configure-policy
+description: Day-2 governance - assign init-<org>-<token>-hybrid-baseline at subscription scope with remediation identity, define and assign the Azure Local Insights and Key Vault backup extension policies; -Action Remove deletes.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id,     type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,            type: string, description: "Region for the assignment identity (D-010)", required: true, default: null, source: environment }
+  - { name: management_group_id, type: string, description: "Management group that holds the initiative definition (lz-azure-local bicep/initiative.bicep). Required for the demo: the initiative module is management-group scope only, so an empty value leaves the policy beat with nothing to assign (conflict A13); empty = the initiative is expected at subscription scope", required: false, default: "", source: environment }
+  - { name: log_analytics_workspace_id, type: string, description: "Workspace for the initiative's DeployIfNotExists parameters (empty = derived from names.law in rg_mon)", required: false, default: "", source: environment }
+  - { name: enforcement_mode,    type: string, description: "added: Default | DoNotEnforce", required: false, default: Default, source: environment }
+  - { name: assign_insights_policies, type: bool, description: "added: also define + assign the two Azure Local Insights policies (Learn: Enable Insights at scale)", required: false, default: true, source: environment }
+  - { name: names,               type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
+
+outputs:
+  - { name: baseline_assignment_id,   type: string, description: "Resource ID of the initiative assignment" }
+  - { name: baseline_principal_id,    type: string, description: "Principal ID of the assignment's remediation identity" }
+  - { name: insights_assignment_ids,  type: list,   description: "Assignment IDs of the Insights policies (empty when disabled)" }
+  - { name: custom_definition_ids,    type: list,   description: "Custom policy definition IDs created at subscription scope" }
+
+secrets: []
+destroy: supported
+
+names:
+  rg_mon:                { type: rg,   purpose: azl-mon }
+  law:                   { type: law,  purpose: "" }         # lab-wide singleton, same name as the landing zone
+  init_hybrid_baseline:  { type: init, purpose: hybrid-baseline }
+  asg_hybrid_baseline:   { type: asg,  purpose: hybrid-baseline }
+  pol_insights_ama:      { type: pol,  purpose: azl-insights-ama }
+  pol_insights_dcra:     { type: pol,  purpose: azl-insights-dcra }
+  pol_akv_backup_ext:    { type: pol,  purpose: akv-backup-ext }
+  asg_insights_ama:      { type: asg,  purpose: azl-insights-ama }
+  asg_insights_dcra:     { type: asg,  purpose: azl-insights-dcra }
+  asg_akv_backup_ext:    { type: asg,  purpose: akv-backup-ext }
+  dcr_insights:          { type: dcr,  purpose: azl-insights }
+  deployment_name:       { type: dep,  purpose: azl-policy }

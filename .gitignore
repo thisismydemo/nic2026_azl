@@ -36,3 +36,41 @@ Thumbs.db
 TMP/
 tmp/
 *.tmp
+
+# Your real environment files (tenant and subscription IDs, addresses, names): local only.
+# Copy automation/shared/examples/*.example.yml to environment/ and keep the copies out of git.
+environment/
+tf-backend.hcl
+*.auto.pkrvars.json
+!*.example.pkrvars.json
+
+# Files the converters generate from your environment files
+*.generated.bicepparam
+*.generated.tfvars.json
+terraform.generated.tfvars.json
+main.generated.bicepparam
+generated.yml
+
+# Terraform working files (the lock file is kept)
+.terraform/
+*.tfplan
+*.tfvars
+!*.example.tfvars
+crash.log
+crash.*.log
+
+# Packer
+packer_cache/
+output-*/
+*.box
+
+# Node (follow-along site build)
+node_modules/
+dist/
+
+# Test and tool output
+TestResults/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

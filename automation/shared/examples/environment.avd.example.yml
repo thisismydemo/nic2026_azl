@@ -1,0 +1,190 @@
+# NIC 2026 lab - AVD environment EXAMPLE (IIC values from the designs, all-zero GUIDs).
+# Copy to environment/avd/environment.yml and replace values. Shared values live in environment/shared/*.yml.
+# Schema: automation/shared/schemas/avd.environment.schema.json
+# Sources: design/avd/landing-zone.md section 11.5, design/avd/hybrid-hyperv-hosts.md section 16.1.
+# Secrets are keyvault://<vault>/<secret> references only (placeholder prefix 'iic-nic26-' in this example).
+
+subscription_id_avd: 00000000-0000-0000-0000-000000000000
+subscription_id_azl: 00000000-0000-0000-0000-000000000000
+
+# --- network (sections 4.1, 4.5) ----------------------------------------------------------------------------------------
+avd_vnet_prefix: 10.100.8.0/22
+avd_subnets:
+  hosts: 10.100.8.0/24
+  pe: 10.100.9.0/26
+  imgbuild: 10.100.9.64/26
+  dnsin: 10.100.9.128/28
+azl_spoke_vnet_id: ""            # output of lz-azure-local; empty until it exists
+azl_spoke_prefix: 10.100.6.0/24
+onprem_compute_prefixes:
+  - 192.168.110.0/24
+  - 192.168.120.0/24
+dns_resolver_inbound_ip: 10.100.9.132
+enable_private_endpoints: false       # D-029: no private endpoints; Azure Files on its public endpoint
+enable_dns_private_resolver: false    # only used when enable_private_endpoints is true
+link_privatelink_zone_to_hub: false
+secondary_dns_ip: 10.100.4.36
+log_analytics_workspace_id: ""
+key_vault_id: ""
+action_group_id: ""
+avd_budget_monthly: 1500
+
+# --- control plane (section 6) -----------------------------------------------------------------------------------------
+host_pools:
+  azure:
+    type: Pooled
+    load_balancer: BreadthFirst
+    max_session_limit: 4
+    start_vm_on_connect: true
+    validation_environment: false
+    session_host_count: 2
+    friendly_name: Asgard
+    preferred_app_group_type: Desktop
+  azl:
+    type: Pooled
+    load_balancer: BreadthFirst
+    max_session_limit: 4
+    start_vm_on_connect: false
+    validation_environment: false
+    session_host_count: 2
+    friendly_name: Midgard
+    preferred_app_group_type: Desktop
+  hybrid:
+    type: Pooled
+    load_balancer: BreadthFirst
+    max_session_limit: 1
+    start_vm_on_connect: false
+    validation_environment: false
+    session_host_count: 2
+    friendly_name: Outer realms
+    preferred_app_group_type: Desktop
+rdp_properties: "enablerdsaadauth:i:1;redirectclipboard:i:1;drivestoredirect:s:;audiomode:i:0;audiocapturemode:i:1;camerastoredirect:s:;redirectprinters:i:0;redirectsmartcards:i:0;redirectwebauthn:i:1;use multimon:i:1;dynamic resolution:i:1;networkautodetect:i:1;bandwidthautodetect:i:1;autoreconnection enabled:i:1"
+scaling_plan:
+  time_zone: W. Europe Standard Time
+  assigned_pools: [azure]
+  schedules:
+    - name: weekdays
+      days_of_week: [Monday, Tuesday, Wednesday, Thursday, Friday]
+      ramp_up_start_time: "07:00"
+      ramp_up_load_balancing: BreadthFirst
+      ramp_up_minimum_hosts_percent: 50
+      ramp_up_capacity_threshold_percent: 60
+      peak_start_time: "09:00"
+      peak_load_balancing: BreadthFirst
+      ramp_down_start_time: "18:00"
+      ramp_down_load_balancing: DepthFirst
+      ramp_down_minimum_hosts_percent: 50
+      ramp_down_capacity_threshold_percent: 60
+      ramp_down_force_logoff_users: false
+      ramp_down_wait_time_minutes: 30
+      ramp_down_notification_message: The realm is closing; save your work.
+      off_peak_start_time: "20:00"
+      off_peak_load_balancing: DepthFirst
+
+# --- identity (section 5.2) --------------------------------------------------------------------------------------------
+entra_groups:
+  avd_azure: grp-iic-nic26-avd-azure
+  avd_azl: grp-iic-nic26-avd-azl
+  avd_hybrid: grp-iic-nic26-avd-hybrid
+  avd_users: grp-iic-nic26-avd-users
+  avd_admins: grp-iic-nic26-avd-admins
+  avd_devices: grp-iic-nic26-avd-devices
+  lab_operators: grp-iic-nic26-lab-operators
+group_object_ids:
+  avd_azure: 00000000-0000-0000-0000-000000000000
+  avd_azl: 00000000-0000-0000-0000-000000000000
+  avd_hybrid: 00000000-0000-0000-0000-000000000000
+  avd_users: 00000000-0000-0000-0000-000000000000
+  avd_admins: 00000000-0000-0000-0000-000000000000
+  avd_devices: 00000000-0000-0000-0000-000000000000
+  lab_operators: 00000000-0000-0000-0000-000000000000
+demo_users:
+  - { upn: thor@contoso.com, display_name: Thor Odinson, realm: azure }
+  - { upn: odin@contoso.com, display_name: Odin Allfather, realm: azl }
+  - { upn: freya@contoso.com, display_name: Freya Vanadis, realm: hybrid }
+  - { upn: heimdall@contoso.com, display_name: Heimdall Gatekeeper, realm: admin }
+ca_policy_name: CA-iic-nic26-avd   # prefix: New-AvdConditionalAccess.ps1 appends -mfa-service and -mfa-sso
+ca_mode: reportOnly
+
+# --- profiles (section 7) ----------------------------------------------------------------------------------------------
+share_names:
+  profiles: nic26-fslogix-profiles
+  odfc: nic26-fslogix-odfc
+share_quota_gib: 256
+fslogix_settings_file: config/fslogix-settings.json
+redirections_xml: config/redirections.xml
+enable_backup: true
+backup_policy:
+  schedule_time_utc: "03:00"
+  retention_days: 7
+enable_policy_assignments: true
+arc_onboard_sp_object_id: 00000000-0000-0000-0000-000000000000
+
+# --- images (section 8) ------------------------------------------------------------------------------------------------
+images:
+  build_vm_size: Standard_D4ds_v4
+  os_disk_size_gb: 128
+  replication_regions: [eastus]
+  image_definitions:
+    - { name: imgdef-iic-nic26-win11-avd, publisher: iic, offer: win11-avd, sku: 25h2-multisession, os_type: Windows, hyper_v_generation: V2, security_type: TrustedLaunch, os_state: Generalized }
+    - { name: imgdef-iic-nic26-win11-ent, publisher: iic, offer: win11-avd, sku: 25h2-ent, os_type: Windows, hyper_v_generation: V2, security_type: TrustedLaunch, os_state: Generalized }
+  aib_source_image:
+    publisher: MicrosoftWindowsDesktop
+    offer: office-365
+    sku: win11-25h2-avd-m365
+    version: latest
+  packer_iso_path: C:\ClusterStorage\csv-nic26-m2-vmstore-01\iso\win11-ent-25h2.iso
+  packer_iso_checksum: none
+  packer_output_path: C:\ClusterStorage\csv-nic26-m2-vmstore-01\images
+  azure_local_image_name: img-iic-nic26-win11-avd-25h2
+  hybrid_image_vhdx: images\img-iic-nic26-win11-ent-25h2.vhdx
+session_host_sku_azure: Standard_D4ds_v4
+session_host_zones: [1, 2]
+computer_name_prefixes:
+  azure: nic26-avd-az
+  azl: nic26-avd-al
+  hybrid: nic26-avd-hv
+
+# --- monitoring and transport ----------------------------------------------------------------------------------------------
+dcr_counter_set: avd-insights-default
+shortpath_managed_port: 3390
+registration_token_ttl_hours: 2
+
+# --- hybrid Hyper-V hosts (hybrid-hyperv-hosts.md 16.1; VLAN 120 per P-08) ------------------------------------------------
+hybrid:
+  cluster_name: nic26-clus01
+  csv_path: C:\ClusterStorage\csv-nic26-m2-vmstore-01
+  compute_switch_name: ConvergedSwitch(compute)
+  vlan_id: 120
+  vcpu: 4
+  memory_gb: 16
+  disk_gb: 128
+  vms:
+    - { name: nic26-avd-hv01, owner_node: nic26-01-n01, mac_address: 00-15-5D-26-15-01, ip_address: 192.168.120.191 }
+    - { name: nic26-avd-hv02, owner_node: nic26-01-n02, mac_address: 00-15-5D-26-15-02, ip_address: 192.168.120.192 }
+  arc_tags:
+    realm: hybrid
+    hypervisor: hyper-v
+    cluster: nic26-clus01
+dhcp_reservations:
+  - { hostname: nic26-avd-hv01, mac: 00-15-5D-26-15-01, ip: 192.168.120.191, vlan_id: 120 }
+  - { hostname: nic26-avd-hv02, mac: 00-15-5D-26-15-02, ip: 192.168.120.192, vlan_id: 120 }
+
+realms:
+  azure:  { enabled: true, join_type: entra, os: win11-multisession, friendly_name: Asgard }
+  azl:    { enabled: true, join_type: entra, os: win11-multisession, friendly_name: Midgard }
+  hybrid: { enabled: true, join_type: entra, os: win11-single, friendly_name: Outer realms }
+patch_channel: intune
+
+avm_versions:
+  avm/res/desktop-virtualization/host-pool: 0.0.0   # pin the confirmed version before use (CONTRACT.md section 5)
+
+# --- secret references (names only) ----------------------------------------------------------------------------------------
+secret_refs:
+  hybrid_local_admin_username: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-hyperv-hybrid-local-admin-username
+  hybrid_local_admin_password: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-hyperv-hybrid-local-admin-password
+  sessionhost_local_admin_username: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-avd-sessionhost-local-admin-username
+  sessionhost_local_admin_password: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-avd-sessionhost-local-admin-password
+  arc_onboarding_client_id: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-arc-onboarding-spn-client-id
+  arc_onboarding_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-arc-onboarding-spn-secret
+  entra_bulk_token: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-avd-entra-bulktoken-secret

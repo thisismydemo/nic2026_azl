@@ -1,0 +1,82 @@
+# NIC 2026 lab - shared environment EXAMPLE (IIC values, all-zero GUIDs, placeholder shared-resource names).
+# Copy to environment/shared/environment.yml and replace every value with the live ones from your private inventory.
+# Schema: automation/shared/schemas/shared.environment.schema.json  (validated by Get-NIC26Config)
+# Secrets are never written here: only keyvault://<vault>/<secret> references appear in environment files.
+
+tenant_id: 00000000-0000-0000-0000-000000000000
+tenant_domain: contoso.com
+management_group_id: mg-iic-landingzones
+
+subscriptions:
+  azure_local: 00000000-0000-0000-0000-000000000000
+  avd: 00000000-0000-0000-0000-000000000000
+  connectivity: 00000000-0000-0000-0000-000000000000
+  identity: 00000000-0000-0000-0000-000000000000
+  management: 00000000-0000-0000-0000-000000000000
+
+location: eastus
+location_short: eus
+org: iic
+token: nic26
+owner_email: lab-owner@contoso.com
+cost_center: iic-nic26-lab
+# Key Vault secret-name prefix <org>-<env-name>- (HCS standard). IIC placeholder here; the registered
+# org/env prefix goes only in the PRIVATE environment file (design/shared/keyvault-and-secrets.md section 3).
+secret_name_prefix: iic-nic26-
+
+tags:
+  project: nic26
+  environment: demo
+  owner: lab-owner@contoso.com
+  cost-center: iic-nic26-lab
+  lifecycle: temporary
+
+# --- existing shared resources (reused as-is, never renamed; names come only from here) -------------------------------
+hub_vnet_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-connectivity-eus-01/providers/Microsoft.Network/virtualNetworks/vnet-iic-hub-eus-01
+hub_vnet_name: vnet-iic-hub-eus-01
+hub_resource_group_name: rg-iic-connectivity-eus-01
+hub_subscription_id: 00000000-0000-0000-0000-000000000000
+hub_address_space: 10.100.0.0/22
+vpn_gateway_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-connectivity-eus-01/providers/Microsoft.Network/virtualNetworkGateways/vgw-iic-hub-eus-01
+local_network_gateway_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-connectivity-eus-01/providers/Microsoft.Network/localNetworkGateways/lgw-iic-onprem-eus-01
+vpn_gateway_bgp_asn: 65422
+vpn_gateway_bgp_peer_ip: 169.254.21.2
+p2s_client_pool: 172.30.100.0/24
+bastion_subnet_prefix: 10.100.0.64/26
+bastion_host_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-connectivity-eus-01/providers/Microsoft.Network/bastionHosts/bas-iic-hub-eus-01
+
+identity_spoke_vnet_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-identity-eus-01/providers/Microsoft.Network/virtualNetworks/vnet-iic-identity-eus-01
+identity_spoke_address_space: 10.100.4.0/24
+management_spoke_vnet_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-management-eus-01/providers/Microsoft.Network/virtualNetworks/vnet-iic-mgmt-eus-01
+management_spoke_address_space: 10.100.5.0/24
+identity_dc_ips:
+  - 10.100.4.36
+  - 10.100.4.37
+dns_servers:
+  - 10.100.4.36
+  - 10.100.4.37
+ad_domain_fqdn: iic.local
+ad_domain_netbios: IMPROBABLE
+
+onprem_prefixes:
+  - 192.168.100.0/24
+  - 192.168.110.0/24
+  - 192.168.120.0/24
+  - 192.168.130.0/24
+  - 192.168.131.0/24
+  - 192.168.132.0/24
+  - 192.168.133.0/24
+  - 10.101.64.0/24
+
+
+# Empty string = the lab creates its own zone (decision P-11).
+privatelink_vaultcore_zone_id: ""
+privatelink_file_zone_id: ""
+privatelink_blob_zone_id: ""
+
+terraform_backend:
+  subscription_id: 00000000-0000-0000-0000-000000000000
+  resource_group_name: rg-iic-nic26-azl-sec-eus-01
+  storage_account_name: stiicnic26tfstateeus01
+  container_name: tfstate
+  use_azuread_auth: true

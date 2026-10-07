@@ -1,0 +1,35 @@
+# NIC 2026 — Day-2 Ready 3.2 update management (cluster-configure/update-manager)
+# Azure Update Manager for the GUEST OS of the Azure Local VMs (Arc machines): maintenance configuration
+# mc_azl (InGuestPatch, the window agreed in outline §1.11) + a dynamic scope by tag so new VMs are covered automatically.
+# The cluster itself is updated by Lifecycle Manager (outline §4.1), not here. Reversible (D-014): Remove = delete the
+# dynamic-scope assignment and the maintenance configuration.
+
+name: cluster-configure-update-manager
+description: Day-2 guest update management - Azure Update Manager maintenance configuration (InGuestPatch) with a tag-based dynamic scope at subscription level; remove = delete.
+scope: azure-local
+tools: [bicep, terraform, powershell]
+depends_on: [cluster-deploy, lz-azure-local]
+
+inputs:
+  - { name: subscription_id, type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,        type: string, description: "Region (D-010)", required: true, default: null, source: environment }
+  - { name: tags,            type: map,    description: "The seven required tags", required: true, default: null, source: environment }
+  - { name: maintenance_window, type: map, description: "added: {start_date_time 'yyyy-MM-dd HH:mm', duration 'HH:mm', time_zone, recur_every} (outline §1.11 windows)", required: false, default: { start_date_time: "2026-10-05 02:00", duration: "03:00", time_zone: "W. Europe Standard Time", recur_every: "Week Sunday" }, source: environment }
+  - { name: patch_classifications, type: list, description: "added: Windows classifications to install", required: false, default: [Critical, Security, UpdateRollup, Definition], source: environment }
+  - { name: reboot_setting,  type: string, description: "added: IfRequired | Never | Always", required: false, default: IfRequired, source: environment }
+  - { name: dynamic_scope_tags, type: map, description: "added: tag name -> list of values that selects the Arc machines (All operator)", required: false, default: { workload: [azure-local] }, source: environment }
+  - { name: dynamic_scope_os_types, type: list, description: "added: OS types in the dynamic scope", required: false, default: [Windows, Linux], source: environment }
+  - { name: names,           type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
+
+outputs:
+  - { name: maintenance_configuration_id, type: string, description: "Resource ID of the maintenance configuration" }
+  - { name: dynamic_scope_assignment_id,  type: string, description: "Resource ID of the subscription-level dynamic scope configuration assignment" }
+
+secrets: []
+destroy: supported
+
+names:
+  rg_mon:          { type: rg,  purpose: azl-mon }
+  mc_azl:          { type: mc,  purpose: azl }
+  mc_azl_dynscope: { type: mc,  purpose: azl-dynscope }   # name of the configurationAssignment (dynamic scope)
+  deployment_name: { type: dep, purpose: azl-update-manager }

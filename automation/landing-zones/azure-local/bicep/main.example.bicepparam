@@ -1,0 +1,161 @@
+// EXAMPLE ONLY - IIC values and all-zero GUIDs (contract §3, §7). The real file is generated:
+//   ConvertTo-NIC26BicepParam -Solution lz-azure-local  ->  bicep/main.generated.bicepparam (git-ignored)
+// The two @secure() parameters (jump_admin_username / jump_admin_password) are NOT in any parameter file;
+// Invoke-LzAzureLocalDeploy.ps1 supplies them in memory at stage S7.
+using 'main.bicep'
+
+param tenant_id = '00000000-0000-0000-0000-000000000000'
+param subscription_id = '00000000-0000-0000-0000-000000000000'
+param management_group_id = 'mg-iic-landingzones'
+param location = 'eastus'
+param org = 'iic'
+param token = 'nic26'
+param region_short = 'eus'
+param tags = {
+  project: 'nic26'
+  workload: 'azure-local'
+  environment: 'demo'
+  owner: 'user1@contoso.com'
+  'managed-by': 'bicep'
+  'cost-center': 'iic-demo'
+  lifecycle: 'temporary'
+}
+
+param budget_monthly_amount = 2500
+param budget_contact_emails = ['user1@contoso.com']
+param defender_servers_plan = 'off'
+param enable_defender_keyvault = false
+param enable_defender_storage = false
+
+// Documentation address ranges only (RFC 5737 / RFC 3849 equivalents); the real plan lives in environment/.
+param spoke_address_space = '192.0.2.0/24'
+param subnet_jump_prefix = '192.0.2.0/27'
+param subnet_pe_prefix = '192.0.2.32/27'
+param subnet_mgmt_prefix = '192.0.2.64/26'
+param subnet_asr_prefix = '192.0.2.128/26'
+param subnet_asr_test_prefix = '192.0.2.192/26'
+param dns_servers = ['198.51.100.10', '198.51.100.11']
+param hub_vnet_id = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-hub-eus-01/providers/Microsoft.Network/virtualNetworks/vnet-iic-hub-eus-01'
+param hub_resource_group_name = 'rg-iic-hub-eus-01'
+param hub_subscription_id = '00000000-0000-0000-0000-000000000000'
+param bastion_subnet_prefix = '203.0.113.64/26'
+param p2s_client_pool = '203.0.113.128/25'
+param identity_spoke_vnet_id = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-identity-eus-01/providers/Microsoft.Network/virtualNetworks/vnet-iic-identity-eus-01'
+param management_spoke_vnet_id = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-mgmt-eus-01/providers/Microsoft.Network/virtualNetworks/vnet-iic-mgmt-eus-01'
+param onprem_prefixes = ['198.51.100.0/25', '198.51.100.128/25']
+param avd_spoke_vnet_id = ''
+param identity_spoke_prefix = '198.51.100.0/24'
+param management_spoke_prefix = '203.0.113.0/26'
+param avd_spoke_prefix = ''
+param enable_identity_peering = false
+param enable_management_peering = false
+param enable_private_endpoints = false
+param enable_monitor_private_link = false
+param privatelink_vaultcore_zone_id = ''
+
+param group_object_ids = {
+  grp_lab_operators: '00000000-0000-0000-0000-000000000000'
+  grp_azl_admins: '00000000-0000-0000-0000-000000000000'
+  grp_azl_operators: '00000000-0000-0000-0000-000000000000'
+  grp_azl_readers: '00000000-0000-0000-0000-000000000000'
+}
+param pim_max_activation_hours = 8
+param manage_pim_in_iac = false
+param kv_soft_delete_days = 7
+param kv_public_network_access = { ops: 'Enabled', azl: 'Enabled' }
+param azl_rp_app_object_id = '00000000-0000-0000-0000-000000000000'
+
+param central_log_analytics_workspace_id = ''
+param deploy_platform_scope_items = false
+param law_retention_days = 30
+param law_daily_cap_gb = 2
+
+param enable_voucher_storage = false
+param rsv_storage_redundancy = 'LocallyRedundant'
+
+param enable_jump_server = true
+param jump_vm_size = 'Standard_D4s_v4'
+param jump_data_disk_gb = 256
+param jump_private_ip = ''
+param jump_encryption_at_host = false
+param jump_admin_username_secret = 'keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-local-admin-username'
+param jump_admin_password_secret = 'keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-local-admin-password'
+
+param enabled_stages = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']
+
+// Resolved by New-NIC26ResourceName from solution.yml `names:` - shown here only so the example compiles.
+param names = {
+  rg_azl: 'rg-iic-nic26-azl-eus-01'
+  rg_net: 'rg-iic-nic26-azl-net-eus-01'
+  rg_mon: 'rg-iic-nic26-azl-mon-eus-01'
+  rg_sec: 'rg-iic-nic26-azl-sec-eus-01'
+  rg_bcdr: 'rg-iic-nic26-azl-bcdr-eus-01'
+  rg_dr: 'rg-iic-nic26-azl-dr-eus-01'
+  rg_mgmt: 'rg-iic-nic26-azl-mgmt-eus-01'
+  spoke_vnet: 'vnet-iic-nic26-azl-eus-01'
+  snet_jump: 'snet-iic-nic26-jump'
+  snet_pe: 'snet-iic-nic26-pe'
+  snet_mgmt: 'snet-iic-nic26-mgmt'
+  snet_asr: 'snet-iic-nic26-asr'
+  snet_asr_test: 'snet-iic-nic26-asr-test'
+  nsg_jump: 'nsg-iic-nic26-jump-eus-01'
+  nsg_pe: 'nsg-iic-nic26-pe-eus-01'
+  nsg_mgmt: 'nsg-iic-nic26-mgmt-eus-01'
+  nsg_asr: 'nsg-iic-nic26-asr-eus-01'
+  nsg_asr_test: 'nsg-iic-nic26-asr-test-eus-01'
+  rt_azl: 'rt-iic-nic26-azl-eus-01'
+  peer_spoke_to_hub: 'peer-vnet-iic-nic26-azl-eus-01-to-hub'
+  peer_hub_to_spoke: 'peer-hub-to-vnet-iic-nic26-azl-eus-01'
+  peer_spoke_to_avd: 'peer-vnet-iic-nic26-azl-eus-01-to-avd'
+  peer_spoke_to_identity: 'peer-vnet-iic-nic26-azl-eus-01-to-identity'
+  peer_identity_to_spoke: 'peer-identity-to-vnet-iic-nic26-azl-eus-01'
+  peer_spoke_to_mgmt: 'peer-vnet-iic-nic26-azl-eus-01-to-mgmt'
+  peer_mgmt_to_spoke: 'peer-mgmt-to-vnet-iic-nic26-azl-eus-01'
+  pdns_vaultcore: 'privatelink.vaultcore.azure.net'
+  pdns_monitor: 'privatelink.monitor.azure.com'
+  pdns_oms: 'privatelink.oms.opinsights.azure.com'
+  pdns_ods: 'privatelink.ods.opinsights.azure.com'
+  pdns_agentsvc: 'privatelink.agentsvc.azure-automation.net'
+  link_azl: 'link-iic-nic26-azl'
+  link_identity: 'link-iic-nic26-identity'
+  link_avd: 'link-iic-nic26-avd'
+  pep_kv_ops: 'pep-iic-nic26-kvops-eus-01'
+  pep_kv_azl: 'pep-iic-nic26-kvazl-eus-01'
+  kv_ops: 'kv-iic-nic26-ops-eus-01'
+  kv_azl: 'kv-iic-nic26-azl-eus-01'
+  id_deploy: 'id-iic-nic26-deploy-eus-01'
+  grp_lab_operators: 'grp-iic-nic26-lab-operators'
+  grp_azl_admins: 'grp-iic-nic26-azl-admins'
+  grp_azl_operators: 'grp-iic-nic26-azl-operators'
+  grp_azl_readers: 'grp-iic-nic26-azl-readers'
+  law: 'law-iic-nic26-eus-01'
+  ag_ops: 'ag-iic-nic26-ops-eus-01'
+  dce_azl: 'dce-iic-nic26-azl-eus-01'
+  budget_azl: 'budget-iic-nic26-azl-01'
+  asg_allowed_locations: 'asg-iic-nic26-allowed-locations'
+  asg_require_tags_rg: 'asg-iic-nic26-require-tags-rg'
+  asg_inherit_tags: 'asg-iic-nic26-inherit-tags'
+  asg_activity_log: 'asg-iic-nic26-activity-log'
+  init_hybrid_baseline: 'init-iic-nic26-hybrid-baseline'
+  st_witness: 'stiicnic26witeus01'
+  st_asr_cache: 'stiicnic26asrcacheeus01'
+  st_voucher: 'stiicnic26vchreus01'
+  st_tfstate: 'stiicnic26tfstateeus01'
+  st_diag: 'stiicnic26diageus01'
+  rsv_azl: 'rsv-iic-nic26-azl-eus-01'
+  asrpol_tier1: 'asrpol-iic-nic26-tier1-eus-01'
+  bkp_tier1: 'bkp-iic-nic26-tier1-eus-01'
+  rp_tier1: 'rp-iic-nic26-tier1-01'
+  vm_jump: 'vm-iic-nic26-jump-eus-01'
+  vm_jump_computer_name: 'nic26-jmp-01'
+  nic_jump: 'nic-vm-iic-nic26-jump-eus-01-01'
+  osdisk_jump: 'osdisk-vm-iic-nic26-jump-eus-01'
+  datadisk_jump: 'datadisk-vm-iic-nic26-jump-eus-01-01'
+  dcr_insights: 'dcr-iic-nic26-azl-insights-eus-01'
+  dcr_vminsights: 'dcr-iic-nic26-azl-vminsights-eus-01'
+  mc_azl: 'mc-iic-nic26-azl-eus-01'
+  alert_kv_backup: 'alert-iic-nic26-kv-backup-eus-01'
+  deployment_name: 'dep-iic-nic26-lz-azl-01'
+  tfstate_key: 'lz-azl.tfstate'
+  tfstate_container: 'tfstate'
+}

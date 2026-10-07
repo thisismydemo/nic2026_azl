@@ -1,0 +1,83 @@
+# Checks the automation in this repository: PSScriptAnalyzer, Pester (nothing is deployed, nothing needs a tenant), bicep build,
+# terraform fmt and validate, packer validate and a Markdown link check. The same script runs locally:
+#   pwsh automation/shared/scripts/Invoke-CiChecks.ps1 -Check All
+# Actions are pinned to full commit SHAs (the comment names the release). Dependabot or a manual bump moves them.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.3
+          terraform_wrapper: false
+
+      - uses: hashicorp/setup-packer@ce93c3c08a6c2ff2275bf4b54ff0d9a75f6c9789 # v3.4.0
+        with:
+          version: 1.16.1
+
+      - name: Install the PowerShell modules the checks need
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          # -SkipPublisherCheck: the runner image ships Pester 3.4 signed by Microsoft; the pinned 5.9.1 has a different publisher.
+          Install-Module Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser -Force
+          if (-not (Get-Module Az.Accounts -ListAvailable)) { Install-Module Az -Scope CurrentUser -Force }
+
+      - name: Static analysis
+        shell: pwsh
+        run: ./automation/shared/scripts/Invoke-CiChecks.ps1 -Check Analyzer -ResultPath ci-analyzer.json
+
+      - name: Pester suites (one process per suite)
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./automation/shared/scripts/Invoke-CiChecks.ps1 -Check Pester -ResultPath ci-pester.json
+
+      - name: Bicep build
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./automation/shared/scripts/Invoke-CiChecks.ps1 -Check Bicep -ResultPath ci-bicep.json
+
+      - name: Terraform fmt and validate
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./automation/shared/scripts/Invoke-CiChecks.ps1 -Check Terraform -ResultPath ci-terraform.json
+
+      - name: Packer validate
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./automation/shared/scripts/Invoke-CiChecks.ps1 -Check Packer -ResultPath ci-packer.json
+
+      - name: Markdown links
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./automation/shared/scripts/Invoke-CiChecks.ps1 -Check Links -ResultPath ci-links.json
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-results
+          path: ci-*.json
+          if-no-files-found: error

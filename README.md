@@ -1,125 +1,61 @@
 # Hybrid Cloud: Plan, Deploy, and Operate Azure Local from Discovery to Day 2
 
-## Session Overview
+This repository accompanies a session in three phases. Plan and Discover covers workload assessment with Azure Local Surveyor and RVTools or Azure Migrate, sizing, topology, Network ATC design and identity strategy (Local Identity with Key Vault). Deploy and Day-2 Ready covers cloud-driven deployment with Bicep, Network ATC, post-deployment validation, Azure Monitor, Update Manager, backup, RBAC with PIM and Azure Policy. Day 2 Operations covers lifecycle updates, fault diagnosis, capacity, VM lifecycle through Arc and a planned Azure Site Recovery failover.
 
-**Conference:** NIC 2026  
-**Date:** October 15, 2026  
-**Time:** 9:50 AM (W Europe Time)  
-**Duration:** 60 minutes  
-**Level:** 400 (Expert)  
-**Location:** Amsterdam
+The session and this repository target the current Azure Local release, the 2609 release family.
 
-This practical, demo-driven technical session is for people interested in deploying Azure Local. In one hour, learn how to assess workloads and plan the infrastructure, deploy the cluster, configure Day-2 readiness, and handle ongoing operations. Demonstrations use a real cluster, with supporting artifacts available so you can apply what you learn afterward.
+## Session
 
-**No prerequisites beyond curiosity.** Familiarity with Hyper-V, Failover Clustering, VMware, or basic Azure concepts will enhance your learning, but not required.
+| | |
+|---|---|
+| Conference | NIC 2026 |
+| Date and time | Thursday 15 October 2026, 09:50 (W. Europe Time) |
+| Length | 60 minutes |
+| Level | 400 |
+| Speaker | Kristopher Turner |
+| Release | Azure Local 2609 release family |
 
-## What You'll Learn
+## Start here
 
-A comprehensive walkthrough of the complete Azure Local lifecycle, organized into three phases:
+1. Open the [follow-along site](https://thisismydemo.github.io/nic2026_azl/) (it goes live once GitHub Pages is switched on for this repository), or read [follow-along/README.md](follow-along/README.md). The session is mostly watch and read. You can follow along fully for the Surveyor assessment on the synthetic workbook and for the Bicep what-if; neither needs a cluster.
+2. Read the guides and runbooks in [handouts/](handouts/).
+3. Read [automation/README.md](automation/README.md) for the run order, configuration and tests of the deployment automation.
 
-### Phase 1: Plan and Discover
-- **Workload Assessment** - Using [Azure Local Surveyor](https://azurelocal.cloud/azurelocal-surveyor/) for assessment and sizing, with RVTools or Azure Migrate supplying workload inventory
-- **Sizing** - Hardware requirements against Azure Local 2604 specifications
-- **Hardware Decision Framework** - Validated solutions, Premier partnerships, or disaggregated SAN-attached architectures
-- **Topology Selection** - Cluster patterns including Rack Aware Cluster configurations
-- **Network Design** - Network ATC intent-based design
-- **Identity Strategy** - Local Identity with Key Vault, Active Directory, or hybrid approaches
+## What is in this repository
 
-### Phase 2: Deploy and Day-2 Ready
-- **Cloud-Driven Deployment** - Infrastructure-as-code through portal and Bicep
-- **Local Identity Bootstrap** - Secure initialization without on-premises dependencies
-- **Network ATC Application** - Automated network intent implementation
-- **Post-Deployment Validation** - Verification procedures
-- **Day-2 Readiness** - Azure Monitor, Update Manager, Backup, RBAC with PIM, Azure Policy
+| Path | What it holds |
+|---|---|
+| `presentation/Azure_Local_Discovery_to_Day2_NIC2026.pptx` | The deck |
+| `handouts/` | `Azure_Local_Sizing_Guide.md`, `Planning_and_Design_Decisions.md`, `Network_ATC_Design.md`, `Deployment_Guide.md`, `Day2_Readiness_Checklist.md`, `Day2_Operations_Runbook.md`, `ASR_Failover_Procedures.md`, `Azure_Migrate_to_Azure_Local.md`, `Troubleshooting_Guide.md` |
+| `src/assessment/` | `IIC-RVTools-demo.xlsx`, a synthetic RVTools workbook, and its README |
+| `follow-along/README.md` | The attendee guide in Markdown |
+| `follow-along-site/` | Source of the follow-along site |
+| `automation/shared/` | The `NIC26.Automation` PowerShell module (config loader, naming, converters, Key Vault resolver), JSON Schemas and example environment files |
+| `automation/landing-zones/azure-local/` | Subscription foundation, spoke network, vaults, Log Analytics, Recovery Services vault, witness storage and jump server |
+| `automation/azure-local/cluster-deploy/` | Validate and deploy the cluster, with Bicep or Terraform plus scripts |
+| `automation/azure-local/cluster-configure/` | Day-2 configuration: monitoring, Update Manager, Defender, backup and Site Recovery, access with PIM, platform, policy |
+| `automation/demo/` | Readiness gate, cluster and update dashboards, reversible faults with undo, Site Recovery helpers |
 
-### Phase 3: Day 2 Operations
-- **Lifecycle Manager** - Solution updates with validation
-- **Fault Diagnosis** - Node failures, drive failures, Network ATC drift resolution
-- **Capacity Management** - Utilization monitoring and expansion planning
-- **VM Lifecycle** - Managing virtual machines through Arc
-- **Disaster Recovery** - Planned ASR failover to Azure
+Bicep and Terraform are kept in parity; PowerShell orchestrates.
 
-## Live Demo
+## What is tested and what is not
 
-A complete walkthrough showing discovery → deployment → Day-2 readiness → operations → disaster recovery, with every step demonstrating real-world scenarios.
-
-## Attendee Deliverables
-
-You leave with production-configurable artifacts:
-
-- ✅ **Bicep Deployment Package** - Complete infrastructure-as-code for cluster and VM deployment
-- ✅ **Azure Policy Initiative** - Compliance baseline for hybrid cloud
-- ✅ **Day-2 Operations Runbook** - Step-by-step operational procedures
-- ✅ **Azure Update Manager Templates** - Maintenance configuration patterns
-- ✅ **Azure Monitor Data Collection Rules** - Cost-conscious telemetry
-- ✅ **Alert Rules** - Pre-built monitoring and alerting
-- ✅ **Complete GitHub Repository** - Full deployment code, runbooks, and documentation
-
-## Repository Contents
-
-### `/PRESENTATION`
-- NIC 2026 PowerPoint presentation (using official NIC template)
-- Speaker notes and slide references
-
-### `/HANDOUTS`
-- **Azure_Local_Sizing_Guide.md** - Hardware selection and capacity planning
-- **Network_ATC_Design.md** - Network intent design patterns
-- **Day2_Operations_Runbook.md** - Complete operations procedures
-- **ASR_Failover_Procedures.md** - Disaster recovery and failover steps
-- **Troubleshooting_Guide.md** - Common issues and resolutions
-
-### `/src/bicep`
-- `azure-local-cluster.bicep` - Cluster infrastructure
-- `vm-deployment.bicep` - Virtual machine deployment
-- `network-atc.bicep` - Network ATC intent configuration
-- `monitoring-stack.bicep` - Monitoring and telemetry setup
-
-### `/src/scripts`
-- **discovery/** - Assess-Workloads.ps1
-- **deploy/** - Local-Identity-Bootstrap.ps1, Post-Deploy-Validation.ps1
-- **operations/** - Fault-Diagnosis.ps1, Capacity-Check.ps1, Update-Manager-Config.ps1
-- **asr/** - Failover-Procedures.ps1
-
-### `/src/policies`
-- `hybrid-baseline-initiative.json` - Azure Policy initiative
-
-### `/src/azure-monitor`
-- `dcr-hybrid.json` - Data Collection Rules
-- `alert-rules.json` - Alert rule templates
-
-### `/src/runbooks`
-- `Day2-Operations-Runbook.md` - Detailed operational procedures
-
-## Getting Started
-
-1. **Read the Sizing Guide** - Start with `HANDOUTS/Azure_Local_Sizing_Guide.md`
-2. **Review Network Design** - Check `HANDOUTS/Network_ATC_Design.md`
-3. **Plan Your Deployment** - Use Bicep templates in `/src/bicep`
-4. **Deploy** - Run Bicep deployment with Post-Deploy-Validation.ps1
-5. **Operate** - Follow Day2-Operations-Runbook.md
+The code is tested with Pester (using mocks), by compiling the Bicep and by validating the Terraform. It has not yet been run end to end against a tenant or cluster from this repository: treat the first deployment as a test and use a lab. Site Recovery for Azure Local is a preview integration in some releases. The fault helpers change a live cluster; use a lab. Everything is variable-driven, and the example files hold neutral placeholder values that you replace with your own.
 
 ## Prerequisites
 
-- Basic understanding of Azure concepts
-- Familiarity with Hyper-V, Failover Clustering, or virtualization platforms (helpful)
-- PowerShell 7+ for scripting
-- Access to Azure subscription and Azure Local cluster
+- PowerShell 7.4 or later, Az PowerShell, Azure CLI with Bicep, Terraform 1.9 or later, Pester 5.5 or later
+- An Azure subscription with Owner-level rights
+- For the cluster, a Windows machine that can reach the nodes
 
-## Support & Questions
+## Security
 
-For questions about the content:
-- Review the Troubleshooting Guide in HANDOUTS
-- Check the Day-2 Operations Runbook for operational questions
-- Refer to official Microsoft Azure Local documentation
+Secrets never go in files; use Key Vault references only. Report a suspected vulnerability or leaked secret privately through the repository's Security tab (see [SECURITY.md](SECURITY.md)), and never in a public issue.
 
 ## License
 
-These materials are provided as-is for educational purposes.
+MIT. See [LICENSE](LICENSE).
 
-## Speaker
+## Feedback
 
-Presented at NIC 2026
-
----
-
-**Questions? Issues? Feedback?** Open an issue in this repository.
+Open an issue for content questions.

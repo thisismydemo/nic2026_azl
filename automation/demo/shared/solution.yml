@@ -1,0 +1,29 @@
+# NIC 2026 — demo support, shared (demo-shared)
+# Manifest per automation/CONTRACT.md §2, §10 and §12. PowerShell only: Test-DemoPrerequisites, Start-DemoRecording and the
+# DemoCommon module used by demo/azure-local and demo/avd.
+
+name: demo-shared
+description: Demo-day support shared by both sessions — the console prerequisites check, the demo-screen helper and the DemoCommon module (screen-hygiene filter, guards, fault locks, mockable wrappers).
+scope: shared
+tools: [powershell]
+depends_on: [lz-azure-local]
+
+inputs:
+  - { name: tenant_domain,         type: string, description: "Tenant domain masked by the screen-hygiene filter", required: true,  default: null, source: environment }
+  - { name: tenant_id,             type: string, description: "Tenant ID masked by the screen-hygiene filter", required: true,  default: null, source: environment }
+  - { name: subscriptions,         type: map,    description: "Subscription IDs masked by the screen-hygiene filter", required: true,  default: null, source: environment }
+  - { name: owner_email,           type: string, description: "Owner e-mail masked by the screen-hygiene filter", required: true,  default: null, source: environment }
+  - { name: screen_hidden_terms,   type: list,   description: "added: extra literal terms the screen-hygiene filter masks (tenant short name, shared resource names)", required: false, default: [], source: environment }
+  - { name: org,                   type: string, description: "Naming segment <org> (vault names resolved by New-NIC26ResourceName)", required: true, default: null, source: environment }
+  - { name: token,                 type: string, description: "Naming segment <token>", required: true, default: null, source: environment }
+  - { name: location_short,        type: string, description: "Naming segment <region>", required: true, default: null, source: environment }
+
+outputs:
+  - { name: demo_state_dir, type: string, description: "Folder on the jump server holding the fault-lock registry (NIC26_DEMO_STATE_DIR or LOCALAPPDATA\nic26-demo)." }
+
+secrets: []
+
+destroy: none
+
+names:
+  kv_azl: { type: kv, purpose: azl }      # cluster vault (read-only for the demo: DNS smoke check)

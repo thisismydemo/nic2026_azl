@@ -1,0 +1,867 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nic26.contoso.com/schemas/azure-local.environment.schema.json",
+  "title": "NIC 2026 Azure Local environment (environment/azure-local/*.yml)",
+  "description": "Landing-zone variables (design/azure-local/landing-zone.md section 10.6), cluster facts (nodes, VLANs, intents, IP plan, QoS, witness, identity, release from design/azure-local/network-design.md) and vault names. Secrets are keyvault:// references only. Unknown keys are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "subscription_id",
+    "spoke_address_space",
+    "subnet_jump_prefix",
+    "subnet_pe_prefix",
+    "subnet_mgmt_prefix",
+    "subnet_asr_prefix",
+    "subnet_asr_test_prefix",
+    "budget_monthly_amount",
+    "budget_contact_emails",
+    "enable_monitor_private_link",
+    "enable_voucher_storage",
+    "enable_jump_server",
+    "jump_vm_size",
+    "jump_admin_username_secret",
+    "jump_admin_password_secret",
+    "entra_groups",
+    "group_object_ids",
+    "pim_max_activation_hours",
+    "law_retention_days",
+    "law_daily_cap_gb",
+    "defender_servers_plan",
+    "enable_defender_keyvault",
+    "enable_defender_storage",
+    "kv_soft_delete_days",
+    "kv_public_network_access",
+    "kv_ops_name",
+    "kv_azl_name",
+    "rsv_storage_redundancy",
+    "azl_rp_app_object_id",
+    "cluster_name",
+    "release",
+    "identity",
+    "witness",
+    "nodes",
+    "vlans",
+    "intents",
+    "ip_plan",
+    "secret_refs"
+  ],
+  "properties": {
+    "subscription_id": {
+      "$ref": "#/$defs/guid",
+      "description": "Azure Local landing-zone subscription (same value as shared.subscriptions.azure_local)."
+    },
+    "spoke_address_space": {
+      "$ref": "#/$defs/cidr",
+      "description": "Spoke VNet address space (LZ-03)."
+    },
+    "subnet_jump_prefix": {
+      "$ref": "#/$defs/cidr"
+    },
+    "subnet_pe_prefix": {
+      "$ref": "#/$defs/cidr"
+    },
+    "subnet_mgmt_prefix": {
+      "$ref": "#/$defs/cidr"
+    },
+    "subnet_asr_prefix": {
+      "$ref": "#/$defs/cidr"
+    },
+    "subnet_asr_test_prefix": {
+      "$ref": "#/$defs/cidr"
+    },
+    "avd_spoke_vnet_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "AVD spoke VNet id for a direct peering from the Azure Local landing zone. Leave empty: lz-avd owns both sides of that peering; a second one would fail."
+    },
+    "avd_spoke_prefix": {
+      "$ref": "#/$defs/cidr",
+      "description": "AVD spoke address prefix for NSG rules (same value as avd.avd_vnet_prefix)."
+    },
+    "enable_identity_peering": {
+      "type": "boolean",
+      "description": "lz-azure-local: create the direct spoke<->identity VNet peerings (one resource on the shared identity VNet; owner approval, P-13)."
+    },
+    "enable_management_peering": {
+      "type": "boolean",
+      "description": "lz-azure-local: create the direct spoke<->management VNet peerings (owner approval, P-13)."
+    },
+    "manage_pim_in_iac": {
+      "type": "boolean",
+      "description": "lz-azure-local: create PIM eligible assignments from IaC instead of the script (default false)."
+    },
+    "jump_data_disk_gb": {
+      "type": "integer",
+      "minimum": 32,
+      "maximum": 4096,
+      "description": "Jump server data disk size in GiB (MP-02)."
+    },
+    "jump_private_ip": {
+      "$ref": "#/$defs/ipv4",
+      "description": "Static private IP of the jump server inside subnet_jump_prefix (MP-02)."
+    },
+    "jump_encryption_at_host": {
+      "type": "boolean",
+      "description": "Encryption at host for the jump server (needs the Microsoft.Compute/EncryptionAtHost feature)."
+    },
+    "enabled_stages": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^S-?[0-9]{1,2}$"
+      },
+      "description": "lz-azure-local IaC stages to deploy in this run (subset of S1..S7)."
+    },
+    "secret_name_prefix": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{2,8}-[a-z0-9]{3,8}-$",
+      "description": "Normally inherited from shared; set here only to override for this scope."
+    },
+    "budget_monthly_amount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "budget_contact_emails": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/email"
+      }
+    },
+    "enable_private_endpoints": {
+      "type": "boolean",
+      "description": "Owner decision D-029. false (default) = public endpoints, no privatelink zones, links or private link; true = private-endpoint design."
+    },
+    "enable_monitor_private_link": {
+      "type": "boolean"
+    },
+    "enable_voucher_storage": {
+      "type": "boolean"
+    },
+    "enable_jump_server": {
+      "type": "boolean"
+    },
+    "jump_vm_size": {
+      "type": "string",
+      "pattern": "^Standard_[A-Za-z0-9_-]+$"
+    },
+    "jump_admin_username_secret": {
+      "$ref": "#/$defs/secretRef"
+    },
+    "jump_admin_password_secret": {
+      "$ref": "#/$defs/secretRef"
+    },
+    "entra_groups": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lab_operators",
+        "azl_admins",
+        "azl_operators",
+        "azl_readers"
+      ],
+      "description": "Entra group display names (naming standard section 5).",
+      "properties": {
+        "lab_operators": {
+          "$ref": "#/$defs/groupName"
+        },
+        "azl_admins": {
+          "$ref": "#/$defs/groupName"
+        },
+        "azl_operators": {
+          "$ref": "#/$defs/groupName"
+        },
+        "azl_readers": {
+          "$ref": "#/$defs/groupName"
+        }
+      }
+    },
+    "group_object_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grp_lab_operators",
+        "grp_azl_admins",
+        "grp_azl_operators",
+        "grp_azl_readers"
+      ],
+      "description": "Object IDs written by the group-creation script (S0), keyed by the lz-azure-local names-catalog keys.",
+      "properties": {
+        "grp_lab_operators": {
+          "$ref": "#/$defs/guid"
+        },
+        "grp_azl_admins": {
+          "$ref": "#/$defs/guid"
+        },
+        "grp_azl_operators": {
+          "$ref": "#/$defs/guid"
+        },
+        "grp_azl_readers": {
+          "$ref": "#/$defs/guid"
+        }
+      }
+    },
+    "pim_max_activation_hours": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24
+    },
+    "law_retention_days": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 730
+    },
+    "law_daily_cap_gb": {
+      "type": "number",
+      "minimum": 0.023,
+      "maximum": 1000
+    },
+    "central_log_analytics_workspace_id": {
+      "type": "string",
+      "pattern": "^$|^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$",
+      "description": "Resource ID of the central Log Analytics workspace of the platform management subscription; empty creates a workload workspace."
+    },
+    "deploy_platform_scope_items": {
+      "type": "boolean",
+      "description": "Deploy subscription policy and Defender, the activity-log export and peerings on platform-owned VNets; false (default) leaves them to their owners."
+    },
+    "defender_servers_plan": {
+      "type": "string",
+      "enum": [
+        "P1",
+        "P2",
+        "off"
+      ]
+    },
+    "enable_defender_keyvault": {
+      "type": "boolean"
+    },
+    "enable_defender_storage": {
+      "type": "boolean"
+    },
+    "kv_soft_delete_days": {
+      "type": "integer",
+      "minimum": 7,
+      "maximum": 90
+    },
+    "kv_public_network_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ops",
+        "azl"
+      ],
+      "description": "Per-vault phase flag (K-4): the cluster vault stays Enabled through Validate/Deploy.",
+      "properties": {
+        "ops": {
+          "type": "string",
+          "enum": [
+            "Enabled",
+            "Disabled"
+          ]
+        },
+        "azl": {
+          "type": "string",
+          "enum": [
+            "Enabled",
+            "Disabled"
+          ]
+        }
+      }
+    },
+    "kv_ops_name": {
+      "$ref": "#/$defs/keyVaultName",
+      "description": "Operations vault name (K-1)."
+    },
+    "kv_azl_name": {
+      "$ref": "#/$defs/keyVaultName",
+      "description": "Cluster-owned vault name (K-1)."
+    },
+    "rsv_storage_redundancy": {
+      "type": "string",
+      "enum": [
+        "LocallyRedundant",
+        "ZoneRedundant",
+        "GeoRedundant"
+      ]
+    },
+    "azl_rp_app_object_id": {
+      "$ref": "#/$defs/guid",
+      "description": "Object id of the Microsoft.AzureStackHCI Resource Provider first-party application in this tenant."
+    },
+    "log_analytics_workspace_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Landing-zone output recorded for the deploy and Day-2 solutions."
+    },
+    "action_group_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty"
+    },
+    "cluster_name": {
+      "$ref": "#/$defs/netbios",
+      "description": "Cluster / CNO name (D-009)."
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "azure_local_version"
+      ],
+      "properties": {
+        "azure_local_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+\\.\\d+$",
+          "description": "Deployed Azure Local release (D-019), e.g. 12.2609.1003.7."
+        },
+        "sbe_version": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "OEM Solution Builder Extension version."
+        },
+        "os_build": {
+          "type": "string",
+          "maxLength": 64
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "dns_zone",
+        "deployment_identity_name",
+        "local_admin_username_secret",
+        "local_admin_password_secret"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": [
+            "local-identity-keyvault",
+            "ad-joined",
+            "hybrid"
+          ],
+          "description": "D-008: Local Identity with Key Vault."
+        },
+        "dns_zone": {
+          "$ref": "#/$defs/hostname",
+          "description": "DNS zone hosted on the existing DCs for nodes and cluster name."
+        },
+        "deployment_identity_name": {
+          "type": "string",
+          "pattern": "^id-[a-z0-9-]+$"
+        },
+        "local_admin_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "local_admin_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        }
+      }
+    },
+    "witness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "storage_account_name"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "cloud",
+            "fileshare"
+          ]
+        },
+        "storage_account_name": {
+          "$ref": "#/$defs/storageAccountName"
+        },
+        "storage_key_secret": {
+          "$ref": "#/$defs/secretRef",
+          "description": "Platform-mandated WitnessStorageKey in the cluster vault (written by the deploy script, never by IaC)."
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "management_ip",
+          "storage_ips",
+          "lom1_mac"
+        ],
+        "properties": {
+          "name": {
+            "$ref": "#/$defs/netbios"
+          },
+          "management_ip": {
+            "$ref": "#/$defs/ipv4"
+          },
+          "storage_ips": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "smb1",
+              "smb2"
+            ],
+            "properties": {
+              "smb1": {
+                "$ref": "#/$defs/ipv4"
+              },
+              "smb2": {
+                "$ref": "#/$defs/ipv4"
+              }
+            }
+          },
+          "lom1_mac": {
+            "$ref": "#/$defs/mac"
+          }
+        }
+      }
+    },
+    "vlans": {
+      "type": "object",
+      "required": [
+        "management",
+        "compute",
+        "storage_a",
+        "storage_b",
+        "avd",
+        "oob"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/vlan"
+      }
+    },
+    "intents": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "traffic_types",
+          "adapters"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "Management",
+              "Compute",
+              "Storage"
+            ]
+          },
+          "traffic_types": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "Management",
+                "Compute",
+                "Storage"
+              ]
+            }
+          },
+          "adapters": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "overrides": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "jumbo_packet": {
+                "type": "integer",
+                "enum": [
+                  1514,
+                  4088,
+                  9014
+                ]
+              },
+              "rdma_protocol": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "RoCEv2",
+                  "iWARP",
+                  "RoCE",
+                  null
+                ],
+                "description": "Only on OEM guidance; null leaves Network ATC's detection."
+              },
+              "storage_vlans": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                }
+              },
+              "enable_storage_auto_ip": {
+                "type": "boolean"
+              },
+              "rdma_enabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ip_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "management_subnet",
+        "default_gateway",
+        "infrastructure_pool",
+        "dns_servers",
+        "dns_zone",
+        "reserved_ranges",
+        "storage_auto_ip"
+      ],
+      "properties": {
+        "management_subnet": {
+          "$ref": "#/$defs/cidr"
+        },
+        "default_gateway": {
+          "$ref": "#/$defs/ipv4"
+        },
+        "infrastructure_pool": {
+          "$ref": "#/$defs/ipRange",
+          "description": "Contiguous management-pool addresses (>= 6); the cluster IP is the first."
+        },
+        "cluster_ip": {
+          "$ref": "#/$defs/ipv4"
+        },
+        "dns_servers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/ipv4"
+          }
+        },
+        "dns_zone": {
+          "$ref": "#/$defs/hostname"
+        },
+        "ntp_servers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ipv4"
+          }
+        },
+        "reserved_ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cidr"
+          },
+          "description": "Must stay unused anywhere the nodes can reach (Arc Resource Bridge)."
+        },
+        "storage_auto_ip": {
+          "type": "boolean"
+        }
+      }
+    },
+    "qos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage_priority",
+        "cluster_priority",
+        "storage_bandwidth_percent",
+        "jumbo_frame_size"
+      ],
+      "properties": {
+        "storage_priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "cluster_priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "storage_bandwidth_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "cluster_bandwidth_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "jumbo_frame_size": {
+          "type": "integer",
+          "enum": [
+            1514,
+            4088,
+            9014
+          ]
+        }
+      }
+    },
+    "logical_networks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "vlan_id",
+          "subnet",
+          "gateway",
+          "ip_pool",
+          "dns_servers"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^lnet-[a-z0-9-]+$"
+          },
+          "vlan_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          },
+          "subnet": {
+            "$ref": "#/$defs/cidr"
+          },
+          "gateway": {
+            "$ref": "#/$defs/ipv4"
+          },
+          "ip_pool": {
+            "$ref": "#/$defs/ipRange"
+          },
+          "dns_servers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/ipv4"
+            }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "volumes",
+        "storage_paths"
+      ],
+      "properties": {
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "resiliency",
+              "size_gb"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^csv-[a-z0-9-]+$"
+              },
+              "resiliency": {
+                "type": "string",
+                "enum": [
+                  "two-way-mirror",
+                  "three-way-mirror",
+                  "nested-two-way-mirror"
+                ]
+              },
+              "size_gb": {
+                "type": "integer",
+                "minimum": 10
+              }
+            }
+          }
+        },
+        "storage_paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "volume"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^sp-[a-z0-9-]+$"
+              },
+              "volume": {
+                "type": "string",
+                "pattern": "^csv-[a-z0-9-]+$"
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 260
+              }
+            }
+          }
+        }
+      }
+    },
+    "secret_refs": {
+      "type": "object",
+      "description": "Named keyvault:// references read at run time (names only; values never enter files).",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/secretRef"
+      }
+    }
+  },
+  "$defs": {
+    "guid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "ipv4": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$"
+    },
+    "cidr": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/(3[0-2]|[12]?\\d)$"
+    },
+    "ipRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/ipv4"
+        },
+        "end": {
+          "$ref": "#/$defs/ipv4"
+        }
+      }
+    },
+    "hostname": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$",
+      "maxLength": 253
+    },
+    "email": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+    },
+    "resourceIdOrEmpty": {
+      "type": "string",
+      "pattern": "^$|^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/[A-Za-z.]+/[^/]+/[^/]+(/.*)?$"
+    },
+    "secretRef": {
+      "type": "string",
+      "pattern": "^keyvault://[a-z0-9-]{3,24}/[A-Za-z0-9-]+$"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "pattern": "^[a-zA-Z](([a-zA-Z0-9]-?)*[a-zA-Z0-9])?$",
+      "minLength": 3,
+      "maxLength": 24
+    },
+    "storageAccountName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{3,24}$"
+    },
+    "netbios": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,13}[a-z0-9])?$"
+    },
+    "mac": {
+      "type": "string",
+      "pattern": "^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"
+    },
+    "groupName": {
+      "type": "string",
+      "pattern": "^grp-[a-z0-9-]+$",
+      "maxLength": 256
+    },
+    "vlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "subnet",
+        "gateway",
+        "routed"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4094
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$"
+        },
+        "subnet": {
+          "$ref": "#/$defs/cidr"
+        },
+        "gateway": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ipv4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "routed": {
+          "type": "boolean"
+        },
+        "dhcp_range": {
+          "$ref": "#/$defs/ipRange"
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    }
+  }
+}

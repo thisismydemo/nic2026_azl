@@ -1,0 +1,94 @@
+# Fixture manifest for the NIC26.Automation Pester tests. Deploys nothing. Mirrors automation/CONTRACT.md sections 2 and 10.
+name: lz-example
+description: Test fixture solution that exercises every input type, a nested path, a default, a generated input and the names catalog.
+scope: avd
+tools: [bicep, terraform, ansible]
+depends_on: [lz-azure-local]
+inputs:
+  - name: tenant_id
+    type: string
+    description: Entra tenant (shared)
+    required: true
+    source: environment
+  - name: subscription_id_avd
+    type: string
+    description: AVD landing-zone subscription
+    required: true
+    source: environment
+  - name: location
+    type: string
+    description: Azure region
+    required: true
+    source: environment
+  - name: avd_vnet_prefix
+    type: string
+    description: AVD spoke address space
+    required: true
+    source: environment
+  - name: avd_subnets
+    type: map
+    description: Subnet name to prefix
+    required: true
+    source: environment
+  - name: onprem_compute_prefixes
+    type: list
+    description: On-prem prefixes for NSG rules
+    required: true
+    source: environment
+  - name: shortpath_managed_port
+    type: int
+    description: RDP Shortpath managed port
+    required: true
+    source: environment
+  - name: tags
+    type: map
+    description: Required tag set
+    required: true
+    source: environment
+  - name: enable_example_feature
+    type: bool
+    description: Optional flag with a safe default
+    required: false
+    default: false
+    source: environment
+  - name: optional_without_default
+    type: string
+    description: Optional input absent from the config; must be omitted, not fail
+    required: false
+    source: environment
+  - name: hybrid_local_admin_password
+    type: secret-ref
+    description: Ops-vault reference to the Hyper-V VM local admin password (name only)
+    required: true
+    source: keyvault
+    path: secret_refs.hybrid_local_admin_password
+  - name: registration_token
+    type: string
+    description: AVD registration token generated at join time; never in config files
+    required: false
+    source: generated
+outputs:
+  - name: spoke_vnet_id
+    type: string
+    description: AVD spoke VNet resource id
+  - name: workspace_id
+    type: string
+    description: AVD workspace resource id
+secrets: [iic-nic26-hyperv-hybrid-local-admin-password]
+destroy: supported
+names:
+  rg_net:         { type: rg, purpose: avd-net }
+  spoke_vnet:     { type: vnet, purpose: avd }
+  snet_hosts:     { type: snet, purpose: hosts }
+  nsg_hosts:      { type: nsg, purpose: avd-hosts }
+  fslogix_sa:     { type: st, purpose: fslogix }
+  kv_ops:         { type: kv, purpose: ops }
+  gallery:        { type: gal }
+  law:            { type: law }
+  workspace:      { type: vdws }
+  hostpool_azure: { type: vdpool, purpose: azure }
+  budget:         { type: budget, purpose: avd }
+  lnet_avd:       { type: lnet, purpose: avd }
+  file_zone:      { type: pdnszone, name: privatelink.file.core.windows.net }
+  gateway_subnet: { type: fixedsubnet, name: GatewaySubnet }
+  sh_azure_01:    { type: sessionhost, purpose: az, instance: 1 }
