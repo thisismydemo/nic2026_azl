@@ -113,7 +113,7 @@ function Invoke-CiPester {
     $pwsh = (Get-Process -Id $PID).Path
     foreach ($t in $targets) {
         $path = (Join-Path $Root $t).Replace("'", "''")
-        $cmd = "Set-Location -LiteralPath '$((Resolve-Path -LiteralPath $Root).Path.Replace("'", "''"))'; Import-Module Pester -MinimumVersion 5.5.0; `$c = New-PesterConfiguration; `$c.Run.Path = '$path'; `$c.Run.PassThru = `$true; `$c.Output.Verbosity = 'None'; `$r = Invoke-Pester -Configuration `$c; 'RESULT passed=' + `$r.PassedCount + ' failed=' + `$r.FailedCount + ' skipped=' + `$r.SkippedCount"
+        $cmd = "Set-Location -LiteralPath '$((Resolve-Path -LiteralPath $Root).Path.Replace("'", "''"))'; Import-Module Pester -MinimumVersion 5.5.0; `$c = New-PesterConfiguration; `$c.Run.Path = '$path'; `$c.Run.PassThru = `$true; `$c.Output.Verbosity = 'None'; `$r = Invoke-Pester -Configuration `$c; 'RESULT passed=' + `$r.PassedCount + ' failed=' + `$r.FailedCount + ' skipped=' + `$r.SkippedCount; `$r.Failed | Select-Object -First 3 | ForEach-Object { 'FAILEDTEST ' + `$_.ExpandedPath + ' :: ' + ((`$_.ErrorRecord.Exception.Message -split '\r?\n')[0]) }"
         $info = [Diagnostics.ProcessStartInfo]::new($pwsh)
         foreach ($a in '-NoProfile', '-NonInteractive', '-Command', $cmd) { $info.ArgumentList.Add($a) }
         $info.RedirectStandardOutput = $true
@@ -127,9 +127,13 @@ function Invoke-CiPester {
             Get-CiResult 'Pester' $t 'Failed' "timed out after $TimeoutSeconds s"
             continue
         }
-        $line = ($stdout.GetAwaiter().GetResult() -split "`r?`n" | Where-Object { $_ -match '^RESULT ' } | Select-Object -Last 1)
+        $stdoutText = $stdout.GetAwaiter().GetResult()
+        $line = ($stdoutText -split "`r?`n" | Where-Object { $_ -match '^RESULT ' } | Select-Object -Last 1)
         if (-not $line) { Get-CiResult 'Pester' $t 'Failed' 'no RESULT line (the suite did not finish)' }
-        elseif ($line -match 'failed=(\d+)' -and [int]$Matches[1] -gt 0) { Get-CiResult 'Pester' $t 'Failed' $line }
+        elseif ($line -match 'failed=(\d+)' -and [int]$Matches[1] -gt 0) {
+            $failedTests = @($stdoutText -split "`r?`n" | Where-Object { $_ -match '^FAILEDTEST ' } | Select-Object -First 3) -join ' | '
+            Get-CiResult 'Pester' $t 'Failed' ($line + ' ' + $failedTests)
+        }
         else { Get-CiResult 'Pester' $t 'Passed' $line }
     }
 }
@@ -233,7 +237,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     if ($env:GITHUB_ACTIONS) {
         foreach ($r in ($results | Where-Object Status -eq 'Failed')) {
             $msg = ('{0}' -f $r.Detail) -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A'
-            Write-Output ('::error title={0} {1}::{2}' -f $r.Check, ($r.Target -replace '[,:]', '_'), $msg)
+            [Console]::Out.WriteLine(('::error title={0} {1}::{2}' -f $r.Check, ($r.Target -replace '[,:]', '_'), $msg))
         }
     }
     if ($PassThru) { return $results.ToArray() }
