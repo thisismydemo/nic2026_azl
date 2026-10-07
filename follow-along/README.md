@@ -43,9 +43,9 @@ Replace the placeholders in the commands with your own values:
 
 - Save the project or discard it.
 
-**In the repo:** `environment/azure-local/workloads/README.md`, `src/assessment/IIC-RVTools-demo.xlsx`
+**In the repo:** `src/assessment/README.md`, `src/assessment/IIC-RVTools-demo.xlsx`
 
-### Sizing and fit against two AX-760 nodes
+### Sizing and fit against two nodes
 
 **Goal:** Read the sizing result for the synthetic estate.
 
@@ -102,7 +102,7 @@ Replace the placeholders in the commands with your own values:
 
 - None; nothing was created.
 
-**In the repo:** `automation/azure-local/cluster-deploy/README.md`, `src/bicep`
+**In the repo:** `automation/azure-local/cluster-deploy/README.md`, `automation/azure-local/cluster-deploy/bicep`
 
 ## Read along
 
@@ -116,13 +116,13 @@ Replace the placeholders in the commands with your own values:
 
 **Goal:** Read the intent design.
 
-**In the repo:** `handouts/Network_ATC_Design.md`, `design/azure-local/network-design.md`
+**In the repo:** `handouts/Network_ATC_Design.md`, `handouts/Planning_and_Design_Decisions.md`
 
 ### Simplified machine provisioning (preview, recorded)
 
 **Goal:** Understand the flow and its limits.
 
-**In the repo:** `automation/azure-local/os-provisioning/README.md`
+**In the repo:** `handouts/Deployment_Guide.md`
 
 ### Network ATC intents on the running cluster
 
@@ -144,19 +144,19 @@ Replace the placeholders in the commands with your own values:
 
 **Goal:** Understand the two gates.
 
-**In the repo:** `automation/demo/azure-local/scripts/Test-Day2Readiness.ps1`, `runbooks/azure-local/build.md`
+**In the repo:** `automation/demo/azure-local/scripts/Test-Day2Readiness.ps1`, `handouts/Day2_Operations_Runbook.md`
 
 ### Monitoring: Insights and the cost-conscious DCR
 
 **Goal:** Read the monitoring artefacts.
 
-**In the repo:** `automation/azure-local/cluster-configure/monitoring`, `src/monitoring (DCRs and alert rules)`
+**In the repo:** `automation/azure-local/cluster-configure/monitoring`
 
 ### Update management: the maintenance configuration
 
 **Goal:** Read the maintenance configuration templates.
 
-**In the repo:** `automation/azure-local/cluster-configure/update-manager`, `src/update-manager`
+**In the repo:** `automation/azure-local/cluster-configure/update-manager`
 
 ### Backup and DR setup
 
@@ -174,7 +174,7 @@ Replace the placeholders in the commands with your own values:
 
 **Goal:** Read the policy initiative.
 
-**In the repo:** `automation/azure-local/cluster-configure/policy`, `src/policies`
+**In the repo:** `automation/azure-local/cluster-configure/policy`
 
 ### Acceptance: the readiness gate, red to green
 
@@ -192,7 +192,7 @@ Replace the placeholders in the commands with your own values:
 
 **Goal:** Understand the update flow.
 
-**In the repo:** `runbooks/azure-local/build.md`
+**In the repo:** `handouts/Day2_Operations_Runbook.md`
 
 ### Capacity: a decision, not a chart
 
@@ -204,7 +204,7 @@ Replace the placeholders in the commands with your own values:
 
 **Goal:** Read the VM lifecycle steps.
 
-**In the repo:** `runbooks/azure-local/build.md`
+**In the repo:** `handouts/Day2_Operations_Runbook.md`
 
 ### Planned ASR failover to Azure: start and result
 
@@ -229,6 +229,4 @@ Replace the placeholders in the commands with your own values:
 ### Fault 3: node failure (recorded incident, live commentary)
 
 **Goal:** Not run outside the lab.
-
-**In the repo:** `automation/demo/azure-local/scripts/Invoke-NodePowerOff.ps1`
 
