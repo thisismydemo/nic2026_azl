@@ -8,7 +8,7 @@ How to plan an Azure Local deployment so that Deploy is an input file, not a dis
 
 1. Work through the decisions in order; each one feeds the next.
 2. Record every decision in a decision log (identifier, question, decision, date, owner).
-3. Put every resulting value in one deployment configuration file (the session repo uses `infrastructure.yml`). Nothing is typed by hand at deployment time.
+3. Put every resulting value in one deployment configuration file (the session repo uses `environment/azure-local/environment.yml`, copied from an example file; the session also shows the `infrastructure.yml` design export). Nothing is typed by hand at deployment time.
 4. Do not start Deploy until the planning gate at the end of this guide is green.
 
 ## Decision 1: Release

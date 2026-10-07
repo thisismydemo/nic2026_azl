@@ -2,7 +2,7 @@
 
 The line between a deployed cluster and an operable platform. Use this checklist as the acceptance gate before handing the cluster to operations. Each control implements a requirement from the planning phase and reports an evidence state, not just a colour.
 
-**Status:** prepared 2026-10-06. Results depend on your release and tenant. The matching read-only readiness script in the session repo (`src/scripts/`) runs these checks in one pass.
+**Status:** prepared 2026-10-06. Results depend on your release and tenant. The matching read-only readiness script in the session repo, `automation/demo/azure-local/scripts/Test-Day2Readiness.ps1`, runs these checks in one pass.
 
 ## Two gates, not one
 

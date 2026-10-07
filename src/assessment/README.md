@@ -29,14 +29,39 @@ One vCenter, three ESXi hosts, two VMFS datastores, and Windows and Linux worklo
 
 These are inventory totals before growth, compute reserve, CPU overcommit, storage resiliency and rebuild deductions. They are not a statement that any hardware fits.
 
-## How to use it
+## Route A: VMware Team Supplies RVTools
 
-1. In Azure Local Surveyor open **Workload Planning, Assess existing hardware** and enter your own target nodes (not the source hosts in `vHost`).
-2. Go to **Workloads, Import RVTools** and select this file. An import replaces existing inventory rows, so save any existing project first.
-3. Check the preview against the table above, then continue to fit, storage design and reports.
+1. Explain the collection route: the VMware team connects RVTools to the in-scope vCenter and supplies its all-tabs Excel export. For the demonstration, use the synthetic workbook instead.
+2. Open [Azure Local Surveyor](https://azurelocal.cloud/azurelocal-surveyor/), then **Workload Planning > Assess existing hardware**. Enter the actual Azure Local nodes, CPU, RAM and drives, not the source VMware hosts in `vHost`.
+3. Go to **Workloads > Import RVTools** and select [IIC-RVTools-demo.xlsx](IIC-RVTools-demo.xlsx).
+4. The preview should report **24 VMs**, **3 templates or platform placeholders skipped**, and **2 powered-off or suspended VMs remaining included**. Confirm **Use this inventory**. An import replaces existing inventory rows; save an existing project first. Specialized workloads remain separate and can double-count the estate if entered again.
+5. Review the two `iic-legacy-*` VMs. Keep them included initially, then discuss retirement/exclusion. Templates and the vCLS VM should not appear as workloads.
+6. Review allocated demand, suggested tiers, growth, storage basis and maintenance reserve. Explain that this snapshot is allocation evidence, not P95 utilization or an application-dependency map.
+7. Continue through **Fit & Recommendations > Storage Design > Reports & Exports**, then save the project and export the report.
+
+Surveyor v2.8.0 reads `CPUs` as a count, and `Memory`, `Provisioned MiB`, and `In Use MiB` as MiB. Its individual-VM importer can use summed `vPartition` consumed evidence, falling back to `vInfo` for powered-off VMs without guest partition rows. The generated partition values agree with `vInfo`.
+
+**Verified on the live site, October 2, 2026:** preview counts matched, all 24 VMs appeared after import, and the dashboard displayed 72 vCPU, 160 GiB RAM and rounded consumed/provisioned storage of **3 / 5.8 TiB**. With zero inventory growth and provisioned storage selected, planned storage displayed **6.3 TB (decimal)**. TiB and decimal TB are different units.
+
+## Route B: Azure Migrate Collects Workloads
+
+1. Explain the alternative: create/select an Azure Migrate project, deploy and register its VMware discovery appliance, provide an appropriately scoped vCenter account, and start discovery. This workbook does not deploy or simulate that appliance.
+2. Review discovered server configuration and performance metadata. Installed applications and agentless dependency analysis require additional guest access, permissions and connectivity; do not claim a complete dependency map from vCenter inventory alone.
+3. Bring the validated discovery inventory into Surveyor's individual VM inputs. Native import of an arbitrary Migrate export is not established by the reviewed Surveyor docs. If normalizing it into an RVTools-shaped `vInfo` workbook, retain the original export and label the converted artifact as normalized Migrate data, not an actual RVTools dump.
+4. Map VM name, vCPU count, allocated memory, provisioned/consumed storage, source cluster/host, OS and stable VM identity. Convert units explicitly: GiB to MiB is multiplication by 1,024; decimal GB/MB is not the same as GiB/MiB. Do not substitute utilization percentages for allocated memory or disk capacity.
+5. Keep observation duration and utilization evidence separate. Download Surveyor's **Performance template** after creating inventory and map only measurements whose percentile, units, window and VM identity have been validated. Missing evidence should remain missing, not zero or invented.
+6. Assess the same target hardware and record the same reserve, growth and storage assumptions as Route A so the comparison is meaningful.
+
+For a short talk-through: both routes supply discovery evidence; **Surveyor remains the Azure Local assessment and sizing tool**. The pre-created workbook supports the RVTools handoff demonstration only.
 
 ## Limits
 
 - It is allocation evidence only: no utilisation percentiles, no application dependencies. Treat missing evidence as an assumption, not as a fact.
 - Do not use it as a sizing input for a real project. Use your own RVTools export or an Azure Migrate discovery.
 - Surveyor reads `CPUs` as a count, and `Memory`, `Provisioned MiB` and `In Use MiB` as MiB. Keep that unit convention if you edit the file or build your own.
+
+## Sources
+
+- [Surveyor planning guide](https://azurelocal.cloud/azurelocal-surveyor/docs/guide/planning-areas.html): workbook/vInfo CSV imports, existing-hardware workflow, assumptions and fit limits.
+- [Surveyor workload reference](https://azurelocal.cloud/azurelocal-surveyor/docs/engine/workloads.html): RVTools inputs and allocation units. The live Workloads importer was also checked because older grouped-workload behavior differs from the individual-VM workflow.
+- [Microsoft Learn: discover VMware servers with Azure Migrate](https://learn.microsoft.com/en-us/azure/migrate/tutorial-discover-vmware?view=migrate): appliance discovery, vCenter permissions, performance metadata and guest-access requirements.
