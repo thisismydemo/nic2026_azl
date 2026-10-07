@@ -71,32 +71,54 @@ Replace the placeholders in the commands with your own values:
 **You need**
 
 - The repo
+- PowerShell 7 with the Az.Accounts and Az.KeyVault modules
 - Azure CLI with Bicep
 - A subscription (the preview creates nothing)
-- A copy of the example config with your values
+- Copies of the two example environment files with your values
 
 **Steps**
 
-1. **Prepare the config.** Copy the example environment file and replace the values with yours: names, nodes, IP pool, VLANs.
+1. **Prepare the config.** Copy the two example environment files (shared values and Azure Local values) and replace the values with yours: names, nodes, IP pool, VLANs.
 
    ```powershell
+   New-Item -ItemType Directory -Force environment/shared, environment/azure-local | Out-Null
+   Copy-Item automation/shared/examples/environment.shared.example.yml environment/shared/environment.yml
    Copy-Item automation/shared/examples/environment.azure-local.example.yml environment/azure-local/environment.yml
    ```
 
-   - You should see: The file validates: Get-NIC26Config -Scope azure-local returns without errors.
-2. **Run the preview stage.** Run the Validate pass up to the Preview stage. It generates the parameters and runs a what-if.
+   - You should see: Both files exist under environment/. Edit them before you go on.
+2. **Check the config.** Load the automation module and read the Azure Local scope back.
 
    ```powershell
-   ./automation/azure-local/cluster-deploy/scripts/Invoke-ClusterDeploy.ps1 -Pass Validate -Tool Bicep -Stage Preview
+   Import-Module ./automation/shared/powershell/NIC26.Automation/NIC26.Automation.psd1
+   Get-NIC26Config -Scope azure-local | Out-Null
    ```
 
-   - You should see: A what-if result is printed and no resources were created.
-3. **Read what the what-if cannot see.** Compare the output with the Environment Checker results. Platform-side checks run only during the Validate pass in Azure.
+   - You should see: The command returns without errors.
+3. **Sign in.** The what-if runs against your subscription and creates nothing. The script reads through Az PowerShell and runs the what-if with the Azure CLI, so sign in to both.
+
+   ```powershell
+   Connect-AzAccount -Subscription <sub>
+   az login
+   az account set --subscription <sub>
+   ```
+
+   - You should see: Get-AzContext and az account show both name your subscription.
+4. **Run the validate pass as a dry run.** Run the Validate pass without -Execute. It generates the parameter files, builds the templates and runs a what-if.
+
+   ```powershell
+   ./automation/azure-local/cluster-deploy/scripts/Invoke-ClusterDeploy.ps1 -Pass Validate -Tool Bicep
+   ```
+
+   - You should see: The template build passes and a what-if result is printed; no resources were created.
+5. **Read what the what-if cannot see.** Compare the output with the Environment Checker results. Platform-side checks run only during the Validate pass in Azure.
    - You should see: You can list one check the what-if does not cover.
 
 **Troubleshooting**
 
 - Missing providers: register the resource providers listed in the landing-zone README first.
+- Input file not found: run the script without -Stage, so the Generate stage writes the parameter files first.
+- az exited with code 1 or No Az context: sign in with az login and Connect-AzAccount.
 
 **Clean up**
 

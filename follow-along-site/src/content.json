@@ -210,22 +210,35 @@
         "goal": "Generate and preview an Azure Local deployment without creating anything.",
         "needs": [
           "The repo",
+          "PowerShell 7 with the Az.Accounts and Az.KeyVault modules",
           "Azure CLI with Bicep",
           "A subscription (the preview creates nothing)",
-          "A copy of the example config with your values"
+          "Copies of the two example environment files with your values"
         ],
         "steps": [
           {
             "title": "Prepare the config",
-            "instructions": "Copy the example environment file and replace the values with yours: names, nodes, IP pool, VLANs.",
-            "command": "Copy-Item automation/shared/examples/environment.azure-local.example.yml environment/azure-local/environment.yml",
-            "check": "The file validates: Get-NIC26Config -Scope azure-local returns without errors."
+            "instructions": "Copy the two example environment files (shared values and Azure Local values) and replace the values with yours: names, nodes, IP pool, VLANs.",
+            "command": "New-Item -ItemType Directory -Force environment/shared, environment/azure-local | Out-Null\nCopy-Item automation/shared/examples/environment.shared.example.yml environment/shared/environment.yml\nCopy-Item automation/shared/examples/environment.azure-local.example.yml environment/azure-local/environment.yml",
+            "check": "Both files exist under environment/. Edit them before you go on."
           },
           {
-            "title": "Run the preview stage",
-            "instructions": "Run the Validate pass up to the Preview stage. It generates the parameters and runs a what-if.",
-            "command": "./automation/azure-local/cluster-deploy/scripts/Invoke-ClusterDeploy.ps1 -Pass Validate -Tool Bicep -Stage Preview",
-            "check": "A what-if result is printed and no resources were created."
+            "title": "Check the config",
+            "instructions": "Load the automation module and read the Azure Local scope back.",
+            "command": "Import-Module ./automation/shared/powershell/NIC26.Automation/NIC26.Automation.psd1\nGet-NIC26Config -Scope azure-local | Out-Null",
+            "check": "The command returns without errors."
+          },
+          {
+            "title": "Sign in",
+            "instructions": "The what-if runs against your subscription and creates nothing. The script reads through Az PowerShell and runs the what-if with the Azure CLI, so sign in to both.",
+            "command": "Connect-AzAccount -Subscription <sub>\naz login\naz account set --subscription <sub>",
+            "check": "Get-AzContext and az account show both name your subscription."
+          },
+          {
+            "title": "Run the validate pass as a dry run",
+            "instructions": "Run the Validate pass without -Execute. It generates the parameter files, builds the templates and runs a what-if.",
+            "command": "./automation/azure-local/cluster-deploy/scripts/Invoke-ClusterDeploy.ps1 -Pass Validate -Tool Bicep",
+            "check": "The template build passes and a what-if result is printed; no resources were created."
           },
           {
             "title": "Read what the what-if cannot see",
@@ -235,7 +248,9 @@
           }
         ],
         "troubleshooting": [
-          "Missing providers: register the resource providers listed in the landing-zone README first."
+          "Missing providers: register the resource providers listed in the landing-zone README first.",
+          "Input file not found: run the script without -Stage, so the Generate stage writes the parameter files first.",
+          "az exited with code 1 or No Az context: sign in with az login and Connect-AzAccount."
         ],
         "cleanup": [
           "None; nothing was created."
