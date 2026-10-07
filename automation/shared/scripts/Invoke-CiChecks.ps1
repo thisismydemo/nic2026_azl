@@ -229,6 +229,13 @@ if ($MyInvocation.InvocationName -ne '.') {
     $summary = $results | Group-Object Check, Status | ForEach-Object { [pscustomobject]@{ Check = $_.Group[0].Check; Status = $_.Group[0].Status; Count = $_.Count } }
     $summary | Format-Table -AutoSize | Out-String | Write-Information -InformationAction Continue
     foreach ($r in ($results | Where-Object Status -eq 'Failed')) { Write-Information ('FAILED {0}: {1} - {2}' -f $r.Check, $r.Target, $r.Detail) -InformationAction Continue }
+    # On GitHub Actions a workflow command turns each failure into a public annotation, so the cause is readable without log access.
+    if ($env:GITHUB_ACTIONS) {
+        foreach ($r in ($results | Where-Object Status -eq 'Failed')) {
+            $msg = ('{0}' -f $r.Detail) -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A'
+            Write-Output ('::error title={0} {1}::{2}' -f $r.Check, ($r.Target -replace '[,:]', '_'), $msg)
+        }
+    }
     if ($PassThru) { return $results.ToArray() }
     exit $(if (@($results | Where-Object Status -eq 'Failed').Count -gt 0) { 1 } else { 0 })
 }
