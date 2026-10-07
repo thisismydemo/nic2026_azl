@@ -17,7 +17,7 @@ The session and this repository target the current Azure Local release, the 2609
 
 ## Start here
 
-1. Open the [follow-along site](https://thisismydemo.github.io/nic2026_azl/) (it goes live once GitHub Pages is switched on for this repository), or read [follow-along/README.md](follow-along/README.md). The session is mostly watch and read. You can follow along fully for the Surveyor assessment on the synthetic workbook and for the Bicep what-if; neither needs a cluster.
+1. Open the [follow-along site](https://thisismydemo.cloud/nic2026_azl/) (GitHub Pages, built by the workflow in this repository), or read [follow-along/README.md](follow-along/README.md). The session is mostly watch and read. You can follow along fully for the Surveyor assessment on the synthetic workbook and for the Bicep what-if; neither needs a cluster.
 2. Read the guides and runbooks in [handouts/](handouts/).
 3. Read [automation/README.md](automation/README.md) for the run order, configuration and tests of the deployment automation.
 
