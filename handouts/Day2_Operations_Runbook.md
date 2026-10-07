@@ -2,7 +2,7 @@
 
 The recurring operations for a running Azure Local instance: cluster updates, fault diagnosis, capacity management and the virtual machine lifecycle. Each procedure states its inputs, the steps, the evidence that proves it worked, and when to stop and escalate.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Commands are shown for orientation; run them with the account and context your environment requires, and test them on a non-production instance first. **Verify** items depend on your release and hardware.
+**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Commands are shown for orientation; run them with the account and context your environment requires, and test them on a non-production instance first. Some behaviour depends on your release and hardware; the text says where.
 
 ## Principles
 
@@ -15,7 +15,7 @@ The recurring operations for a running Azure Local instance: cluster updates, fa
 
 **What is updated:** the solution as one update train: the operating system, agents and services, and the OEM solution extension (drivers and firmware), orchestrated by Lifecycle Manager. **Cadence:** monthly quality updates, quarterly baseline updates, hotfixes as needed, and vendor extension updates. Stay within six months of the most recent release to remain supported. Feature releases can arrive about a week after Microsoft's release because the hardware vendor validates them.
 
-**Inputs:** a maintenance window; a healthy cluster; a plan for what you do if the update fails (stop, collect the diagnostics and escalate; **verify** which recovery options exist for your release before the window).
+**Inputs:** a maintenance window; a healthy cluster; a plan for what you do if the update fails. A failed update run can be resumed once the cause is fixed or accepted: select **Try again** on the failed stage in the portal, or run `Start-SolutionUpdate` on the failed update (add `-IgnoreWarnings` only when the blocking checks are in a Warning state and you accept them). After a power loss, restore power, run a system health check and then resume. If a node has a critical failure, repair the node first and then resume. If a retry does not resolve it, collect the diagnostic logs and open a support ticket.
 
 | Step | Portal | PowerShell on a node, as the deployment user |
 |---|---|---|

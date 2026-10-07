@@ -2,7 +2,7 @@
 
 Discovery, replication, test migration and cutover for moving VMware virtual machines to an Azure Local instance with Azure Migrate. The assessment that feeds it (inventory, sizing, waves) is covered in the sizing guide.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Migration of **VMware** VMs is documented without a preview label; migration of **Hyper-V** VMs to Azure Local is a **preview**. **Verify** both on the day you plan, because status and limits change.
+**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Migration of **VMware** VMs to Azure Local is generally available (announced October 2025); migration of **Hyper-V** VMs is a **preview**. Both statuses were checked against the 2609 documentation on 6 Oct 2026. Status and limits change, so re-read the migration overview for your release when you plan.
 
 ## What you need in place
 

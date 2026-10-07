@@ -2,7 +2,7 @@
 
 Common deployment, Day-2 and fault symptoms with a likely cause and the action to take. Start with the cheapest read-only check, and change one thing at a time.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Where a cause depends on your release or hardware it is marked **verify**. This guide does not replace support: collect diagnostics and escalate when the action column does not resolve the symptom.
+**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Where a cause depends on your release or hardware, the text says so. This guide does not replace support: collect diagnostics and escalate when the action column does not resolve the symptom.
 
 ## First checks
 
@@ -42,7 +42,7 @@ Get-SolutionUpdateEnvironment
 | Update stays Ready but never installs | Vendor validation of the new release is pending, or a readiness check fails | Confirm the release is available for your hardware; run `Start-SolutionUpdate -PrepareOnly` to see the checks |
 | New feature release not offered | The hardware vendor has not yet validated it | Wait for the vendor sign-off; it can take a week or more |
 | Policy shows non-compliant straight after assignment | Compliance evaluation is not instant | Start a compliance scan and wait for it to complete |
-| Backup job fails | Source cannot reach the vault, or the protection route does not support the VM state | Check connectivity and the supported protection matrix for Azure Local VMs (**verify**) |
+| Backup job fails | Source cannot reach the vault, or the protection route does not support the VM state | Check connectivity, then the support matrix of the backup solution you use: confirm that it protects Azure Local VMs at the host or guest level and which restore targets it offers (restoring to a different cluster brings the VM back unmanaged until it is re-registered) |
 | Logical network VM has no IP | IP pool exhausted, or no static pool defined | Add an address range to the logical network |
 | VM creation fails on a storage path | Not enough space at the storage path | Expand the volume or choose another path; never use the infrastructure volume |
 

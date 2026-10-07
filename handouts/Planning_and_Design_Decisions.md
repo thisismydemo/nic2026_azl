@@ -2,7 +2,7 @@
 
 How to plan an Azure Local deployment so that Deploy is an input file, not a discovery exercise. Each decision below follows the same shape: the question, the options, the pros and cons, the decision made for the example customer (IIC), and where the decision is recorded.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn for the 2609 release family. Items marked **verify** depend on your release, region, hardware or tenant. Preview features are labelled **preview** and are not a deployment recommendation.
+**Status:** prepared 2026-10-06 against Microsoft Learn for the 2609 release family. Where a choice depends on your release, region, hardware or tenant, the text says so. Preview features are labelled **preview** and are not a deployment recommendation.
 
 ## How to use this guide
 
@@ -28,12 +28,12 @@ Facts to design around (Microsoft Learn): Microsoft ships monthly quality update
 | | |
 |---|---|
 | **Question** | What do we buy, and who owns the firmware problem? |
-| **Options** | Premier Solution; Integrated System; validated node; disaggregated, SAN-attached (check the release status of the disaggregated architecture: **verify**) |
+| **Options** | Premier Solution; Integrated System; validated node; disaggregated, SAN-attached (documented for the 2609 release family without a preview label: Fibre Channel or iSCSI storage, one to 64 machines) |
 | **Pros and cons** | Premier Solution: highest partner integration and validation, single support path, firmware managed through the solution extension. Integrated System: validated hardware with more deployment, update and support responsibility on you. Validated node: flexible sizing, you assemble the support model. Disaggregated: reuse existing SAN storage, different failure domains and a separate operating model |
 | **Decision (IIC)** | A validated integrated system from the Azure Local catalog: two nodes with all-flash NVMe, one GPU per node |
 | **Record** | Bill of materials and the firmware baseline to reach before the OS is installed (BIOS, BMC, network adapters, drives, solution extension) |
 
-Start from an exact SKU in the Azure Local catalog and ask the hardware provider to validate the final configuration against workload, failure-state, support and lifecycle requirements. Category names in the catalog change: **verify** them when you design.
+Start from an exact SKU in the Azure Local catalog and ask the hardware provider to validate the final configuration against workload, failure-state, support and lifecycle requirements. The solution categories in the catalog today are Premier Solutions, Integrated Systems and Validated Nodes; names change over time, so confirm them in the catalog when you design.
 
 **Decision matrix to complete per option:** eligibility, who owns support and firmware, storage architecture, failure domains, expansion path, cost implications.
 
@@ -78,7 +78,7 @@ Why it is not chosen for IIC: it needs two rooms or racks with the required late
 | Enterprise proxy | Same list | TLS inspection must be disabled for the required endpoints |
 | **Arc gateway** | Roughly 23 to fewer than 30 | Tunnels supported HTTPS traffic; **new deployments on 2506 or later only; it cannot be enabled after deployment** |
 | Proxy plus Arc gateway | Fewest | Recommended for new production deployments on a public path |
-| Private path | Arc gateway plus a firewall explicit proxy over ExpressRoute or site-to-site VPN | Verify the release that supports it |
+| Private path | Arc gateway plus a firewall explicit proxy over ExpressRoute or site-to-site VPN | Requires Azure Local 2608 or later; earlier releases do not support it |
 | Disconnected operations | n/a | For air-gapped sites |
 
 Constraints that shape the decision (Microsoft Learn): HTTP traffic is never tunneled through the Arc gateway; OEM and third-party endpoints are not covered by it; Azure Arc Private Link is not supported for Azure Local infrastructure, so Arc registration uses public Arc endpoints; private endpoint addresses must stay outside `10.96.0.0/12` and `10.244.0.0/16`; keep Key Vault and the witness storage account publicly reachable until deployment completes, then restrict them. Firewall rules must be in place before Arc registration; validate them with the Environment Checker.

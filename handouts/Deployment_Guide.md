@@ -2,7 +2,7 @@
 
 From a completed design package to a running cluster, deployed from the cloud with Local Identity and Azure Key Vault. The guide follows the order of work: gates, Azure foundation, site readiness, node registration, the two deployment passes, and validation.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). **Verify** items depend on your release, hardware or tenant. Preview features are labelled **preview**.
+**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Where a step depends on your release, hardware or tenant, the text says so. Preview features are labelled **preview**.
 
 ## Before you start
 
