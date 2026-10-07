@@ -1,6 +1,6 @@
 name: pages
 
-# Builds the follow-along site (follow-along-site/) and publishes it with GitHub Pages at https://<owner>.github.io/<repository>/.
+# Builds the follow-along site (follow-along-site/) and publishes it with GitHub Pages under the owner's Pages address (for this account https://thisismydemo.cloud/<repository>/).
 # One-time repository setting: Settings, Pages, Source: GitHub Actions.
 on:
   push:
