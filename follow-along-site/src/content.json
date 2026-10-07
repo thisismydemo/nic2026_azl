@@ -1,0 +1,544 @@
+{
+  "id": "azl",
+  "title": "Azure Local, Discovery to Day 2",
+  "subtitle": "Hybrid Cloud: Plan, Deploy, and Operate Azure Local from Discovery to Day 2",
+  "date": "Thu 15 Oct 2026, 09:50 (W. Europe Time)",
+  "length": 60,
+  "level": 400,
+  "followAlongPolicy": "Mostly watch and read. Full follow-along only where no cluster is needed: the Surveyor assessment on the synthetic workbook and the Bicep what-if. Every other demo is a read-along with the repo path.",
+  "variables": [
+    {
+      "name": "<sub>",
+      "meaning": "your Azure Local landing-zone subscription id"
+    },
+    {
+      "name": "<rg>",
+      "meaning": "your resource group"
+    },
+    {
+      "name": "<cluster>",
+      "meaning": "your cluster name"
+    },
+    {
+      "name": "<node1>",
+      "meaning": "the first cluster node"
+    }
+  ],
+  "sections": [
+    {
+      "id": "0",
+      "title": "Open — the voyage and the ship",
+      "minutes": 3
+    },
+    {
+      "id": "1",
+      "title": "Plan & Discover",
+      "minutes": 12
+    },
+    {
+      "id": "2",
+      "title": "Deploy",
+      "minutes": 9
+    },
+    {
+      "id": "3",
+      "title": "Day-2 Ready",
+      "minutes": 11
+    },
+    {
+      "id": "3B",
+      "title": "Migrate",
+      "minutes": 3
+    },
+    {
+      "id": "4",
+      "title": "Day-2 Operations",
+      "minutes": 15
+    },
+    {
+      "id": "5",
+      "title": "Safe harbour",
+      "minutes": 5
+    }
+  ],
+  "demos": [
+    {
+      "id": "az-1-1-surveyor",
+      "title": "Workload assessment in Surveyor (RVTools route)",
+      "section": "1.1",
+      "mode": "live+recorded",
+      "minutes": 2,
+      "followAlong": {
+        "level": "full",
+        "goal": "Import a synthetic RVTools workbook into Azure Local Surveyor and read the inventory totals.",
+        "needs": [
+          "A browser",
+          "The synthetic workbook IIC-RVTools-demo.xlsx from the repo (src/assessment)",
+          "No cluster required"
+        ],
+        "steps": [
+          {
+            "title": "Open Surveyor and enter the target hardware",
+            "instructions": "Open Azure Local Surveyor, go to Workload Planning > Assess existing hardware, and enter the target nodes (CPU, RAM, drives). Do not enter the source VMware hosts.",
+            "command": "",
+            "check": "The target hardware is saved in the project."
+          },
+          {
+            "title": "Import the workbook",
+            "instructions": "Go to Workloads > Import RVTools and select the workbook. An import replaces existing inventory rows, so save any existing project first.",
+            "command": "",
+            "check": "The preview reports 24 VMs, 3 skipped templates or placeholders and 2 powered-off VMs included."
+          },
+          {
+            "title": "Use the inventory and read the totals",
+            "instructions": "Confirm Use this inventory. The dashboard shows allocated demand.",
+            "command": "",
+            "check": "72 vCPU, 160 GiB memory, 3 TiB consumed and 5.8 TiB provisioned storage."
+          },
+          {
+            "title": "Review the two legacy VMs",
+            "instructions": "Open the two iic-legacy VMs. Decide whether to keep them in the estate and note that they have no performance history.",
+            "command": "",
+            "check": "You can state which evidence is missing for each."
+          }
+        ],
+        "troubleshooting": [
+          "Counts differ: check the workbook version and that you imported the vInfo tab from the supplied file.",
+          "TiB and decimal TB are different units; compare like with like."
+        ],
+        "cleanup": [
+          "Save the project or discard it."
+        ],
+        "repoPaths": [
+          "src/assessment/README.md",
+          "src/assessment/IIC-RVTools-demo.xlsx"
+        ]
+      }
+    },
+    {
+      "id": "az-1-1-migrate-discovery",
+      "title": "Azure Migrate discovery (recorded)",
+      "section": "1.1",
+      "mode": "recorded",
+      "minutes": 0.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Understand the Azure Migrate discovery route.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Azure_Migrate_to_Azure_Local.md"
+        ]
+      }
+    },
+    {
+      "id": "az-1-2-sizing",
+      "title": "Sizing and fit against two nodes",
+      "section": "1.2",
+      "mode": "live",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "full",
+        "goal": "Read the sizing result for the synthetic estate.",
+        "needs": [
+          "The Surveyor project from the previous demo"
+        ],
+        "steps": [
+          {
+            "title": "Open the fit and storage design",
+            "instructions": "Go to Fit & Recommendations, then Storage Design. Change the growth and the storage basis (provisioned or consumed) and observe the result.",
+            "command": "",
+            "check": "Planned storage changes with the basis you choose; note decimal TB versus TiB."
+          }
+        ],
+        "troubleshooting": [],
+        "cleanup": [
+          "Save or discard the project."
+        ],
+        "repoPaths": [
+          "handouts/Azure_Local_Sizing_Guide.md"
+        ]
+      }
+    },
+    {
+      "id": "az-1-7-intent-design",
+      "title": "Network ATC intent design on one screen",
+      "section": "1.7",
+      "mode": "slide",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the intent design.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Network_ATC_Design.md",
+          "handouts/Planning_and_Design_Decisions.md"
+        ]
+      }
+    },
+    {
+      "id": "az-2-3-provisioning",
+      "title": "Simplified machine provisioning (preview, recorded)",
+      "section": "2.3",
+      "mode": "recorded",
+      "minutes": 0.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Understand the flow and its limits.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Deployment_Guide.md"
+        ]
+      }
+    },
+    {
+      "id": "az-2-4-whatif",
+      "title": "Cloud-driven deployment: the what-if",
+      "section": "2.4",
+      "mode": "live+recorded",
+      "minutes": 3.5,
+      "followAlong": {
+        "level": "full",
+        "goal": "Generate and preview an Azure Local deployment without creating anything.",
+        "needs": [
+          "The repo",
+          "Azure CLI with Bicep",
+          "A subscription (the preview creates nothing)",
+          "A copy of the example config with your values"
+        ],
+        "steps": [
+          {
+            "title": "Prepare the config",
+            "instructions": "Copy the example environment file and replace the values with yours: names, nodes, IP pool, VLANs.",
+            "command": "Copy-Item automation/shared/examples/environment.azure-local.example.yml environment/azure-local/environment.yml",
+            "check": "The file validates: Get-NIC26Config -Scope azure-local returns without errors."
+          },
+          {
+            "title": "Run the preview stage",
+            "instructions": "Run the Validate pass up to the Preview stage. It generates the parameters and runs a what-if.",
+            "command": "./automation/azure-local/cluster-deploy/scripts/Invoke-ClusterDeploy.ps1 -Pass Validate -Tool Bicep -Stage Preview",
+            "check": "A what-if result is printed and no resources were created."
+          },
+          {
+            "title": "Read what the what-if cannot see",
+            "instructions": "Compare the output with the Environment Checker results. Platform-side checks run only during the Validate pass in Azure.",
+            "command": "",
+            "check": "You can list one check the what-if does not cover."
+          }
+        ],
+        "troubleshooting": [
+          "Missing providers: register the resource providers listed in the landing-zone README first."
+        ],
+        "cleanup": [
+          "None; nothing was created."
+        ],
+        "repoPaths": [
+          "automation/azure-local/cluster-deploy/README.md",
+          "automation/azure-local/cluster-deploy/bicep"
+        ]
+      }
+    },
+    {
+      "id": "az-2-5-intents",
+      "title": "Network ATC intents on the running cluster",
+      "section": "2.5",
+      "mode": "live",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Know what to check on your own cluster.",
+        "needs": [],
+        "steps": [
+          {
+            "title": "Read the intent status",
+            "instructions": "On a cluster node run the read-only checks.",
+            "command": "Get-NetIntentStatus | Select-Object IntentName, Host, ConfigurationStatus, ProvisioningStatus",
+            "check": "ConfigurationStatus Success and ProvisioningStatus Completed for every intent on every node."
+          }
+        ],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Network_ATC_Design.md"
+        ]
+      }
+    },
+    {
+      "id": "az-2-6-validate-red",
+      "title": "Post-deployment validation, then the readiness gate in red",
+      "section": "2.6",
+      "mode": "live",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Understand the two gates.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/demo/azure-local/scripts/Test-Day2Readiness.ps1",
+          "handouts/Day2_Operations_Runbook.md"
+        ]
+      }
+    },
+    {
+      "id": "az-3-1-insights",
+      "title": "Monitoring: Insights and the cost-conscious DCR",
+      "section": "3.1",
+      "mode": "live+recorded",
+      "minutes": 2,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the monitoring artefacts.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure/monitoring"
+        ]
+      }
+    },
+    {
+      "id": "az-3-2-aum",
+      "title": "Update management: the maintenance configuration",
+      "section": "3.2",
+      "mode": "live",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the maintenance configuration templates.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure/update-manager"
+        ]
+      }
+    },
+    {
+      "id": "az-3-3-backup-dr",
+      "title": "Backup and DR setup",
+      "section": "3.3",
+      "mode": "live",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the backup and Site Recovery configuration.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure/backup-asr"
+        ]
+      }
+    },
+    {
+      "id": "az-3-4-pim",
+      "title": "RBAC with Entra PIM",
+      "section": "3.4",
+      "mode": "live+recorded",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the PIM configuration.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure/access-pim"
+        ]
+      }
+    },
+    {
+      "id": "az-3-5-policy",
+      "title": "Security and governance baseline",
+      "section": "3.5",
+      "mode": "live",
+      "minutes": 2,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the policy initiative.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure/policy"
+        ]
+      }
+    },
+    {
+      "id": "az-3-7-readiness-green",
+      "title": "Acceptance: the readiness gate, red to green",
+      "section": "3.7",
+      "mode": "live",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Understand the evidence states.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/demo/azure-local/scripts/Test-Day2Readiness.ps1"
+        ]
+      }
+    },
+    {
+      "id": "az-3b-migrate",
+      "title": "Azure Migrate: VMware to Azure Local (recorded)",
+      "section": "3B",
+      "mode": "recorded",
+      "minutes": 3,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the migration guide.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Azure_Migrate_to_Azure_Local.md"
+        ]
+      }
+    },
+    {
+      "id": "az-4-1-lcm",
+      "title": "Lifecycle Manager: readiness and history",
+      "section": "4.1",
+      "mode": "live+recorded",
+      "minutes": 2,
+      "followAlong": {
+        "level": "read",
+        "goal": "Understand the update flow.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Day2_Operations_Runbook.md"
+        ]
+      }
+    },
+    {
+      "id": "az-4-2-drive",
+      "title": "Fault 1: drive failure (software-induced, live)",
+      "section": "4.2",
+      "mode": "live+recorded",
+      "minutes": 2.5,
+      "followAlong": {
+        "level": "none",
+        "goal": "Faults are run only on the lab cluster.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/demo/azure-local/scripts/Invoke-DriveFault.ps1"
+        ]
+      }
+    },
+    {
+      "id": "az-4-2-drift",
+      "title": "Fault 2: Network ATC intent drift (live)",
+      "section": "4.2",
+      "mode": "live+recorded",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "none",
+        "goal": "Faults are run only on the lab cluster.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/demo/azure-local/scripts/Invoke-IntentDrift.ps1"
+        ]
+      }
+    },
+    {
+      "id": "az-4-2-node",
+      "title": "Fault 3: node failure (recorded incident, live commentary)",
+      "section": "4.2",
+      "mode": "recorded",
+      "minutes": 2,
+      "followAlong": {
+        "level": "none",
+        "goal": "Not run outside the lab.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": []
+      }
+    },
+    {
+      "id": "az-4-3-capacity",
+      "title": "Capacity: a decision, not a chart",
+      "section": "4.3",
+      "mode": "live",
+      "minutes": 2,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the capacity method.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Azure_Local_Sizing_Guide.md"
+        ]
+      }
+    },
+    {
+      "id": "az-4-4-arc-vm",
+      "title": "VM lifecycle through Arc",
+      "section": "4.4",
+      "mode": "live+recorded",
+      "minutes": 2,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the VM lifecycle steps.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Day2_Operations_Runbook.md"
+        ]
+      }
+    },
+    {
+      "id": "az-4-5-asr",
+      "title": "Planned ASR failover to Azure: start and result",
+      "section": "4.5",
+      "mode": "live+recorded",
+      "minutes": 2,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read the Site Recovery procedure.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure/backup-asr"
+        ]
+      }
+    }
+  ]
+}
