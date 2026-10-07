@@ -1,0 +1,5 @@
+# Checkouts use LF on every platform, so scripts, tests and Bicep behave the same on a Windows runner and on Linux.
+* text=auto eol=lf
+*.png binary
+*.pptx binary
+*.xlsx binary
