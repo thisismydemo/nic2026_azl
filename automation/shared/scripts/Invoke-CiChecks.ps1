@@ -113,7 +113,9 @@ function Invoke-CiPester {
     $pwsh = (Get-Process -Id $PID).Path
     foreach ($t in $targets) {
         $path = (Join-Path $Root $t).Replace("'", "''")
-        $cmd = "Set-Location -LiteralPath '$((Resolve-Path -LiteralPath $Root).Path.Replace("'", "''"))'; Import-Module Pester -MinimumVersion 5.5.0; `$c = New-PesterConfiguration; `$c.Run.Path = '$path'; `$c.Run.PassThru = `$true; `$c.Output.Verbosity = 'None'; `$r = Invoke-Pester -Configuration `$c; 'RESULT passed=' + `$r.PassedCount + ' failed=' + `$r.FailedCount + ' skipped=' + `$r.SkippedCount; `$r.Failed | Select-Object -First 3 | ForEach-Object { 'FAILEDTEST ' + `$_.ExpandedPath + ' :: ' + ((`$_.ErrorRecord.Exception.Message -split '\r?\n')[0]) }"
+        # Preserve download/validation errors after the introductory line. Bound each diagnostic,
+        # retaining both its beginning and end when large, without altering failure status.
+        $cmd = "Set-Location -LiteralPath '$((Resolve-Path -LiteralPath $Root).Path.Replace("'", "''"))'; Import-Module Pester -MinimumVersion 5.5.0; `$c = New-PesterConfiguration; `$c.Run.Path = '$path'; `$c.Run.PassThru = `$true; `$c.Output.Verbosity = 'None'; `$r = Invoke-Pester -Configuration `$c; 'RESULT passed=' + `$r.PassedCount + ' failed=' + `$r.FailedCount + ' skipped=' + `$r.SkippedCount; `$r.Failed | Select-Object -First 3 | ForEach-Object { `$message = [regex]::Replace([string]`$_.ErrorRecord.Exception.Message, '\s+', ' ').Trim(); if (`$message.Length -gt 4096) { `$message = `$message.Substring(0, 1536) + ' ... ' + `$message.Substring(`$message.Length - 2555) }; 'FAILEDTEST ' + `$_.ExpandedPath + ' :: ' + `$message }"
         $info = [Diagnostics.ProcessStartInfo]::new($pwsh)
         foreach ($a in '-NoProfile', '-NonInteractive', '-Command', $cmd) { $info.ArgumentList.Add($a) }
         $info.RedirectStandardOutput = $true

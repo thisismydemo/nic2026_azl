@@ -48,6 +48,26 @@ Describe 'discovery' {
 }
 
 Describe 'Invoke-CiChecks.ps1' {
+    It 'preserves multiline failure causes and bounds long messages through the real child process' {
+        $diagnosticRoot = Join-Path $TestDrive 'diagnostic-repo'
+        $suite = Join-Path $diagnosticRoot 'automation/diagnostic/tests/Failure.Tests.ps1'
+        New-Item -ItemType Directory -Path (Split-Path $suite -Parent) -Force | Out-Null
+        Set-Content -LiteralPath $suite -Value @'
+Describe 'download diagnostics' {
+    It 'retains multiline details' { throw "Initializing modules...`nMIDDLE-CAUSE`nFINAL-DOWNLOAD-ERROR" }
+    It 'bounds large output and preserves the tail' { throw ('START-MARKER ' + ('x' * 6000) + "`nTAIL-CAUSE") }
+}
+'@
+        $result = @(& $script:Script -Root $diagnosticRoot -Check Pester -PassThru 6>$null)
+        $result.Count | Should -Be 1
+        $result[0].Status | Should -Be 'Failed'
+        $detail = $result[0].Detail
+        $detail | Should -Match 'passed=0 failed=2 skipped=0'
+        $detail | Should -Match 'Initializing modules\.\.\. MIDDLE-CAUSE FINAL-DOWNLOAD-ERROR'
+        $detail | Should -Match 'START-MARKER .* \.\.\. .*TAIL-CAUSE'
+        $detail | Should -Not -Match '[\r\n]'
+        $detail.Length | Should -BeLessThan 4500
+    }
     It 'in plan mode lists targets and runs nothing' {
         $r = @(& $script:Script -Root $script:Root -Check Bicep, Terraform, Packer -Plan -PassThru 6>$null)
         $r.Count | Should -Be 3
