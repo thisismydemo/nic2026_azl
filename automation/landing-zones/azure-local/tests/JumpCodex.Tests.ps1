@@ -54,6 +54,19 @@ Describe 'full-layout Codex CLI verification' {
         { Assert-JumpCodexTree -Directory $script:tree -Spec $script:spec } | Should -Throw '*reparse point*'
         Should -Invoke Get-JumpCodexReportedVersion -Times 0
     }
+    It 'reads a real hidden Windows ancestor and retains package/signature validation' -Skip:(-not $IsWindows) {
+        $hidden = Join-Path $TestDrive 'hidden-parent'
+        $null = New-Item -ItemType Directory -Path $hidden
+        $package = Join-Path $hidden 'package'
+        Copy-Item -LiteralPath $script:tree -Destination $package -Recurse
+        $original = [IO.File]::GetAttributes($hidden)
+        try {
+            [IO.File]::SetAttributes($hidden, ($original -bor [IO.FileAttributes]::Hidden))
+            { Get-Item -LiteralPath $hidden -ErrorAction Stop } | Should -Throw
+            { Assert-JumpCodexTree -Directory $package -Spec $script:spec } | Should -Not -Throw
+        }
+        finally { [IO.File]::SetAttributes($hidden, $original) }
+    }
     It 'does not install or update PATH after an archive checksum mismatch' {
         Mock Get-JumpCodexLayout { @{ Directory = (Join-Path $TestDrive 'absent-version'); Bin = (Join-Path $TestDrive 'absent-version/bin') } }
         $script:spec.Archive.DownloadUrl = 'https://example.invalid/package.tar.gz'

@@ -202,7 +202,7 @@ function Assert-JumpCodexTree {
     # Walk ancestors as well as package contents; never follow an installation junction.
     $ancestor = [IO.Path]::GetFullPath($Directory)
     while ($ancestor) {
-        if ((Test-Path -LiteralPath $ancestor) -and ((Get-Item -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Codex path contains a reparse point.' }
+        if ((Test-Path -LiteralPath $ancestor) -and ((Get-Item -LiteralPath $ancestor -Force -ErrorAction Stop).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Codex path contains a reparse point.' }
         $ancestor = Split-Path $ancestor -Parent
     }
     $items = @(Get-ChildItem -LiteralPath $Directory -Recurse -Force -ErrorAction Stop)
