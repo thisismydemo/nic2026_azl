@@ -2,6 +2,8 @@ import React from 'react';
 import CodeBlock from './CodeBlock.jsx';
 
 const LEVEL_LABEL = { full: 'Follow along', read: 'Read along', none: 'Watch only' };
+const repositoryUrl = import.meta.env.VITE_REPOSITORY_URL;
+const sourceRef = import.meta.env.VITE_SOURCE_REF || 'main';
 
 export default function DemoPage({ session, demo }) {
   const fa = demo.followAlong;
@@ -44,7 +46,7 @@ export default function DemoPage({ session, demo }) {
 
         {fa.troubleshooting?.length > 0 && (<><h2>Troubleshooting</h2><ul>{fa.troubleshooting.map((t, k) => <li key={k}>{t}</li>)}</ul></>)}
         {fa.cleanup?.length > 0 && (<><h2>Clean up</h2><ul>{fa.cleanup.map((c, k) => <li key={k}>{c}</li>)}</ul></>)}
-        {fa.repoPaths?.length > 0 && (<><h2>In the repository</h2><ul>{fa.repoPaths.map((p, k) => <li key={k}><code>{p}</code></li>)}</ul></>)}
+        {fa.repoPaths?.length > 0 && (<><h2>In the repository</h2><ul>{fa.repoPaths.map((p, k) => <li key={k}>{repositoryUrl ? <a href={`${repositoryUrl}/blob/${encodeURIComponent(sourceRef)}/${p.split('/').map(encodeURIComponent).join('/')}`}><code>{p}</code></a> : <code>{p}</code>}</li>)}</ul></>)}
       </div>
       <nav className="pager">
         {prev ? <a href={`#/demo/${prev.id}`}>← {prev.title}</a> : <span />}
