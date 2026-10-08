@@ -172,7 +172,7 @@ function Invoke-JumpMsixProvisioning {
 
 function Get-InstalledWingetVersion {
     param([string] $Id, [string] $Source)
-    $arguments = @('list', '--id', $Id, '--exact', '--disable-interactivity')
+    $arguments = @('list', '--id', $Id, '--exact', '--scope', 'machine', '--disable-interactivity')
     if ($Source) { $arguments += @('--source', $Source) }
     $output = & winget @arguments 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
