@@ -69,7 +69,7 @@ Invoke-PostCheck -Name 'Local Identity: identityProvider = LocalIdentity in depl
     $ip = $d.properties.deploymentConfiguration.scaleUnits[0].deploymentData.identityProvider
     Assert-Post ($ip -eq 'LocalIdentity') "identityProvider=$ip"; "identityProvider=$ip"
 }
-Invoke-PostCheck -Name 'Arc machines connected (both nodes)' -Test {
+Invoke-PostCheck -Name 'Arc machines connected (all configured nodes)' -Test {
     $bad = @()
     foreach ($n in $inputs.nodes) {
         $m = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$($n.name)?api-version=2024-07-10"

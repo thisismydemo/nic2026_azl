@@ -15,6 +15,10 @@
     Optional subset of check names to run (default: all).
 .PARAMETER OutputPath
     Optional JSON report path (names, states and details only).
+.PARAMETER JumpVmResourceId
+    Optional explicit relocated jump VM ID for effective-routes only. No fallback to the workload VM.
+.PARAMETER JumpSubnetResourceId
+    Expected existing subnet ID, required together with JumpVmResourceId. Workload checks keep their original scope.
 .PARAMETER ExpectDnsPrivate
     When set, the vault DNS check expects the PRIVATE endpoint addresses (run on the jump server / P2S laptop / node after
     the DC forwarders exist). Without it the check only reports what resolves.
@@ -25,12 +29,15 @@
     Requires Az.Accounts, Az.Resources, Az.Network, Az.KeyVault, Az.OperationalInsights, Az.Security, Az.RecoveryServices (read roles suffice).
     Runs anywhere; the DNS checks are meaningful from the jump server, a P2S laptop and a node (design §11.1).
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Parameters are consumed by deferred Invoke-LzCheck scriptblocks and final report generation.')]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [object] $Config,
     [string[]] $Checks,
     [string] $OutputPath,
-    [switch] $ExpectDnsPrivate
+    [switch] $ExpectDnsPrivate,
+    [string] $JumpVmResourceId,
+    [string] $JumpSubnetResourceId
 )
 
 Set-StrictMode -Version Latest
@@ -258,10 +265,44 @@ Invoke-LzCheck 'dns-dc-reachable' {
 Invoke-LzCheck 'dns-forwarders' { if (-not [bool]$Config.enable_private_endpoints) { Add-LzResult 'dns-forwarders' 'Skipped' 'private endpoints are not used (D-029); the existing DNS needs no change'; return }; Add-LzResult 'dns-forwarders' 'Manual' 'Confirm on EVERY DC: conditional forwarder vault.azure.net (and vaultcore.azure.net) -> 168.63.129.16; Arc FQDNs still public (P-07, owner-approved change).' }
 Invoke-LzCheck 'p2s-dns-profile' { Add-LzResult 'p2s-dns-profile' 'Manual' 'The hub pushes no DNS to P2S clients: the exported azurevpnconfig.xml must carry the DC DNS servers and be re-imported after every peering change (connectivity C-06).' }
 Invoke-LzCheck 'effective-routes' {
-    $nic = Get-AzNetworkInterface -Name $n.nic_jump -ResourceGroupName $n.rg_mgmt -ErrorAction SilentlyContinue
+    if (-not $JumpVmResourceId -and -not $JumpSubnetResourceId) {
+        if (Test-LzConfigKey $Config 'external_jump_vm_id') { $JumpVmResourceId = [string]$Config.external_jump_vm_id }
+        if (Test-LzConfigKey $Config 'external_jump_subnet_id') { $JumpSubnetResourceId = [string]$Config.external_jump_subnet_id }
+    }
+    if (@($Config.onprem_prefixes).Count -eq 0) { throw 'Expected on-prem prefixes are required for route acceptance.' }
+    $nicName = $n.nic_jump
+    $nicGroup = $n.rg_mgmt
+    $routeProfile = Get-AzContext
+    if ($JumpVmResourceId -or $JumpSubnetResourceId) {
+        if ($JumpVmResourceId -notmatch '^/subscriptions/(?<sub>[0-9a-f-]{36})/resourceGroups/(?<rg>[^/]+)/providers/Microsoft.Compute/virtualMachines/(?<vm>[^/]+)$' -or -not $JumpSubnetResourceId) { throw 'Relocated jump requires a valid VM ID and expected subnet ID.' }
+        $vmSubscription = $Matches.sub
+        $vmGroup = $Matches.rg
+        $vmName = $Matches.vm
+        $routeProfile = Set-AzContext -SubscriptionId $vmSubscription -Tenant $routeProfile.Tenant.Id -ErrorAction Stop
+        try {
+            $vm = Get-AzVM -ResourceGroupName $vmGroup -Name $vmName -DefaultProfile $routeProfile -ErrorAction Stop
+            if ($vm.Id -ine $JumpVmResourceId) { throw 'Resolved VM does not match explicit jump target.' }
+            $attachments = @($vm.NetworkProfile.NetworkInterfaces)
+            $primary = @($attachments | Where-Object Primary)
+            if ($attachments.Count -eq 1) { $primary = $attachments }
+            if ($primary.Count -ne 1) { throw 'Jump primary NIC is ambiguous.' }
+            $nicId = [string]$primary[0].Id
+            if ($nicId -notmatch '^/subscriptions/(?<sub>[0-9a-f-]{36})/resourceGroups/(?<rg>[^/]+)/providers/Microsoft.Network/networkInterfaces/(?<nic>[^/]+)$' -or $Matches.sub -ine $vmSubscription) { throw 'Jump NIC ID has invalid type or subscription.' }
+            $nicName = $Matches.nic
+            $nicGroup = $Matches.rg
+            $nic = Get-AzNetworkInterface -Name $nicName -ResourceGroupName $nicGroup -DefaultProfile $routeProfile -ErrorAction Stop
+            if ($nic.Id -ine $nicId -or $nic.VirtualMachine.Id -ine $JumpVmResourceId) { throw 'NIC does not belong to the explicit jump VM.' }
+            $ipConfigs = @($nic.IpConfigurations)
+            $primaryIp = @($ipConfigs | Where-Object Primary)
+            if ($ipConfigs.Count -eq 1) { $primaryIp = $ipConfigs }
+            if ($primaryIp.Count -ne 1 -or $primaryIp[0].Subnet.Id -ine $JumpSubnetResourceId) { throw 'Jump NIC does not use the expected existing subnet.' }
+        }
+        finally { $null = Set-AzContext -SubscriptionId $sub -ErrorAction Stop }
+    }
+    else { $nic = Get-AzNetworkInterface -Name $nicName -ResourceGroupName $nicGroup -DefaultProfile $routeProfile -ErrorAction Stop }
     if (-not $nic) { Add-LzResult 'effective-routes' 'Skipped' 'jump NIC not found (enable_jump_server?)'; return }
-    $routes = @(Get-AzEffectiveRouteTable -NetworkInterfaceName $n.nic_jump -ResourceGroupName $n.rg_mgmt -ErrorAction SilentlyContinue)
-    $onprem = @($Config.onprem_prefixes) | Where-Object { $p = $_; -not ($routes | Where-Object { $_.AddressPrefix -contains $p -and $_.NextHopType -eq 'VirtualNetworkGateway' }) }
+    $routes = @(Get-AzEffectiveRouteTable -NetworkInterfaceName $nicName -ResourceGroupName $nicGroup -DefaultProfile $routeProfile -ErrorAction Stop)
+    $onprem = @($Config.onprem_prefixes) | Where-Object { $p = $_; -not ($routes | Where-Object { $_.AddressPrefix -contains $p -and $_.NextHopType -eq 'VirtualNetworkGateway' -and $_.State -eq 'Active' }) }
     Add-LzResult 'effective-routes' ($onprem ? 'Fail' : 'Pass') ($onprem ? "missing gateway routes for $($onprem -join ', ')" : "on-prem prefixes via VirtualNetworkGateway ($($routes.Count) routes)")
 }
 
@@ -353,13 +394,22 @@ Invoke-LzCheck 'rsv' {
     if (-not $rsv) { Add-LzResult 'rsv' 'Fail' 'vault missing'; return }
     $props = Get-AzRecoveryServicesVaultProperty -VaultId $rsv.ID -ErrorAction SilentlyContinue
     $redundancy = (Get-AzRecoveryServicesBackupProperty -Vault $rsv -ErrorAction SilentlyContinue).BackupStorageRedundancy
-    $drEmpty = @(Get-AzResource -ResourceGroupName $n.rg_dr -ErrorAction SilentlyContinue).Count -eq 0
+    $drEmpty = @(Get-AzResource -ResourceGroupName $n.rg_dr -ErrorAction Stop).Count -eq 0
     $ok = $rsv.Identity -and $props.SoftDeleteFeatureState -ne 'Disabled' -and $redundancy -eq $Config.rsv_storage_redundancy -and $drEmpty
     Add-LzResult 'rsv' ($ok ? 'Pass' : 'Fail') "identity=$([bool]$rsv.Identity) softDelete=$($props.SoftDeleteFeatureState) redundancy=$redundancy drRgEmpty=$drEmpty"
 }
 Invoke-LzCheck 'idempotency' { Add-LzResult 'idempotency' 'Manual' 'Run Invoke-LzAzureLocalDeploy.ps1 (WhatIf) for both tools right after deployment and confirm "no changes" (design §11.1).' }
 
 # ------------------------------------------------------------------ report
+if ($Checks) {
+    $emittedChecks = @($script:Results | ForEach-Object Check)
+    $requestedChecks = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($requested in $Checks) {
+        if ($requestedChecks.Add($requested) -and $requested -notin $emittedChecks) {
+            Add-LzResult $requested 'Fail' 'Requested check not recognized or unavailable under current configuration'
+        }
+    }
+}
 $script:Results | Format-Table Check, Status, Detail -AutoSize -Wrap | Out-String | Write-Information -InformationAction Continue
 if ($OutputPath) { $script:Results | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $OutputPath -Encoding utf8 }
 $failed = @($script:Results | Where-Object Status -EQ 'Fail').Count

@@ -1,6 +1,7 @@
 # Shared helpers for the cluster-deploy scripts (dot-sourced). No secret value ever passes through these functions.
 #Requires -Version 7.0
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
 function Get-ClusterDeploySolutionRoot {
     [CmdletBinding()]
@@ -74,6 +75,19 @@ function Get-ClusterDeployInputs {
     $json = Get-Content -LiteralPath $InputFile -Raw | ConvertFrom-Json -Depth 50
     foreach ($required in 'subscription_id', 'cluster_name', 'kv_azl_name', 'witness', 'nodes', 'names') {
         if (-not ($json.PSObject.Properties.Name -contains $required)) { throw "Input file is missing '$required'." }
+    }
+    if ($json.nodes -isnot [array] -or $json.nodes.Count -eq 0) {
+        throw 'Input nodes must be a nonempty array of named node objects.'
+    }
+    $nodeNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($node in $json.nodes) {
+        if ($node -isnot [pscustomobject] -or -not $node.PSObject.Properties['name'] -or
+            $node.name -isnot [string] -or [string]::IsNullOrWhiteSpace($node.name)) {
+            throw 'Every input node must have a nonblank string name.'
+        }
+        if ($node.name -ne $node.name.Trim() -or -not $nodeNames.Add($node.name)) {
+            throw 'Input node names must be unique case-insensitively and have no surrounding whitespace.'
+        }
     }
     return $json
 }

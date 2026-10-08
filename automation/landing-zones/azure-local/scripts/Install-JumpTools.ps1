@@ -144,14 +144,16 @@ function Invoke-JumpMsixProvisioning {
     $directory = Join-Path ([IO.Path]::GetTempPath()) ('nic26-msix-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $directory | Out-Null
     # Store download only acquires files. Every artifact is independently checked before provisioning.
-    & winget download --id $pin.StoreId --source msstore --exact --architecture $pin.Architecture --download-directory $directory --skip-license --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Windows App dependency download failed (exit $LASTEXITCODE)." }
+    if ($pin.Dependencies.Count -gt 0) {
+        & winget download --id $pin.StoreId --source msstore --exact --architecture $pin.Architecture --download-directory $directory --skip-license --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "MSIX dependency download failed (exit $LASTEXITCODE)." }
+    }
     $main = Join-Path $directory 'pinned-main.msix'
     Invoke-WebRequest -Uri $pin.DownloadUrl -OutFile $main
     $manifest = Assert-JumpMsixPackage -Path $main -Pin $pin
     $dependencyPaths = [Collections.Generic.List[string]]::new()
-    $files = @(Get-ChildItem -LiteralPath (Join-Path $directory 'Dependencies') -File)
-    $required = @($manifest.Package.Dependencies.PackageDependency)
+    $files = if ($pin.Dependencies.Count -gt 0) { @(Get-ChildItem -LiteralPath (Join-Path $directory 'Dependencies') -File) } else { @() }
+    $required = @($manifest.SelectNodes("/*[local-name()='Package']/*[local-name()='Dependencies']/*[local-name()='PackageDependency']"))
     if ($required.Count -ne $pin.Dependencies.Count) { throw 'Required dependency set does not match the pins.' }
     foreach ($dependency in $required) {
         $packageMatches = @($pin.Dependencies | Where-Object { $_.Name -ceq $dependency.Name -and $_.Publisher -ceq $dependency.Publisher })
@@ -166,8 +168,119 @@ function Invoke-JumpMsixProvisioning {
         $dependencyPaths.Add($candidates[0].FullName)
     }
     # No package state is changed until every main/dependency check above has passed.
-    Add-AppxProvisionedPackage -Online -PackagePath $main -DependencyPackagePath $dependencyPaths.ToArray() -SkipLicense -ErrorAction Stop | Out-Null
+    $provisionArguments = @{ Online = $true; PackagePath = $main; ErrorAction = 'Stop' }
+    if ($dependencyPaths.Count -gt 0) { $provisionArguments.DependencyPackagePath = $dependencyPaths.ToArray() }
+    if ($pin.Contains('License')) {
+        if ($pin.License.DownloadUrl -notmatch '^https://' -or $pin.License.Sha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid offline MSIX license pin.' }
+        $licensePath = Join-Path $directory 'pinned-license.xml'
+        Invoke-WebRequest -Uri $pin.License.DownloadUrl -OutFile $licensePath
+        if ((Get-FileHash -LiteralPath $licensePath -Algorithm SHA256).Hash -cne $pin.License.Sha256) { throw 'Offline MSIX license SHA-256 mismatch.' }
+        $provisionArguments.LicensePath = $licensePath
+        $provisionArguments.Regions = 'all'
+    }
+    else { $provisionArguments.SkipLicense = $true }
+    Add-AppxProvisionedPackage @provisionArguments | Out-Null
     # Provisioning makes the package available to new profiles. Existing-profile registration and launch are separate live checks.
+}
+
+function Get-JumpCodexLayout {
+    param([System.Collections.IDictionary] $Spec)
+    if ($Spec.Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid Codex version path.' }
+    $directory = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) ('JumpTools/Codex/' + $Spec.Version)
+    return [pscustomobject]@{ Directory = $directory; Bin = (Join-Path $directory 'bin') }
+}
+
+function Get-JumpCodexReportedVersion {
+    param([string] $Binary)
+    $text = & $Binary --version 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Codex version command failed.' }
+    return ($text -join ' ').Trim()
+}
+
+function Assert-JumpCodexTree {
+    param([string] $Directory, [System.Collections.IDictionary] $Spec)
+    # Walk ancestors as well as package contents; never follow an installation junction.
+    $ancestor = [IO.Path]::GetFullPath($Directory)
+    while ($ancestor) {
+        if ((Test-Path -LiteralPath $ancestor) -and ((Get-Item -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Codex path contains a reparse point.' }
+        $ancestor = Split-Path $ancestor -Parent
+    }
+    $items = @(Get-ChildItem -LiteralPath $Directory -Recurse -Force -ErrorAction Stop)
+    if (@($items | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -gt 0) { throw 'Codex package contains a reparse point.' }
+    $files = @($items | Where-Object { -not $_.PSIsContainer })
+    $pins = $Spec.Archive.Files
+    if ($pins.Count -eq 0 -or $files.Count -ne $pins.Count) { throw 'Codex package file set mismatch.' }
+    foreach ($file in $files) {
+        $relative = [IO.Path]::GetRelativePath($Directory, $file.FullName).Replace('\', '/')
+        if (-not $pins.Contains($relative) -or $pins[$relative] -notmatch '^[A-Fa-f0-9]{64}$' -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -cne $pins[$relative]) { throw 'Codex package file hash mismatch.' }
+    }
+    $binary = Join-Path $Directory 'bin/codex.exe'
+    $signature = Get-AuthenticodeSignature -LiteralPath $binary
+    if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Subject -cne $Spec.Archive.Publisher) { throw 'Codex executable signature mismatch.' }
+    if ((Get-JumpCodexReportedVersion -Binary $binary) -cne ('codex-cli ' + $Spec.Version)) { throw 'Codex executable version mismatch.' }
+}
+
+function Get-InstalledJumpCodexVersion {
+    param([System.Collections.IDictionary] $Spec)
+    $layout = Get-JumpCodexLayout -Spec $Spec
+    if (-not (Test-Path -LiteralPath $layout.Directory -PathType Container)) { return $null }
+    $entries = @(([string](Get-JumpMachineEnvironment 'Path')) -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim()).TrimEnd('\', '/') })
+    if ($entries -inotcontains $layout.Bin.TrimEnd('\', '/')) { return $null }
+    Assert-JumpCodexTree -Directory $layout.Directory -Spec $Spec
+    return $Spec.Version
+}
+
+function Set-JumpCodexEnvironment {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called only by guarded installer after package validation.')]
+    param([string] $Bin)
+    $entries = @(([string](Get-JumpMachineEnvironment 'Path')) -split ';' | Where-Object { $_ -and $_.TrimEnd('\', '/') -ine $Bin.TrimEnd('\', '/') })
+    [Environment]::SetEnvironmentVariable('Path', ((@($Bin) + $entries) -join ';'), 'Machine')
+    $env:Path = $Bin + ';' + $env:Path
+}
+
+function Invoke-JumpCodexSetup {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called only within Invoke-JumpTools Execute and ShouldProcess gate.')]
+    param([System.Collections.IDictionary] $Spec)
+    $layout = Get-JumpCodexLayout -Spec $Spec
+    if (Test-Path -LiteralPath $layout.Directory) {
+        Assert-JumpCodexTree -Directory $layout.Directory -Spec $Spec
+        Set-JumpCodexEnvironment -Bin $layout.Bin
+        return
+    }
+    $pin = $Spec.Archive
+    if ($pin.DownloadUrl -notmatch '^https://' -or $pin.Sha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid Codex archive pin.' }
+    $stage = Join-Path ([IO.Path]::GetTempPath()) ('nic26-codex-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $stage | Out-Null
+    $archive = Join-Path $stage 'package.tar.gz'
+    Invoke-WebRequest -Uri $pin.DownloadUrl -OutFile $archive
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne $pin.Sha256) { throw 'Codex archive SHA-256 mismatch.' }
+    $tar = Join-Path ([Environment]::SystemDirectory) 'tar.exe'
+    $members = @(& $tar -tzf $archive)
+    if ($LASTEXITCODE -ne 0 -or $members.Count -eq 0 -or @($members | Where-Object { $_ -match '(^[/\\]|(^|[/\\])\.\.([/\\]|$)|:)' }).Count -gt 0) { throw 'Unsafe Codex archive path.' }
+    $expanded = Join-Path $stage 'expanded'
+    New-Item -ItemType Directory -Path $expanded | Out-Null
+    & $tar -xzf $archive -C $expanded
+    if ($LASTEXITCODE -ne 0) { throw 'Codex archive extraction failed.' }
+    Assert-JumpCodexTree -Directory $expanded -Spec $Spec
+    # No package writes before validation. Refuse changed existing version contents, retaining them for review.
+    $parent = Split-Path $layout.Directory -Parent
+    $ancestor = $parent
+    while ($ancestor) {
+        if ((Test-Path -LiteralPath $ancestor) -and ((Get-Item -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Codex destination contains a reparse point.' }
+        $ancestor = Split-Path $ancestor -Parent
+    }
+    New-Item -ItemType Directory -Path $layout.Directory -ErrorAction Stop | Out-Null
+    $acl = [Security.AccessControl.DirectorySecurity]::new()
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($rule in @(@('S-1-5-18', 'FullControl'), @('S-1-5-32-544', 'FullControl'), @('S-1-5-32-545', 'ReadAndExecute'))) {
+        $identity = [Security.Principal.SecurityIdentifier]::new($rule[0])
+        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, $rule[1], 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+    }
+    Set-Acl -LiteralPath $layout.Directory -AclObject $acl
+    Get-ChildItem -LiteralPath $expanded -Force | Copy-Item -Destination $layout.Directory -Recurse
+    Assert-JumpCodexTree -Directory $layout.Directory -Spec $Spec
+    Set-JumpCodexEnvironment -Bin $layout.Bin
+    # Retain uniquely named temporary artifacts for diagnosis; never copy authentication or home directories.
 }
 
 function Get-InstalledWingetVersion {
@@ -505,6 +618,7 @@ function Get-JumpComponentVersion {
         'psresource' { Get-InstalledPSResourceVersion -Name $Component.Name }
         'az-extension' { Get-InstalledAzExtensionVersion -Name $Component.Name }
         'az-bicep' { Get-InstalledAzBicepVersion -Spec $Spec }
+        'codex-cli' { Get-InstalledJumpCodexVersion -Spec $Spec }
         'code' { Get-VSCodeExtensionVersion -Id $Component.Name -Directory $ExtensionDirectory }
         'feature' { Get-WindowsFeatureState -Name $Component.Name }
         'wsl' { if (Get-WslState -Distribution $Component.Name) { $Component.Version } else { $null } }
@@ -597,6 +711,7 @@ function Invoke-JumpTools {
             foreach ($name in $spec.Extensions.Keys) { $components.Add([pscustomobject]@{ Kind = 'az-extension'; Name = $name; Version = $spec.Extensions[$name]; Data = $null }) }
         }
         if ($key -eq 'bicep') { $components.Add([pscustomobject]@{ Kind = 'az-bicep'; Name = 'az bicep'; Version = $spec.Version; Data = $null }) }
+        if ($key -eq 'codex-cli') { $components.Add([pscustomobject]@{ Kind = 'codex-cli'; Name = 'Codex CLI'; Version = $spec.Version; Data = $null }) }
         if ($key -eq 'vscode') {
             foreach ($name in $spec.Extensions.Keys) { $components.Add([pscustomobject]@{ Kind = 'code'; Name = $name; Version = $spec.Extensions[$name]; Data = $null }) }
         }
@@ -652,6 +767,7 @@ function Invoke-JumpTools {
                         'psresource' { Install-PSResourcePinned -Name $component.Name -Version $component.Version }
                         'az-extension' { Invoke-AzCli -Arguments @('extension', 'add', '--name', $component.Name, '--version', $component.Version, '--system') }
                         'az-bicep' { Invoke-JumpBicepSetup -Spec $spec }
+                        'codex-cli' { Invoke-JumpCodexSetup -Spec $spec }
                         'code' {
                             Set-MachineExtensionsDirectory -Directory $extensionDirectory
                             Invoke-Code -Id $component.Name -Version $component.Version -Directory $extensionDirectory

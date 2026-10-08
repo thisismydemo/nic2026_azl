@@ -80,6 +80,8 @@ cd .\automation\azure-local\cluster-deploy\scripts
 
 `Test-ClusterPostDeployment.ps1` is read-only: cluster resource Succeeded/Connected, Deploy status Success, `identityProvider = LocalIdentity`, Arc machines Connected with the required extensions (incl. `AzureEdgeAKVBackupForWindows`), custom location, Arc Resource Bridge `Running`, witness account, cluster vault secrets by **name** (ECE + backed-up BitLocker/RecoveryAdmin), node identities' vault roles; over WinRM from the jump server: nodes Up, cloud witness Online, S2D Healthy, `Get-NetIntentStatus` Success, RDMA/jumbo on storage only, **WORKGROUP + `ADAware = 2`**, live-migration network selection (R-03).
 
+Input validation runs before Azure context checks: `nodes` must be a nonempty array of objects with nonblank, case-insensitively unique string names and no surrounding whitespace. Empty or malformed lists cannot skip node checks and produce a passing report. The helper accepts a generic node count; the lab's configured two-node requirement must still be verified against both actual machines.
+
 ## Portal-equivalent steps (for the recorded first run)
 
 1. Azure portal → **Azure Local** → **Create** → resource group `rg-iic-nic26-azl-eus-01`, instance name `nic26-clus01`, region East US, select both Arc machines.

@@ -45,6 +45,7 @@ BeforeAll {
     function Get-AzContext { [pscustomobject]@{ Subscription = [pscustomobject]@{ Id = $global:LzTestSub }; Tenant = [pscustomobject]@{ Id = $global:LzTestSub }; Account = [pscustomobject]@{ Id = 'user1@contoso.com' } } }
     function Set-AzContext { param($SubscriptionId, [Parameter(ValueFromRemainingArguments)] $Rest) }
     function Get-AzResource {
+        [CmdletBinding()]
         param($ResourceType, $ResourceGroupName, $ResourceId, $ApiVersion, [Parameter(ValueFromRemainingArguments)] $Rest)
         $inv = @($global:LzInventory)
         if ($ResourceId) { if ($ResourceId -like '*/extensions') { return }; return @($inv | Where-Object { $_.ResourceId -ieq $ResourceId }) }
@@ -109,6 +110,23 @@ Describe 'Script conventions (contract §7)' -Tag 'Scripts' {
         $text | Should -Not -Match '\b(Remove|New)-Az\w+'
         $text | Should -Not -Match '\bSet-Az(?!Context)\w+'
     }
+    It 'fails an unknown-only check selection instead of returning an empty successful report' {
+        Mock Get-AzResource { throw 'Unexpected resource read' }
+        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks unknown-check -InformationAction SilentlyContinue)
+        $rows.Count | Should -Be 1
+        $rows[0].Check | Should -Be 'unknown-check'
+        $rows[0].Status | Should -Be 'Fail'
+        $rows[0].Detail | Should -BeLike 'Requested check not recognized*'
+        $LASTEXITCODE | Should -Be 1
+        Should -Invoke Get-AzResource -Times 0 -Exactly
+    }
+    It 'retains a known manual result and reports duplicate unknown names only once' {
+        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks idempotency,unknown-check,UNKNOWN-CHECK -InformationAction SilentlyContinue)
+        $rows.Count | Should -Be 2
+        ($rows | Where-Object Check -EQ idempotency).Status | Should -Be 'Manual'
+        @($rows | Where-Object Status -EQ Fail).Count | Should -Be 1
+        $LASTEXITCODE | Should -Be 1
+    }
     It 'Test-JumpTools.ps1 invokes verification only and exposes no execution mode' {
         $text = Get-Content (Join-Path $script:ScriptDir 'Test-JumpTools.ps1') -Raw
         $text | Should -Match 'Invoke-JumpTools -VerifyOnly -PassThru'
@@ -116,6 +134,37 @@ Describe 'Script conventions (contract §7)' -Tag 'Scripts' {
     }
     It 'scripts that touch secrets say they run on the Windows jump server' {
         (Get-Content (Join-Path $script:ScriptDir 'Invoke-LzAzureLocalDeploy.ps1') -Raw) | Should -Match '(?i)windows.*jump server|jump server.*windows'
+    }
+}
+
+Describe 'Landing-zone Recovery Services DR inventory acceptance' {
+    BeforeEach {
+        Mock Get-AzRecoveryServicesVault { [pscustomobject]@{ ID = '/example/vault'; Identity = [pscustomobject]@{ Type = 'SystemAssigned' } } }
+        Mock Get-AzRecoveryServicesVaultProperty { [pscustomobject]@{ SoftDeleteFeatureState = 'AlwaysON' } }
+        Mock Get-AzRecoveryServicesBackupProperty { [pscustomobject]@{ BackupStorageRedundancy = 'LocallyRedundant' } }
+    }
+    It 'does not report an unreadable DR inventory as empty' {
+        Mock Get-AzResource { throw 'DR inventory denied' }
+        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks rsv -InformationAction SilentlyContinue)
+        $rows.Count | Should -Be 1
+        $rows[0].Status | Should -Be 'Fail'
+        $rows[0].Detail | Should -BeLike '*DR inventory denied*'
+        $LASTEXITCODE | Should -Be 1
+        Should -Invoke Get-AzResource -Times 1 -Exactly -ParameterFilter { $ResourceGroupName -eq $script:Config.names.rg_dr -and $ErrorAction -eq 'Stop' }
+    }
+    It 'accepts a successfully read empty DR group' {
+        Mock Get-AzResource { @() }
+        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks rsv -InformationAction SilentlyContinue)
+        $rows[0].Status | Should -Be 'Pass'
+        $rows[0].Detail | Should -BeLike '*drRgEmpty=True*'
+        $LASTEXITCODE | Should -Be 0
+    }
+    It 'fails a successfully read populated DR group' {
+        Mock Get-AzResource { [pscustomobject]@{ Name = 'example-resource' } }
+        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks rsv -InformationAction SilentlyContinue)
+        $rows[0].Status | Should -Be 'Fail'
+        $rows[0].Detail | Should -BeLike '*drRgEmpty=False*'
+        $LASTEXITCODE | Should -Be 1
     }
 }
 
@@ -433,6 +482,15 @@ Describe 'New-LzTeardownPlan.ps1 (S9..S1)' -Tag 'Scripts', 'Destructive' {
 Describe 'Teardown platform ownership boundary' -Tag 'Scripts', 'Destructive' {
     BeforeEach { Mock Get-AzContext { throw 'Unexpected Azure call during plan generation.' } }
     AfterEach { Should -Invoke Get-AzContext -Times 0 -Exactly }
+    It 'preserves rollback management resources and excludes the external jump from teardown' {
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg | Add-Member external_jump_vm_id "/subscriptions/$script:Sub/resourceGroups/rg-platform-management/providers/Microsoft.Compute/virtualMachines/relocated-jump"
+        $cfg | Add-Member external_jump_subnet_id "/subscriptions/$script:Sub/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/management/subnets/operators"
+        $plan = & (Join-Path $script:ScriptDir 'New-LzTeardownPlan.ps1') -Config $cfg -PlanPath (Join-Path $script:Scratch 'relocated-jump-plan.json') -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -eq S7).Action | Should -Be keep
+        @($plan | Where-Object { $_.Target -like '*rg-platform-management*' }).Count | Should -Be 0
+        @($plan | Where-Object { $_.Action -eq 'delete-rg' -and $_.Target -like ('*/' + $cfg.names.rg_mgmt) }).Count | Should -Be 0
+    }
     It 'keeps all three remote peerings and policies with a false or missing flag' -TestCases @(@{ Missing = $false }, @{ Missing = $true }) {
         param($Missing)
         $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
@@ -468,6 +526,36 @@ Describe 'Teardown platform ownership boundary' -Tag 'Scripts', 'Destructive' {
 Describe 'Invoke-LzAzureLocalDeploy.ps1 (orchestrator)' -Tag 'Scripts' {
     BeforeAll { $script:Orchestrator = Join-Path $script:ScriptDir 'Invoke-LzAzureLocalDeploy.ps1'; $script:FakeParams = Join-Path $script:Scratch 'main.generated.bicepparam'; Set-Content $script:FakeParams "using 'main.bicep'" }
     BeforeEach { Mock Invoke-NIC26ArmDeployment { [pscustomobject]@{ WhatIf = [bool]$Preview; Stages = $ParameterOverrides.enabled_stages } } }
+    It 'refuses relocated-jump unsafe <Tool> <Stage> execution before Azure or generation' -TestCases @(
+        @{ Tool = 'Bicep'; Stage = 'S7' }, @{ Tool = 'Terraform'; Stage = 'S1' },
+        @{ Tool = 'Terraform'; Stage = 'S8' }, @{ Tool = 'Bicep'; Stage = 'S-1' }
+    ) {
+        param($Tool, $Stage)
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg | Add-Member external_jump_vm_id "/subscriptions/$script:Sub/resourceGroups/rg-management/providers/Microsoft.Compute/virtualMachines/relocated-jump"
+        $cfg | Add-Member external_jump_subnet_id "/subscriptions/$script:Sub/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/management/subnets/operators"
+        Mock Get-AzContext { throw 'Unexpected Azure preflight' }
+        Mock az { throw 'Unexpected generation' }
+        { & $script:Orchestrator -Tool $Tool -Stage $Stage -Execute -Config $cfg -Confirm:$false -InformationAction SilentlyContinue } | Should -Throw '*deployment ownership*'
+        Should -Invoke Get-AzContext -Times 0 -Exactly
+        Should -Invoke az -Times 0 -Exactly
+        Should -Invoke Invoke-NIC26ArmDeployment -Times 0 -Exactly
+    }
+    It 'rejects an incomplete external target before Azure preflight' {
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg | Add-Member external_jump_vm_id "/subscriptions/$script:Sub/resourceGroups/rg-management/providers/Microsoft.Compute/virtualMachines/relocated-jump"
+        Mock Get-AzContext { throw 'Unexpected Azure preflight' }
+        { & $script:Orchestrator -Stage S9 -Config $cfg -InformationAction SilentlyContinue } | Should -Throw '*resource-ID pair*'
+        Should -Invoke Get-AzContext -Times 0 -Exactly
+    }
+    It 'allows other Bicep stages with external target without changing the jump enable flag' {
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg | Add-Member external_jump_vm_id "/subscriptions/$script:Sub/resourceGroups/rg-management/providers/Microsoft.Compute/virtualMachines/relocated-jump"
+        $cfg | Add-Member external_jump_subnet_id "/subscriptions/$script:Sub/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/management/subnets/operators"
+        $null = & $script:Orchestrator -Stage S1 -Config $cfg -ParameterFile $script:FakeParams -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        Should -Invoke Invoke-NIC26ArmDeployment -Times 1 -Exactly -ParameterFilter { $Preview -and $ParameterOverrides.enabled_stages -contains 'S1' }
+        $cfg.enable_jump_server | Should -Be $script:Config.enable_jump_server
+    }
 
     It 'defaults to what-if: S1 runs the deployment with -WhatIf only' {
         $r = & $script:Orchestrator -Stage S1 -Config $script:Config -ParameterFile $script:FakeParams -WarningAction SilentlyContinue -InformationAction SilentlyContinue

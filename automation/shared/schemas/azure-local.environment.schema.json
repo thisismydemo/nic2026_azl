@@ -5,6 +5,14 @@
   "description": "Landing-zone variables (design/azure-local/landing-zone.md section 10.6), cluster facts (nodes, VLANs, intents, IP plan, QoS, witness, identity, release from design/azure-local/network-design.md) and vault names. Secrets are keyvault:// references only. Unknown keys are rejected.",
   "type": "object",
   "additionalProperties": false,
+  "dependentRequired": {
+    "external_jump_vm_id": [
+      "external_jump_subnet_id"
+    ],
+    "external_jump_subnet_id": [
+      "external_jump_vm_id"
+    ]
+  },
   "required": [
     "subscription_id",
     "spoke_address_space",
@@ -154,6 +162,16 @@
     },
     "enable_jump_server": {
       "type": "boolean"
+    },
+    "external_jump_vm_id": {
+      "type": "string",
+      "pattern": "^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\\.Compute/virtualMachines/[^/]+$",
+      "description": "Runtime-only explicit relocated jump; not an IaC parameter. Original workload VM/disks retained for rollback until ownership reconciliation."
+    },
+    "external_jump_subnet_id": {
+      "type": "string",
+      "pattern": "^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\\.Network/virtualNetworks/[^/]+/subnets/[^/]+$",
+      "description": "Runtime-only expected existing subnet of relocated jump; paired with external_jump_vm_id."
     },
     "jump_vm_size": {
       "type": "string",

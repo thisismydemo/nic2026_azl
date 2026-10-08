@@ -154,6 +154,35 @@ Describe 'script hygiene (contract §7)' {
         $i.cluster_name | Should -Be 'nic26-clus01'
         (ConvertTo-ClusterDeployResult -Check 'x' -Result 'pass' -Evidence 'y').result | Should -Be 'pass'
     }
+    It 'rejects missing node evidence before post-deployment Azure reads' -TestCases @(
+        @{ Nodes = @() },
+        @{ Nodes = $null },
+        @{ Nodes = @{ name = 'example-node' } },
+        @{ Nodes = @($null) },
+        @{ Nodes = @(@{}) },
+        @{ Nodes = @(@{ name = '' }) },
+        @{ Nodes = @(@{ name = ' ' }) },
+        @{ Nodes = @(@{ name = 1 }) },
+        @{ Nodes = @(@{ name = 'example-node' }, @{ name = 'EXAMPLE-NODE' }) },
+        @{ Nodes = @(@{ name = ' example-node' }) }
+    ) {
+        param($Nodes)
+        $inputData = Get-Content (Join-Path $script:solutionRoot 'terraform/terraform.example.tfvars.json') -Raw | ConvertFrom-Json -AsHashtable
+        $inputData.nodes = $Nodes
+        $path = Join-Path $TestDrive 'invalid-nodes.json'
+        $inputData | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $path
+        Mock Get-AzContext { throw 'Unexpected Azure context read' }
+        { Get-ClusterDeployInputs -InputFile $path } | Should -Throw '*node*'
+        { & (Join-Path $script:solutionRoot 'scripts/Test-ClusterPostDeployment.ps1') -InputFile $path -SkipNodeChecks } | Should -Throw '*node*'
+        Should -Invoke Get-AzContext -Times 0 -Exactly
+    }
+    It 'accepts a nonempty generic node list without imposing the lab node count' {
+        $inputData = Get-Content (Join-Path $script:solutionRoot 'terraform/terraform.example.tfvars.json') -Raw | ConvertFrom-Json -AsHashtable
+        $inputData.nodes = @(@{ name = 'example-node' })
+        $path = Join-Path $TestDrive 'one-node.json'
+        $inputData | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $path
+        (Get-ClusterDeployInputs -InputFile $path).nodes.Count | Should -Be 1
+    }
 }
 
 Describe 'IaC gates' -Tag Gate {

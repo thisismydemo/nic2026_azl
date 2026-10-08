@@ -72,6 +72,23 @@ if (-not $Config) { $Config = Get-NIC26Config -Scope 'azure-local' }
 # Get-NIC26Config returns { scope, sources, shared, azure_local, values }; the stages read the flat values. Tests pass a flat config.
 $fullConfig = $Config
 if ($Config -is [System.Collections.IDictionary] -and $Config.Contains('values')) { $Config = $Config['values'] }
+$externalJump = @{}
+foreach ($key in @('external_jump_vm_id', 'external_jump_subnet_id')) {
+    $present = ($Config -is [System.Collections.IDictionary]) ? $Config.Contains($key) : ($null -ne $Config.PSObject.Properties[$key])
+    if ($present) { $externalJump[$key] = [string]$Config.$key }
+}
+if ($externalJump.Count -gt 0) {
+    if ($externalJump.Count -ne 2 -or
+        $externalJump.external_jump_vm_id -notmatch '^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Compute/virtualMachines/[^/]+$' -or
+        $externalJump.external_jump_subnet_id -notmatch '^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$') {
+        throw 'External jump requires a valid VM/subnet resource-ID pair.'
+    }
+    $terraformApply = $Tool -eq 'Terraform' -and (@($Stage | Where-Object { $_ -in $iacStages -or $_ -eq 'S8' }).Count -gt 0)
+    if ($Execute -and ('S7' -in $Stage -or 'S-1' -in $Stage -or $terraformApply)) {
+        throw 'External jump configured: source S7, S-1 and Terraform apply are unavailable until deployment ownership is reconciled; preserve rollback VM/disks.'
+    }
+    if ($Tool -eq 'Terraform') { Write-Warning 'External jump configured: this Terraform plan is diagnostic only; deployment ownership is unresolved and apply is refused by this orchestrator.' }
+}
 # The flat values carry no resolved names; the converters resolve them from the solution's manifest. Tests pass a config that already has them.
 $hasNames = ($Config -is [System.Collections.IDictionary]) ? $Config.Contains('names') : ($null -ne $Config.PSObject.Properties['names'])
 $names = if ($hasNames) { $Config.names } else {

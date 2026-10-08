@@ -41,6 +41,20 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$fullConfig = $Config
+if ($Config -is [System.Collections.IDictionary] -and $Config.Contains('values')) {
+    $flat = @{}
+    foreach ($key in $Config['values'].Keys) { $flat[$key] = $Config['values'][$key] }
+    $Config = $flat
+}
+$hasNames = ($Config -is [System.Collections.IDictionary]) ? $Config.Contains('names') : ($null -ne $Config.PSObject.Properties['names'])
+if (-not $hasNames) {
+    $module = Get-Module NIC26.Automation
+    if (-not $module) { throw 'Import NIC26.Automation to resolve canonical config names.' }
+    $resolved = & $module { param($root, $cfg) (Resolve-NIC26SolutionInputs -Manifest (Get-NIC26SolutionManifest -Path $root) -Config $cfg).names } (Split-Path -Parent $PSScriptRoot) $fullConfig
+    if ($Config -is [System.Collections.IDictionary]) { $Config['names'] = $resolved }
+    else { $Config = $Config | Select-Object *, @{ Name = 'names'; Expression = { $resolved } } }
+}
 $sub = [string] $Config.subscription_id
 if ($sub -notmatch '^[0-9a-fA-F-]{36}$') { throw 'Config.subscription_id is not a GUID.' }
 $subPrefix = "/subscriptions/$sub/"
@@ -146,11 +160,20 @@ function Get-LzTeardownPlan {
     $identityNote = $ownsPlatformItems ?
     'Remove template-owned groups/PIM and initiative with their dedicated tooling.' :
     'Remove workload-owned groups/PIM with their dedicated tooling; preserve the platform-owned management-group initiative.'
+    $jumpAction = 'delete-rg'
+    $jumpNote = 'Jump server, NIC, disks.'
+    if ((Test-LzConfigKey $Config 'external_jump_vm_id') -or (Test-LzConfigKey $Config 'external_jump_subnet_id')) {
+        if (-not (Test-LzConfigKey $Config 'external_jump_vm_id') -or -not (Test-LzConfigKey $Config 'external_jump_subnet_id') -or
+            $Config.external_jump_vm_id -notmatch '^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Compute/virtualMachines/[^/]+$' -or
+            $Config.external_jump_subnet_id -notmatch '^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$') { throw 'External jump requires a valid VM/subnet resource-ID pair.' }
+        $jumpAction = 'keep'
+        $jumpNote = 'Retained source jump VM/disks for rollback; relocated management jump is outside this teardown ownership.'
+    }
     $rg = { param($k) "$subPrefix" + "resourceGroups/$($n.$k)" }
     $steps = @(
         ConvertTo-LzStep 'S9' 'manual'  'Test-LandingZone.ps1' 'Run once more and keep the report before teardown.' -Manual 'yes'
         ConvertTo-LzStep 'S8' 'manual'  'copied credentials' 'Rotate every COPIED credential in its source system (keyvault-and-secrets.md §6); delete the Entra device object of the jump server.' -Manual 'yes'
-        ConvertTo-LzStep 'S7' 'delete-rg' (& $rg 'rg_mgmt') 'Jump server, NIC, disks.'
+        ConvertTo-LzStep 'S7' $jumpAction (& $rg 'rg_mgmt') $jumpNote
         ConvertTo-LzStep 'S6' 'check'    "$(& $rg 'rg_bcdr')/providers/Microsoft.RecoveryServices/vaults/$($n.rsv_azl)" 'Vault must hold no protected items and no replicated items (Day-2 removes them first).'
         ConvertTo-LzStep 'S6' 'delete-rg' (& $rg 'rg_bcdr') 'Recovery Services vault and ASR cache storage.'
         ConvertTo-LzStep 'S5' 'check'    (& $rg 'rg_azl') 'No Microsoft.AzureStackHCI/clusters may exist: the witness is deleted only after the cluster is gone.'

@@ -83,4 +83,19 @@ Describe 'provisioning preflight' {
         Invoke-JumpMsixProvisioning $script:spec
         Should -Invoke Add-AppxProvisionedPackage -Times 1 -ParameterFilter { $Online -and $SkipLicense -and $DependencyPackagePath -contains 'synthetic-dependency.appx' }
     }
+    It 'provisions a dependency-free package with the pinned offline license' {
+        $script:spec.Msix.Dependencies = @()
+        $script:spec.Msix.License = @{ DownloadUrl = 'https://example.invalid/license.xml'; Sha256 = ('A' * 64) }
+        Mock Assert-JumpMsixPackage { [xml]'<Package><Dependencies><TargetDeviceFamily Name="Windows.Desktop" /></Dependencies></Package>' }
+        Invoke-JumpMsixProvisioning $script:spec
+        Should -Invoke Add-AppxProvisionedPackage -Times 1 -ParameterFilter { $Online -and $LicensePath -like '*pinned-license.xml' -and $Regions -eq 'all' -and -not $SkipLicense -and -not $DependencyPackagePath }
+        Should -Invoke Get-ChildItem -Times 0
+    }
+    It 'does not provision when offline license bytes change' {
+        $script:spec.Msix.Dependencies = @()
+        $script:spec.Msix.License = @{ DownloadUrl = 'https://example.invalid/license.xml'; Sha256 = ('B' * 64) }
+        Mock Assert-JumpMsixPackage { [xml]'<Package><Dependencies /></Package>' }
+        { Invoke-JumpMsixProvisioning $script:spec } | Should -Throw '*license SHA-256*'
+        Should -Invoke Add-AppxProvisionedPackage -Times 0
+    }
 }
