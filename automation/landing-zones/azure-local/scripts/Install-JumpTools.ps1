@@ -525,6 +525,7 @@ function Invoke-JumpTools {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [switch] $Execute,
+        [switch] $VerifyOnly,
         [string[]] $Only,
         [switch] $SkipOffice,
         [switch] $PassThru,
@@ -533,6 +534,7 @@ function Invoke-JumpTools {
     )
 
     $script:JumpToolsFailed = $false
+    if ($VerifyOnly -and $Execute) { throw 'VerifyOnly cannot be combined with Execute.' }
     if (-not $Execute) { $WhatIfPreference = $true }
     $configuration = Get-JumpConfiguration -Path $VersionsPath
     if ($AdditionalVersionsPath) {
@@ -550,12 +552,14 @@ function Invoke-JumpTools {
 
     $keys = @(if ($requested.Count -gt 0) { $requested } else { $tools.Keys })
     if ($SkipOffice) { $keys = @($keys | Where-Object { $_ -ne 'office' }) }
+    if ($VerifyOnly -and $keys.Count -eq 0) { throw 'Verification requires at least one selected tool.' }
 
     # Pins are checked for the selected tools only, so one unresolved pin blocks its own tool and nothing else.
     $selected = @{ Tools = @{} }
     foreach ($key in $keys) { $selected.Tools[$key] = $tools[$key] }
     if ($keys -contains 'ansible-wsl') { $selected.AnsibleCollections = $configuration.AnsibleCollections }
     $pins = @(Get-PendingPins -Configuration $selected)
+    if ($VerifyOnly -and $pins.Count -gt 0) { throw 'Verification requires resolved pins for every selected tool.' }
     if ($Execute) {
         if (-not (Test-JumpElevated)) { throw 'Execution requires an elevated session.' }
         if ($pins.Count -gt 0) { throw "Resolve TODO-PIN before execution: $($pins -join ', ')" }
@@ -605,13 +609,27 @@ function Invoke-JumpTools {
         if ($components.Count -eq 0) { throw "The versions file defines nothing to install for '$key'." }
 
         foreach ($component in $components) {
-            $installed = Get-JumpComponentVersion -Component $component -Spec $spec -ExtensionDirectory $extensionDirectory
+            try {
+                $installed = Get-JumpComponentVersion -Component $component -Spec $spec -ExtensionDirectory $extensionDirectory
+            }
+            catch {
+                if (-not $VerifyOnly) { throw }
+                $installed = $null
+            }
             if ($installed) { $found.Add("$($component.Name)=$installed") }
-            if (-not (Test-JumpComponentCorrect -Component $component -Installed $installed)) { $missing.Add($component) }
+            if ($VerifyOnly -and $component.Kind -eq 'feature' -and $installed -eq 'InstallPending') {
+                $missing.Add($component)
+                $reboot = $true
+            }
+            elseif (-not (Test-JumpComponentCorrect -Component $component -Installed $installed)) { $missing.Add($component) }
         }
 
         $action = if ($missing.Count) { 'Install' } else { 'Skip' }
         $result = if ($missing.Count) { 'Planned' } else { 'AlreadyCorrect' }
+        if ($VerifyOnly) {
+            $action = 'Verify'
+            $result = if ($missing.Count) { 'Failed' } else { 'Passed' }
+        }
 
         if ($Execute -and $missing.Count -gt 0) {
             $result = 'Installed'

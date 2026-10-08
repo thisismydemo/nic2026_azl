@@ -9,7 +9,7 @@ param()
 BeforeDiscovery {
     $script:ScriptDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts'
     $script:AllScripts = @(Get-ChildItem $script:ScriptDir -Filter '*.ps1' | Select-Object -ExpandProperty FullName)
-    $script:StateChanging = @($script:AllScripts | Where-Object { (Split-Path $_ -Leaf) -ne 'Test-LandingZone.ps1' })
+    $script:StateChanging = @($script:AllScripts | Where-Object { (Split-Path $_ -Leaf) -notin @('Test-LandingZone.ps1', 'Test-JumpTools.ps1') })
 }
 
 BeforeAll {
@@ -108,6 +108,11 @@ Describe 'Script conventions (contract §7)' -Tag 'Scripts' {
         $text = Get-Content (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Raw
         $text | Should -Not -Match '\b(Remove|New)-Az\w+'
         $text | Should -Not -Match '\bSet-Az(?!Context)\w+'
+    }
+    It 'Test-JumpTools.ps1 invokes verification only and exposes no execution mode' {
+        $text = Get-Content (Join-Path $script:ScriptDir 'Test-JumpTools.ps1') -Raw
+        $text | Should -Match 'Invoke-JumpTools -VerifyOnly -PassThru'
+        $text | Should -Not -Match '\$Execute|\b(Remove|New|Set)-Az\w+'
     }
     It 'scripts that touch secrets say they run on the Windows jump server' {
         (Get-Content (Join-Path $script:ScriptDir 'Invoke-LzAzureLocalDeploy.ps1') -Raw) | Should -Match '(?i)windows.*jump server|jump server.*windows'
@@ -414,12 +419,49 @@ Describe 'New-LzTeardownPlan.ps1 (S9..S1)' -Tag 'Scripts', 'Destructive' {
         ($plan | Select-Object -ExpandProperty Stage) | Select-Object -First 1 | Should -Be 'S9'
         ($plan | Select-Object -ExpandProperty Stage) | Select-Object -Last 1 | Should -Be 'S1'
     }
-    It 'only the remote-side peerings target another subscription, and they are marked' {
-        $plan = & (Join-Path $script:ScriptDir 'New-LzTeardownPlan.ps1') -Config $script:Config -PlanPath (Join-Path $script:Scratch 't2.json') -WarningAction SilentlyContinue -InformationAction SilentlyContinue
+    It 'only standalone-owned remote-side peerings cross subscription, and they are marked' {
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg.deploy_platform_scope_items = $true
+        $plan = & (Join-Path $script:ScriptDir 'New-LzTeardownPlan.ps1') -Config $cfg -PlanPath (Join-Path $script:Scratch 't2.json') -WarningAction SilentlyContinue -InformationAction SilentlyContinue
         $cross = @($plan | Where-Object CrossSubscription)
         $cross.Action | Should -Not -Contain 'delete-rg'
         foreach ($c in $cross) { $c.Action | Should -Be 'delete-peering' }
         $plan | Where-Object { $_.Action -eq 'keep' } | Select-Object -ExpandProperty Target | Should -Match 'rg-iic-nic26-azl-sec'
+    }
+}
+
+Describe 'Teardown platform ownership boundary' -Tag 'Scripts', 'Destructive' {
+    BeforeEach { Mock Get-AzContext { throw 'Unexpected Azure call during plan generation.' } }
+    AfterEach { Should -Invoke Get-AzContext -Times 0 -Exactly }
+    It 'keeps all three remote peerings and policies with a false or missing flag' -TestCases @(@{ Missing = $false }, @{ Missing = $true }) {
+        param($Missing)
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg.enable_identity_peering = $true
+        $cfg.enable_management_peering = $true
+        if ($Missing) { $cfg.PSObject.Properties.Remove('deploy_platform_scope_items') }
+        else { $cfg.deploy_platform_scope_items = $false }
+        $plan = & (Join-Path $script:ScriptDir 'New-LzTeardownPlan.ps1') -Config $cfg -PlanPath (Join-Path $script:Scratch 'ownership-default.json') -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        $cross = @($plan | Where-Object CrossSubscription)
+        $cross.Count | Should -Be 3
+        @($cross | Where-Object Action -ne 'keep').Count | Should -Be 0
+        @($plan | Where-Object Action -eq 'delete-policy-assignments').Count | Should -Be 0
+        @($plan | Where-Object Action -eq 'delete-rg').Count | Should -BeGreaterThan 0
+    }
+    It 'retains standalone-owned peering and policy removal when the flag is boolean true' {
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg.deploy_platform_scope_items = $true
+        $cfg.enable_identity_peering = $true
+        $cfg.enable_management_peering = $true
+        $plan = & (Join-Path $script:ScriptDir 'New-LzTeardownPlan.ps1') -Config $cfg -PlanPath (Join-Path $script:Scratch 'ownership-standalone.json') -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        @($plan | Where-Object Action -eq 'delete-peering').Count | Should -Be 3
+        @($plan | Where-Object Action -eq 'delete-policy-assignments').Count | Should -Be 1
+    }
+    It 'rejects a string false before writing a plan' {
+        $cfg = $script:Config | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $cfg.deploy_platform_scope_items = 'false'
+        $path = Join-Path $script:Scratch 'ownership-invalid.json'
+        { & (Join-Path $script:ScriptDir 'New-LzTeardownPlan.ps1') -Config $cfg -PlanPath $path -InformationAction SilentlyContinue -WarningAction SilentlyContinue } | Should -Throw '*must be a boolean*'
+        Test-Path $path | Should -BeFalse
     }
 }
 

@@ -8,7 +8,7 @@
     (only when no cluster exists in the cluster resource group; CanNotDelete lock removed first) -> S4 monitoring ->
     S3 ops vault deleted AND purged, cluster vault deleted (purge after the 7-day retention; security resource group
     stays until then unless -IncludeSecurityResourceGroup) -> S2 remote peerings on the hub/identity/management VNets
-    removed, then the network resource group -> S1 policy assignments, budget, remaining resource groups.
+    removed only when deploy_platform_scope_items is boolean true; otherwise preserved. Then the network resource group -> S1 ownership-gated policy assignments, budget, remaining resource groups.
     Never touches: hub VNet beyond its peering, VPN gateway, P2S, DCs, Bastion, platform vaults, management group.
     Every deletion inside the subscription is checked against the subscription prefix; the ONLY cross-subscription
     deletions are the remote-side peering resources whose IDs are built from the input VNet IDs plus the catalog names.
@@ -24,6 +24,9 @@
     ./New-LzTeardownPlan.ps1 -Config (Get-NIC26Config -Scope azure-local)
     ./New-LzTeardownPlan.ps1 -Config $cfg -Execute
 .NOTES
+    Author: Kristopher Turner
+    Contact: kris@hybridsolutions.cloud
+    Version: 1.2.0
     Requires Az.Accounts, Az.Resources, Az.Network, Az.KeyVault, Az.RecoveryServices. Rotate copied credentials in their
     source systems at lab close (keyvault-and-secrets.md §6) - a manual step listed in the plan.
 #>
@@ -55,9 +58,94 @@ function ConvertTo-LzStep {
     [pscustomobject]@{ Stage = $Stage; Action = $Action; Target = $Target; Note = $Note; CrossSubscription = $CrossSubscription; Manual = $Manual; Status = 'planned' }
 }
 
+function Get-LzArmCollection {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidatePattern('^/subscriptions/')][string] $CollectionPath)
+    $first = [uri]('https://management.azure.com' + $CollectionPath)
+    $next = $first
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $items = [System.Collections.Generic.List[object]]::new()
+    while ($null -ne $next) {
+        if ($next.Scheme -ne 'https' -or $next.Host -ne 'management.azure.com' -or
+            $next.Port -ne 443 -or $next.UserInfo -or $next.Fragment -or
+            -not $next.AbsolutePath.Equals($first.AbsolutePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Protection inventory continuation leaves the authorized ARM collection.'
+        }
+        if (-not $seen.Add($next.AbsoluteUri)) { throw 'Protection inventory pagination cycle.' }
+        $response = Invoke-AzRestMethod -Method GET -Path $next.PathAndQuery -ErrorAction Stop
+        if ([int]$response.StatusCode -ne 200) { throw "Protection inventory returned HTTP $($response.StatusCode)." }
+        $body = $response.Content | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        if ($body -isnot [System.Collections.IDictionary] -or -not $body.Contains('value') -or $body['value'] -isnot [array]) {
+            throw 'Protection inventory response is not a collection.'
+        }
+        foreach ($item in $body['value']) {
+            if ($null -eq $item) { throw 'Protection inventory contains a null record.' }
+            $items.Add($item)
+        }
+        $next = $null
+        if ($body.Contains('nextLink') -and -not [string]::IsNullOrWhiteSpace([string]$body['nextLink'])) {
+            $next = [uri]$body['nextLink']
+            if (-not $next.IsAbsoluteUri) { throw 'Protection inventory continuation is not an absolute URI.' }
+        }
+    }
+    return ,$items.ToArray()
+}
+
+function Assert-LzVaultUnprotected {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $VaultId)
+    # Vault-wide endpoints include all backup workloads and all ASR fabrics/containers.
+    $backup = Get-LzArmCollection -CollectionPath "$VaultId/backupProtectedItems?api-version=2025-08-01"
+    if ($backup.Count -gt 0) { throw "Vault still holds $($backup.Count) backup item(s); stop." }
+    $replication = Get-LzArmCollection -CollectionPath "$VaultId/replicationProtectedItems?api-version=2025-08-01"
+    if ($replication.Count -gt 0) { throw "Vault still holds $($replication.Count) replication item(s); stop." }
+}
+
+function Assert-LzClusterAbsent {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $ResourceGroupName)
+    $clusters = @(Get-AzResource -ResourceGroupName $ResourceGroupName -ResourceType 'Microsoft.AzureStackHCI/clusters' -ErrorAction Stop)
+    if ($clusters.Count -gt 0) { throw 'An Azure Local cluster still exists; stop.' }
+}
+
+function Test-LzArmResourcePresent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidatePattern('^/subscriptions/')][string] $ResourceId,
+        [Parameter(Mandatory)][string] $ApiVersion
+    )
+    $response = Invoke-AzRestMethod -Method GET -Path "$($ResourceId)?api-version=$ApiVersion" -ErrorAction Stop
+    $body = $response.Content | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ([int]$response.StatusCode -eq 200) {
+        if ($body -isnot [System.Collections.IDictionary] -or -not $body.Contains('id') -or
+            -not ([string]$body['id']).Equals($ResourceId, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Resource presence response does not identify the expected resource.'
+        }
+        return $true
+    }
+    if ([int]$response.StatusCode -eq 404 -and $body -is [System.Collections.IDictionary] -and
+        $body.Contains('error') -and $body['error'] -is [System.Collections.IDictionary] -and
+        $body['error'].Contains('code') -and $body['error']['code'] -in @('ResourceNotFound', 'ResourceGroupNotFound')) {
+        return $false
+    }
+    throw "Resource presence read returned HTTP $($response.StatusCode); absence not proven."
+}
+
 function Get-LzTeardownPlan {
     [CmdletBinding()]
-    param([object] $Config)
+    param([object] $Config, [switch] $IncludeSecurityResourceGroup)
+    $ownsPlatformItems = $false
+    if (Test-LzConfigKey $Config 'deploy_platform_scope_items') {
+        if ($Config.deploy_platform_scope_items -isnot [bool]) {
+            throw 'Config.deploy_platform_scope_items must be a boolean.'
+        }
+        $ownsPlatformItems = $Config.deploy_platform_scope_items
+    }
+    $peeringAction = $ownsPlatformItems ? 'delete-peering' : 'keep'
+    $policyAction = $ownsPlatformItems ? 'delete-policy-assignments' : 'keep'
+    $identityNote = $ownsPlatformItems ?
+        'Remove template-owned groups/PIM and initiative with their dedicated tooling.' :
+        'Remove workload-owned groups/PIM with their dedicated tooling; preserve the platform-owned management-group initiative.'
     $rg = { param($k) "$subPrefix" + "resourceGroups/$($n.$k)" }
     $steps = @(
         ConvertTo-LzStep 'S9' 'manual'  'Test-LandingZone.ps1' 'Run once more and keep the report before teardown.' -Manual 'yes'
@@ -72,25 +160,25 @@ function Get-LzTeardownPlan {
         ConvertTo-LzStep 'S3' 'delete-kv-purge' $n.kv_ops 'Ops vault: delete and purge (purge protection off, K-5).'
         ConvertTo-LzStep 'S3' 'delete-kv' $n.kv_azl 'Cluster vault: delete only; purge after the 7-day retention or use instance 02 (K-5).'
         ConvertTo-LzStep 'S3' ($IncludeSecurityResourceGroup ? 'delete-rg' : 'keep') (& $rg 'rg_sec') 'Security resource group stays until the cluster vault can be purged (design §10.4).'
-        ConvertTo-LzStep 'S2' 'delete-peering' "$($Config.hub_vnet_id)/virtualNetworkPeerings/$($n.peer_hub_to_spoke)" 'The one change on the hub (LZ-04).' -CrossSubscription $true
+        ConvertTo-LzStep 'S2' $peeringAction "$($Config.hub_vnet_id)/virtualNetworkPeerings/$($n.peer_hub_to_spoke)" 'Platform hub peering stays unless this configuration owns platform-scope delivery.' -CrossSubscription $true
     )
     if ((Test-LzConfigKey $Config 'enable_identity_peering') -and [bool]$Config.enable_identity_peering) {
-        $steps += ConvertTo-LzStep 'S2' 'delete-peering' "$($Config.identity_spoke_vnet_id)/virtualNetworkPeerings/$($n.peer_identity_to_spoke)" 'P-13 identity-side peering.' -CrossSubscription $true
+        $steps += ConvertTo-LzStep 'S2' $peeringAction "$($Config.identity_spoke_vnet_id)/virtualNetworkPeerings/$($n.peer_identity_to_spoke)" 'Platform identity peering follows the ownership gate.' -CrossSubscription $true
     }
     if ((Test-LzConfigKey $Config 'enable_management_peering') -and [bool]$Config.enable_management_peering) {
-        $steps += ConvertTo-LzStep 'S2' 'delete-peering' "$($Config.management_spoke_vnet_id)/virtualNetworkPeerings/$($n.peer_mgmt_to_spoke)" 'P-13 management-side peering.' -CrossSubscription $true
+        $steps += ConvertTo-LzStep 'S2' $peeringAction "$($Config.management_spoke_vnet_id)/virtualNetworkPeerings/$($n.peer_mgmt_to_spoke)" 'Platform management peering follows the ownership gate.' -CrossSubscription $true
     }
     $steps += @(
         ConvertTo-LzStep 'S2' 'delete-rg' (& $rg 'rg_net') 'VNet, NSGs, route table, own private DNS zones and their links (links on the identity/AVD VNets are children of our zone). A REUSED shared zone is never deleted.'
-        ConvertTo-LzStep 'S1' 'delete-policy-assignments' "$subPrefix" "Assignments named $($n.asg_allowed_locations), $($n.asg_require_tags_rg)-*, $($n.asg_inherit_tags)-*, $($n.asg_activity_log)."
+        ConvertTo-LzStep 'S1' $policyAction "$subPrefix" "Ownership-gated assignments named $($n.asg_allowed_locations), $($n.asg_require_tags_rg)-*, $($n.asg_inherit_tags)-*, $($n.asg_activity_log)."
         ConvertTo-LzStep 'S1' 'delete-budget' "${subPrefix}providers/Microsoft.Consumption/budgets/$($n.budget_azl)" ''
         ConvertTo-LzStep 'S1' 'delete-rg' (& $rg 'rg_dr') 'Must be empty (failback done).'
-        ConvertTo-LzStep 'S1' 'manual' 'Entra groups, PIM eligibilities, management-group initiative definition' 'Remove with Initialize-LzPim.ps1 -Remove and the Entra portal; the initiative definition is removed by the owner at MG scope.' -Manual 'yes'
+        ConvertTo-LzStep 'S1' 'manual' 'Entra groups and PIM eligibilities' $identityNote -Manual 'yes'
     )
     return $steps
 }
 
-$plan = Get-LzTeardownPlan -Config $Config
+$plan = Get-LzTeardownPlan -Config $Config -IncludeSecurityResourceGroup:$IncludeSecurityResourceGroup
 foreach ($s in $plan) {
     if (-not $s.CrossSubscription -and $s.Target.StartsWith('/subscriptions/', [System.StringComparison]::OrdinalIgnoreCase) -and -not $s.Target.StartsWith($subPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Plan integrity error: step targets another subscription: $($s.Target)"
@@ -115,12 +203,14 @@ foreach ($step in $plan) {
         switch ($step.Action) {
             'check' {
                 if ($step.Stage -eq 'S5') {
-                    $clusters = @(Get-AzResource -ResourceGroupName (Split-Path $step.Target -Leaf) -ResourceType 'Microsoft.AzureStackHCI/clusters' -ErrorAction SilentlyContinue)
-                    if ($clusters.Count -gt 0) { throw "cluster still exists ($($clusters[0].Name)); stop." }
+                    if (Test-LzArmResourcePresent -ResourceId $step.Target -ApiVersion '2021-04-01') {
+                        Assert-LzClusterAbsent -ResourceGroupName (Split-Path $step.Target -Leaf)
+                    }
                 }
                 else {
-                    $items = @(Get-AzRecoveryServicesBackupItem -VaultId $step.Target -BackupManagementType AzureVM -WorkloadType AzureVM -ErrorAction SilentlyContinue)
-                    if ($items.Count -gt 0) { throw "vault still holds $($items.Count) protected item(s); stop." }
+                    if (Test-LzArmResourcePresent -ResourceId $step.Target -ApiVersion '2025-02-01') {
+                        Assert-LzVaultUnprotected -VaultId $step.Target
+                    }
                 }
                 $step.Status = 'ok'
             }
