@@ -47,7 +47,7 @@ function Get-LzEligibilityDuration {
     param([string] $Scope, [string] $RoleDefinitionId)
     $roleId = ($RoleDefinitionId -split '/')[-1]
     $assignments = @(Get-AzRoleManagementPolicyAssignment -Scope $Scope -ErrorAction Stop |
-        Where-Object { ($_.RoleDefinitionId -split '/')[-1] -eq $roleId })
+            Where-Object { ($_.RoleDefinitionId -split '/')[-1] -eq $roleId })
     if ($assignments.Count -ne 1) { throw 'Cannot resolve one applicable PIM role-management policy.' }
     $policyId = [string] $assignments[0].PolicyId
     $policyScope = $policyId -replace '/providers/Microsoft.Authorization/roleManagementPolicies/[^/]+$', ''

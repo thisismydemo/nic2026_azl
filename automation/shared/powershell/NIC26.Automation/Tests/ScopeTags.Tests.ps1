@@ -3,7 +3,7 @@ BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '../NIC26.Automation.psd1') -Force
     $sharedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
     $script:ScopeRoot = Join-Path $TestDrive 'environment'
-    foreach ($scope in 'shared','azure-local','avd') {
+    foreach ($scope in 'shared', 'azure-local', 'avd') {
         $folder = Join-Path $script:ScopeRoot $scope
         $null = New-Item -ItemType Directory -Path $folder
         Copy-Item -LiteralPath (Join-Path $sharedRoot "examples/environment.$scope.example.yml") -Destination (Join-Path $folder 'environment.yml')
