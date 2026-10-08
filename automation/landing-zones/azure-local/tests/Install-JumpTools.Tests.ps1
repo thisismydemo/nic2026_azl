@@ -24,6 +24,7 @@ BeforeAll {
         }
         'az-powershell' = @{ Version = '4.0.0'; Modules = @{ Az = '4.0.0'; 'Az.KeyVault' = '4.1.0' } }
         'azure-cli' = @{ Version = '5.0.0'; Packages = @(@{ Id = 'Test.AzCli'; Version = '5.0.0'; Source = 'winget' }); Extensions = @{ ssh = '1.1.1' } }
+        bicep = @{ Version = '1.2.3'; Binary = @{ DownloadUrl = 'https://example.invalid/bicep.exe'; Sha256 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'; Publisher = 'CN=Example' } }
         'ansible-wsl' = @{ Version = '24.04'; Distribution = 'Ubuntu-Test'; AnsibleCoreVersion = '7.0.0' }
         rsat = @{ Version = 'N/A'; Features = @('RSAT-Test-A', 'RSAT-Test-B') }
         'windows-app' = @{ Version = '1.0.0'; Packages = @(@{ Id = 'STOREID'; Version = '1.0.0'; Source = 'msstore' }) }
@@ -69,6 +70,7 @@ BeforeAll {
         Mock Set-MachineExtensionsDirectory {}
         Mock Invoke-OfficeSetup { $global:JumpState['office'] = $Build }
         Mock Set-WingetAutoUpdate {}
+        Mock Invoke-JumpBicepSetup { $global:JumpState['bicep'] = $Spec.Version }
     }
 }
 
@@ -248,13 +250,24 @@ Describe 'execution' {
         $null = Invoke-JumpTools -VersionsPath $script:TestVersions -Only az-powershell, azure-cli -Execute -PassThru
         Should -Invoke Install-PSResourcePinned -Times 1 -ParameterFilter { $Name -eq 'Az' -and $Version -eq '4.0.0' }
         Should -Invoke Install-PSResourcePinned -Times 1 -ParameterFilter { $Name -eq 'Az.KeyVault' -and $Version -eq '4.1.0' }
-        Should -Invoke Invoke-AzCli -Times 1 -ParameterFilter { $Arguments -contains 'extension' -and $Arguments -contains 'ssh' -and $Arguments -contains '1.1.1' }
+        Should -Invoke Invoke-AzCli -Times 1 -ParameterFilter { $Arguments -contains 'extension' -and $Arguments -contains 'ssh' -and $Arguments -contains '1.1.1' -and $Arguments -contains '--system' }
     }
 
     It 'installs each missing Windows feature once' {
         $null = Invoke-JumpTools -VersionsPath $script:TestVersions -Only rsat -Execute -PassThru
         Should -Invoke Install-WindowsFeaturePinned -Times 1 -ParameterFilter { $Name -eq 'RSAT-Test-A' }
         Should -Invoke Install-WindowsFeaturePinned -Times 1 -ParameterFilter { $Name -eq 'RSAT-Test-B' }
+    }
+
+    It 'installs the pinned Bicep binary through the machine installer, then skips a correct rerun' {
+        $r = @(Invoke-JumpTools -VersionsPath $script:TestVersions -Only bicep -Execute -PassThru)
+        $r[0].Result | Should -Be 'Installed'
+        Should -Invoke Invoke-JumpBicepSetup -Times 1 -ParameterFilter { $Spec.Version -eq '1.2.3' }
+        Should -Invoke Invoke-AzCli -Times 0
+        Should -Invoke Invoke-Winget -Times 0
+        $r = @(Invoke-JumpTools -VersionsPath $script:TestVersions -Only bicep -Execute -PassThru)
+        $r[0].Result | Should -Be 'AlreadyCorrect'
+        Should -Invoke Invoke-JumpBicepSetup -Times 1
     }
 
     It 'reports RebootRequired after installing WSL and does not run the Ansible steps in the same pass' {

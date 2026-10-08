@@ -7,8 +7,8 @@
     installed, what is wanted, what it would do). With -Execute (elevated session) it installs what is missing or at the wrong
     version and skips what is already correct, so a re-run is safe.
 
-    Every install is machine-wide: winget --scope machine, Install-PSResource -Scope AllUsers, Windows features, the Office
-    Deployment Tool and MSIX provisioning. Office updates are disabled; Store update policy remains a live acceptance check. -Execute is refused while a version in the file is still 'TODO-PIN' for a selected tool.
+    Machine-wide scope is the requirement: winget --scope machine, Install-PSResource -Scope AllUsers, system Azure CLI extensions, Windows features, the Office
+    Deployment Tool and MSIX provisioning. WSL distributions remain a scope acceptance gap; do not treat a successful run as proof that all tools meet that requirement. Office updates are disabled; Store update policy remains a live acceptance check. -Execute is refused while a version in the file is still 'TODO-PIN' for a selected tool.
     Not installed by design: Azure VPN Client, Windows Admin Center, RVTools.
 
     Dot-sourcing the file defines the functions without running anything (the tests do this).
@@ -189,20 +189,111 @@ function Get-InstalledPSResourceVersion {
     return [string] $resource.Version
 }
 
+function Get-JumpAzSystemExtensionDirectory {
+    $command = Get-Command az -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $command) { return $null }
+    $source = [IO.Path]::GetFullPath($command.Source)
+    $trusted = @($env:ProgramFiles, ${env:ProgramFiles(x86)} | Where-Object { $_ })
+    if (-not @($trusted | Where-Object { $source.StartsWith(([IO.Path]::GetFullPath($_).TrimEnd('\') + '\'), [StringComparison]::OrdinalIgnoreCase) }).Count) { return $null }
+    # Windows MSI CLI layout: wbin/az.cmd, with Python's purelib at Lib/site-packages.
+    if ([IO.Path]::GetFileName($source) -ine 'az.cmd' -or (Split-Path (Split-Path $source -Parent) -Leaf) -ine 'wbin') { return $null }
+    return Join-Path (Split-Path (Split-Path $source -Parent) -Parent) 'Lib/site-packages/azure-cli-extensions'
+}
+
+function Test-JumpAzExtensionPath {
+    param([string] $Path, [string] $Name, [string] $SystemDirectory)
+    if (-not $Path -or -not $SystemDirectory -or $Name -notmatch '^[a-z0-9][a-z0-9-]*$') { return $false }
+    return [IO.Path]::GetFullPath($Path).TrimEnd('\', '/') -ieq [IO.Path]::GetFullPath((Join-Path $SystemDirectory $Name)).TrimEnd('\', '/')
+}
+
 function Get-InstalledAzExtensionVersion {
     param([string] $Name)
     $json = & az extension list --output json 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
     $extension = @($json | ConvertFrom-Json) | Where-Object name -eq $Name | Select-Object -First 1
     if ($null -eq $extension) { return $null }
+    if (-not (Test-JumpAzExtensionPath -Path $extension.path -Name $Name -SystemDirectory (Get-JumpAzSystemExtensionDirectory))) { return $null }
     return [string] $extension.version
 }
 
-function Get-InstalledAzBicepVersion {
-    $text = & az bicep version 2>$null
+function Get-JumpBicepLayout {
+    $directory = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'JumpTools/Bicep'
+    return [pscustomobject]@{ Directory = $directory; Binary = (Join-Path $directory 'bicep.exe') }
+}
+
+function Get-JumpMachineEnvironment {
+    param([string] $Name)
+    return [Environment]::GetEnvironmentVariable($Name, 'Machine')
+}
+
+function Get-JumpBicepBinaryVersion {
+    param([string] $Path, [System.Collections.IDictionary] $Pin)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    if ((Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -cne $Pin.Sha256) { return $null }
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Subject -cne $Pin.Publisher) { return $null }
+    $text = & $Path --version 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
     if (($text -join ' ') -match '\b(?<Version>\d+\.\d+\.\d+)\b') { return $Matches.Version }
     return $null
+}
+
+function Get-InstalledAzBicepVersion {
+    param([System.Collections.IDictionary] $Spec)
+    $layout = Get-JumpBicepLayout
+    foreach ($path in @((Split-Path $layout.Directory -Parent), $layout.Directory, $layout.Binary)) {
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $null }
+    }
+    $entries = @(([string](Get-JumpMachineEnvironment 'Path')) -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim()).TrimEnd('\', '/') })
+    if ($entries -inotcontains $layout.Directory.TrimEnd('\', '/') -or (Get-JumpMachineEnvironment 'AZURE_BICEP_USE_BINARY_FROM_PATH') -ine 'true') { return $null }
+    return Get-JumpBicepBinaryVersion -Path $layout.Binary -Pin $Spec.Binary
+}
+
+function Set-JumpBicepEnvironment {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called only by the guarded Bicep installer after pinned binary verification.')]
+    param([string] $Directory)
+    $currentPath = [string](Get-JumpMachineEnvironment 'Path')
+    $entries = @($currentPath -split ';' | Where-Object { $_ -and $_.TrimEnd('\', '/') -ine $Directory.TrimEnd('\', '/') })
+    [Environment]::SetEnvironmentVariable('Path', ((@($Directory) + $entries) -join ';'), 'Machine')
+    [Environment]::SetEnvironmentVariable('AZURE_BICEP_USE_BINARY_FROM_PATH', 'true', 'Machine')
+    $env:Path = $Directory + ';' + $env:Path
+    $env:AZURE_BICEP_USE_BINARY_FROM_PATH = 'true'
+}
+
+function Invoke-JumpBicepSetup {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called only within Invoke-JumpTools Execute/ShouldProcess boundary.')]
+    param([System.Collections.IDictionary] $Spec)
+    $pin = $Spec.Binary
+    if ($pin.DownloadUrl -notmatch '^https://' -or $pin.Sha256 -notmatch '^[A-F0-9]{64}$') { throw 'Bicep requires an HTTPS URL and pinned SHA-256.' }
+    if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') { throw 'The Bicep source pin requires an x64 machine.' }
+    $layout = Get-JumpBicepLayout
+    foreach ($path in @((Split-Path $layout.Directory -Parent), $layout.Directory, $layout.Binary)) {
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Bicep target must not be a reparse point.' }
+    }
+    $download = Join-Path ([IO.Path]::GetTempPath()) ('nic26-bicep-' + [guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        Invoke-WebRequest -Uri $pin.DownloadUrl -OutFile $download
+        if ((Get-JumpBicepBinaryVersion -Path $download -Pin $pin) -cne $Spec.Version) { throw 'Downloaded Bicep does not match the pinned bytes, publisher and version.' }
+        $null = New-Item -ItemType Directory -Path $layout.Directory -Force
+        $acl = [Security.AccessControl.DirectorySecurity]::new()
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @(@('S-1-5-18', 'FullControl'), @('S-1-5-32-544', 'FullControl'), @('S-1-5-32-545', 'ReadAndExecute'))) {
+            $identity = [Security.Principal.SecurityIdentifier]::new($rule[0])
+            $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, $rule[1], 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+        }
+        Set-Acl -LiteralPath $layout.Directory -AclObject $acl
+        Copy-Item -LiteralPath $download -Destination $layout.Binary -Force
+        $fileAcl = [Security.AccessControl.FileSecurity]::new()
+        $fileAcl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @(@('S-1-5-18', 'FullControl'), @('S-1-5-32-544', 'FullControl'), @('S-1-5-32-545', 'ReadAndExecute'))) {
+            $identity = [Security.Principal.SecurityIdentifier]::new($rule[0])
+            $fileAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, $rule[1], 'Allow'))
+        }
+        Set-Acl -LiteralPath $layout.Binary -AclObject $fileAcl
+        if ((Get-JumpBicepBinaryVersion -Path $layout.Binary -Pin $pin) -cne $Spec.Version) { throw 'Machine Bicep binary verification failed.' }
+        Set-JumpBicepEnvironment -Directory $layout.Directory
+    }
+    finally { if (Test-Path -LiteralPath $download) { Remove-Item -LiteralPath $download -Force } }
 }
 
 function Get-WslState {
@@ -270,8 +361,26 @@ function Install-PSResourcePinned {
 
 function Invoke-AzCli {
     param([string[]] $Arguments)
-    & az @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "az failed (exit $LASTEXITCODE)." }
+    if ($Arguments.Count -ge 2 -and $Arguments[0] -eq 'extension' -and $Arguments[1] -eq 'add') {
+        if ($Arguments -notcontains '--system') { throw 'Jump extensions require --system.' }
+        $systemDirectory = Get-JumpAzSystemExtensionDirectory
+        if (-not $systemDirectory) { throw 'Cannot resolve a trusted machine Azure CLI installation.' }
+        # Override per-user sys_dir configuration for this child invocation, without relocating authentication caches.
+        $previousDirectory = [Environment]::GetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', 'Process')
+        try {
+            [Environment]::SetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', $systemDirectory, 'Process')
+            & az @Arguments
+            if ($LASTEXITCODE -ne 0) { throw "az failed (exit $LASTEXITCODE)." }
+        }
+        finally {
+            $restoreDirectory = if ($null -eq $previousDirectory) { [NullString]::Value } else { $previousDirectory }
+            [Environment]::SetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', $restoreDirectory, 'Process')
+        }
+    }
+    else {
+        & az @Arguments
+        if ($LASTEXITCODE -ne 0) { throw "az failed (exit $LASTEXITCODE)." }
+    }
 }
 
 function Invoke-Wsl {
@@ -386,7 +495,7 @@ function Get-JumpComponentVersion {
         'msix' { Get-ProvisionedJumpMsixVersion -Pin $Component.Data }
         'psresource' { Get-InstalledPSResourceVersion -Name $Component.Name }
         'az-extension' { Get-InstalledAzExtensionVersion -Name $Component.Name }
-        'az-bicep' { Get-InstalledAzBicepVersion }
+        'az-bicep' { Get-InstalledAzBicepVersion -Spec $Spec }
         'code' { Get-VSCodeExtensionVersion -Id $Component.Name -Directory $ExtensionDirectory }
         'feature' { Get-WindowsFeatureState -Name $Component.Name }
         'wsl' { if (Get-WslState -Distribution $Component.Name) { $Component.Version } else { $null } }
@@ -514,8 +623,8 @@ function Invoke-JumpTools {
                             Set-WingetAutoUpdate
                         }
                         'psresource' { Install-PSResourcePinned -Name $component.Name -Version $component.Version }
-                        'az-extension' { Invoke-AzCli -Arguments @('extension', 'add', '--name', $component.Name, '--version', $component.Version) }
-                        'az-bicep' { Invoke-AzCli -Arguments @('bicep', 'install', '--version', $component.Version) }
+                        'az-extension' { Invoke-AzCli -Arguments @('extension', 'add', '--name', $component.Name, '--version', $component.Version, '--system') }
+                        'az-bicep' { Invoke-JumpBicepSetup -Spec $spec }
                         'code' {
                             Set-MachineExtensionsDirectory -Directory $extensionDirectory
                             Invoke-Code -Id $component.Name -Version $component.Version -Directory $extensionDirectory

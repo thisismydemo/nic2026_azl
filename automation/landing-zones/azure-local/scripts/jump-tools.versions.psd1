@@ -39,7 +39,11 @@
         }
         'bicep'            = @{
             Version  = '0.48.1'
-            Packages = @(@{ Id = 'Microsoft.Bicep'; Version = '0.48.1'; Source = 'winget' })
+            Binary = @{
+                DownloadUrl = 'https://github.com/Azure/bicep/releases/download/v0.48.1/bicep-win-x64.exe'
+                Sha256 = '398AF294CF16AC4BECDBD008A77D148D0E8E91492309A6B60EC911B7E1CAB082'
+                Publisher = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'
+            }
         }
         'terraform'        = @{
             Version  = '1.16.5'
