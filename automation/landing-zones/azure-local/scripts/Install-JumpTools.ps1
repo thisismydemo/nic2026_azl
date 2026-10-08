@@ -210,7 +210,7 @@ function Get-InstalledAzExtensionVersion {
     param([string] $Name)
     $json = & az extension list --output json 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
-    $extension = @($json | ConvertFrom-Json) | Where-Object name -eq $Name | Select-Object -First 1
+    $extension = @($json | ConvertFrom-Json) | Where-Object { $_.name -eq $Name } | Select-Object -First 1
     if ($null -eq $extension) { return $null }
     if (-not (Test-JumpAzExtensionPath -Path $extension.path -Name $Name -SystemDirectory (Get-JumpAzSystemExtensionDirectory))) { return $null }
     return [string] $extension.version
@@ -329,6 +329,15 @@ function Get-WindowsFeatureState {
 
 function Get-VSCodeExtensionVersion {
     param([string] $Id, [string] $Directory)
+    # An explicit CLI directory alone does not prove the default for new operators.
+    $machineDirectory = Get-JumpMachineEnvironment -Name 'VSCODE_EXTENSIONS'
+    if ([string]::IsNullOrWhiteSpace($machineDirectory)) { return $null }
+    try {
+        $expected = [IO.Path]::GetFullPath($Directory).TrimEnd('\', '/')
+        $configured = [IO.Path]::GetFullPath($machineDirectory).TrimEnd('\', '/')
+    }
+    catch { return $null }
+    if (-not [string]::Equals($configured, $expected, [StringComparison]::OrdinalIgnoreCase)) { return $null }
     $lines = & code --list-extensions --show-versions --extensions-dir $Directory 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
     foreach ($line in $lines) {
@@ -680,7 +689,7 @@ function Invoke-JumpTools {
     }
 
     $results | Format-Table Tool, Wanted, Found, Action, Result, Reboot -AutoSize | Out-String | Write-Information -InformationAction Continue
-    $script:JumpToolsFailed = @($results | Where-Object Result -eq 'Failed').Count -gt 0
+    $script:JumpToolsFailed = @($results | Where-Object { $_.Result -eq 'Failed' }).Count -gt 0
     if ($PassThru) { return $results.ToArray() }
 }
 
