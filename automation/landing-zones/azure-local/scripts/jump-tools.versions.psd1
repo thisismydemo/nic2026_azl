@@ -1,7 +1,7 @@
 # Pinned versions for Install-JumpTools.ps1. Every version is changed only by a commit, so a rebuild reproduces the same machine.
 # Resolved 6 Oct 2026 from the authoritative source of each tool (winget manifests, PowerShell Gallery, the Azure CLI extension index,
 # PyPI, Ansible Galaxy, the VS Code Marketplace, Microsoft's Current Channel history). 'TODO-PIN' is refused by -Execute for the
-# selected tools; 'N/A' marks a component that is not version-pinned (a Microsoft Store package: presence is checked).
+# selected tools; 'N/A' is reserved for built-in Windows features; package versions must match exactly.
 @{
     Tools              = @{
         'powershell7'      = @{
@@ -112,11 +112,24 @@
             Modules = @{ 'AzureLocal.LocalIdentity.AdminSetup' = '1.0.5' }
         }
         'windows-app'      = @{
-            Version  = '1.2.7391.0'
-            Packages = @(
-                @{ Id = '9N1F85V9T8BN'; Version = 'N/A'; Source = 'msstore' }
-                @{ Id = 'Microsoft.RemoteDesktopClient'; Version = '1.2.7391.0'; Source = 'winget' }
-            )
+            Version = '2.0.1482.0'
+            Msix = @{
+                Name = 'MicrosoftCorporationII.Windows365'
+                Version = '2.0.1482.0'
+                Architecture = 'x64'
+                Publisher = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'
+                PublisherId = '8wekyb3d8bbwe'
+                StoreId = '9N1F85V9T8BN'
+                # Mutable official link: a changed download fails the exact hash check.
+                DownloadUrl = 'https://go.microsoft.com/fwlink/?linkid=2262633'
+                Sha256 = '2FEF58ED626C5E611B70B1F0161F2B4F0FB877092F22B102BBDE2F15BE127AF4'
+                # Acquired with Microsoft's documented winget download route, inspected 8 Oct 2026.
+                Dependencies = @(
+                    @{ Name = 'Microsoft.VCLibs.140.00'; Version = '14.0.33519.0'; Architecture = 'x64'; Publisher = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'; Sha256 = '9C17B521F9D690A1F504DA5108ED6EEC5669EB3A8FD1331EEF43E40D84E74283' }
+                    @{ Name = 'Microsoft.VCLibs.140.00.UWPDesktop'; Version = '14.0.33728.0'; Architecture = 'x64'; Publisher = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'; Sha256 = '077A3D1A5D0622BD3004DCA85F5E192D6E98EC79B83D4AA06766759EA6C09C3D' }
+                    @{ Name = 'Microsoft.WindowsAppRuntime.2'; Version = '2.5.1.0'; Architecture = 'x64'; Publisher = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'; Sha256 = '9F3CA8FF888CFFFC872A6C8B015A38BD91051D4E97D0A92A7D4CB41CC1E6EE6C' }
+                )
+            }
         }
         'drawio'           = @{
             Version  = '31.7.0'

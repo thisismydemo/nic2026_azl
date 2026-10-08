@@ -49,6 +49,9 @@ resource "azapi_resource" "jump_vm" {
             patchMode         = "AutomaticByPlatform"
             assessmentMode    = "AutomaticByPlatform"
             enableHotpatching = true
+            automaticByPlatformSettings = {
+              bypassPlatformSafetyChecksOnUserSchedule = false
+            }
           }
         }
       }

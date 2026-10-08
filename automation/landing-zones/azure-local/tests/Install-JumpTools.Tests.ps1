@@ -26,7 +26,7 @@ BeforeAll {
         'azure-cli' = @{ Version = '5.0.0'; Packages = @(@{ Id = 'Test.AzCli'; Version = '5.0.0'; Source = 'winget' }); Extensions = @{ ssh = '1.1.1' } }
         'ansible-wsl' = @{ Version = '24.04'; Distribution = 'Ubuntu-Test'; AnsibleCoreVersion = '7.0.0' }
         rsat = @{ Version = 'N/A'; Features = @('RSAT-Test-A', 'RSAT-Test-B') }
-        'windows-app' = @{ Version = '1.0.0'; Packages = @(@{ Id = 'STOREID'; Version = 'N/A'; Source = 'msstore' }) }
+        'windows-app' = @{ Version = '1.0.0'; Packages = @(@{ Id = 'STOREID'; Version = '1.0.0'; Source = 'msstore' }) }
         office = @{ Version = '16.0.20001.20002'; DownloadUrl = 'https://example.invalid/odt.exe'; DownloadSha256 = 'ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789' }
         unpinned = @{ Version = 'TODO-PIN'; Packages = @(@{ Id = 'Test.Unpinned'; Version = 'TODO-PIN'; Source = 'winget' }) }
     }
@@ -239,9 +239,9 @@ Describe 'execution' {
         Should -Invoke Set-MachineExtensionsDirectory -Times 1
     }
 
-    It 'does not pass --version for an unpinned Store package and uses the Store source' {
+    It 'passes the exact version even for a Store package' {
         $null = Invoke-JumpTools -VersionsPath $script:TestVersions -Only windows-app -Execute -PassThru
-        Should -Invoke Invoke-Winget -Times 1 -ParameterFilter { $Arguments -notcontains '--version' -and $Arguments[([array]::IndexOf($Arguments, '--source') + 1)] -eq 'msstore' -and $Arguments -contains '--scope' }
+        Should -Invoke Invoke-Winget -Times 1 -ParameterFilter { $Arguments -contains '--version' -and $Arguments[([array]::IndexOf($Arguments, '--source') + 1)] -eq 'msstore' -and $Arguments -contains '--scope' }
     }
 
     It 'installs PowerShell modules for all users at the pinned versions, and az extensions at the pinned version' {
@@ -333,9 +333,9 @@ Describe 'idempotency' {
         $global:JumpState['winget:Test.Git'] | Should -Be '1.0.0'
     }
 
-    It 'treats an unpinned (N/A) component as correct when it is present, and as missing when it is not' {
+    It 'repairs an arbitrary installed package version rather than accepting presence' {
         $global:JumpState['winget:STOREID'] = '7.7.7'
-        (@(Invoke-JumpTools -VersionsPath $script:TestVersions -Only windows-app -Execute -PassThru))[0].Result | Should -Be 'AlreadyCorrect'
+        (@(Invoke-JumpTools -VersionsPath $script:TestVersions -Only windows-app -Execute -PassThru))[0].Result | Should -Be 'Installed'
         $global:JumpState.Remove('winget:STOREID')
         (@(Invoke-JumpTools -VersionsPath $script:TestVersions -Only windows-app -PassThru))[0].Result | Should -Be 'Planned'
     }

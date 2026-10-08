@@ -82,6 +82,7 @@ module vm 'br/public:avm/res/compute/virtual-machine:0.22.3' = {
     patchMode: 'AutomaticByPlatform'
     enableAutomaticUpdates: true
     enableHotpatching: true
+    bypassPlatformSafetyChecksOnUserSchedule: false // Hotpatch requires platform safety checks.
     extensionAadJoinConfig: { enabled: true }
     extensionMonitoringAgentConfig: { enabled: true, dataCollectionRuleAssociations: [] }
   }

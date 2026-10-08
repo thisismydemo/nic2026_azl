@@ -46,6 +46,17 @@
     "secret_refs"
   ],
   "properties": {
+    "tags": {
+      "type": "object",
+      "description": "Optional scope tag overrides merged with shared tags, including the workload tag from naming standard 3a.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,127}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
     "subscription_id": {
       "$ref": "#/$defs/guid",
       "description": "Azure Local landing-zone subscription (same value as shared.subscriptions.azure_local)."

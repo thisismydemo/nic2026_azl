@@ -4,13 +4,13 @@
     Stage S9: READ-ONLY validation of the Azure Local landing zone - design §11.1 as individual pass/fail checks.
 .DESCRIPTION
     Every check is a function that returns Pass / Fail / Manual / Skipped with a detail string. Nothing is changed.
-    Exit code = number of failed checks (0 = all pass). Includes the DNS resolution checks for the vault private
-    endpoints (compares Resolve-DnsName with the private endpoint NIC addresses), the policy-impact pre-check list
+    Exit code = number of failed checks (zero does not prove Manual or Skipped checks). Vault public endpoints are used under D-029; optional private
+    endpoints compare Resolve-DnsName with their NIC addresses only when enabled. Includes the policy-impact pre-check list
     (review R-04), the P-13 peering checks (spoke<->identity, spoke<->management Connected), the DC DNS reachability
     check from the jump server, and the manual P2S DNS-profile note. The built-in role/policy GUID maps used by the
     Bicep gap-fill modules are verified against the tenant (checks role-map and policy-map).
 .PARAMETER Config
-    Canonical config object (Get-NIC26Config -Scope azure-local) incl. names and group_object_ids.
+    Canonical config from Get-NIC26Config, or resolved flat values incl. names and group_object_ids.
 .PARAMETER Checks
     Optional subset of check names to run (default: all).
 .PARAMETER OutputPath
@@ -19,7 +19,7 @@
     When set, the vault DNS check expects the PRIVATE endpoint addresses (run on the jump server / P2S laptop / node after
     the DC forwarders exist). Without it the check only reports what resolves.
 .EXAMPLE
-    ./Test-LandingZone.ps1 -Config (Get-NIC26Config -Scope azure-local) -ExpectDnsPrivate
+    ./Test-LandingZone.ps1 -Config (Get-NIC26Config -Scope azure-local)
     ./Test-LandingZone.ps1 -Config $cfg -Checks providers,dns-vault
 .NOTES
     Requires Az.Accounts, Az.Resources, Az.Network, Az.KeyVault, Az.OperationalInsights, Az.Security, Az.RecoveryServices (read roles suffice).
@@ -36,6 +36,21 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Normalize canonical input without adding resolved names to the caller's values.
+$fullConfig = $Config
+if ($Config -is [System.Collections.IDictionary] -and $Config.Contains('values')) {
+    $flat = @{}
+    foreach ($key in $Config['values'].Keys) { $flat[$key] = $Config['values'][$key] }
+    $Config = $flat
+}
+$hasNames = ($Config -is [System.Collections.IDictionary]) ? $Config.Contains('names') : ($null -ne $Config.PSObject.Properties['names'])
+if (-not $hasNames) {
+    $module = Get-Module NIC26.Automation
+    if (-not $module) { throw 'Import NIC26.Automation to resolve canonical config names.' }
+    $resolvedNames = & $module { param($root, $cfg) (Resolve-NIC26SolutionInputs -Manifest (Get-NIC26SolutionManifest -Path $root) -Config $cfg).names } (Split-Path -Parent $PSScriptRoot) $fullConfig
+    if ($Config -is [System.Collections.IDictionary]) { $Config['names'] = $resolvedNames }
+    else { $Config = $Config | Select-Object *, @{ Name = 'names'; Expression = { $resolvedNames } } }
+}
 $sub = [string] $Config.subscription_id
 $n = $Config.names
 $subScope = "/subscriptions/$sub"
@@ -217,9 +232,28 @@ Invoke-LzCheck 'dns-vault' {
     }
     Add-LzResult 'dns-vault' ($problems ? 'Fail' : ($ExpectDnsPrivate ? 'Pass' : 'Manual')) ($detail -join ' | ')
 }
+function Test-LzDcDns {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string[]]$Servers, [Parameter(Mandatory)][string]$QueryName)
+    if ($Servers.Count -eq 0) { throw 'No configured DNS servers to test.' }
+    foreach ($server in $Servers) {
+        $tcp = $false
+        try { $tcp = Test-NetConnection -ComputerName $server -Port 53 -WarningAction SilentlyContinue -InformationLevel Quiet -ErrorAction Stop }
+        catch { $tcp = $false }
+        $answered = $false
+        try {
+            $answers = @(Resolve-DnsName -Name $QueryName -Server $server -Type A -DnsOnly -NoHostsFile -ErrorAction Stop | Where-Object { $_.Type -eq 'A' -and $_.IPAddress })
+            $answered = $answers.Count -gt 0
+        }
+        catch { $answered = $false }
+        [pscustomobject]@{ Server = $server; Tcp53 = [bool]$tcp; DnsAnswered = $answered; HostVantage = $env:COMPUTERNAME; QueryName = $QueryName }
+    }
+}
 Invoke-LzCheck 'dns-dc-reachable' {
-    $bad = foreach ($dc in @($Config.dns_servers)) { $t = Test-NetConnection -ComputerName $dc -Port 53 -WarningAction SilentlyContinue -InformationLevel Quiet; if (-not $t) { $dc } }
-    Add-LzResult 'dns-dc-reachable' ($bad ? 'Fail' : 'Pass') ($bad ? "DC DNS not reachable on TCP 53 from here: $($bad -join ', ') (P-13 identity peering?)" : "both domain controllers answer on TCP 53 from this host")
+    $probes = @(Test-LzDcDns -Servers @($Config.dns_servers) -QueryName "$($n.kv_ops).vault.azure.net")
+    $bad = @($probes | Where-Object { -not $_.DnsAnswered })
+    $detail = ($probes | ForEach-Object { "server=$($_.Server) TCP53=$($_.Tcp53) DNS-answer=$($_.DnsAnswered) host=$($_.HostVantage) query=$($_.QueryName)" }) -join '; '
+    Add-LzResult 'dns-dc-reachable' ($bad.Count -eq 0 ? 'Pass' : 'Fail') $detail
 }
 Invoke-LzCheck 'dns-forwarders' { if (-not [bool]$Config.enable_private_endpoints) { Add-LzResult 'dns-forwarders' 'Skipped' 'private endpoints are not used (D-029); the existing DNS needs no change'; return }; Add-LzResult 'dns-forwarders' 'Manual' 'Confirm on EVERY DC: conditional forwarder vault.azure.net (and vaultcore.azure.net) -> 168.63.129.16; Arc FQDNs still public (P-07, owner-approved change).' }
 Invoke-LzCheck 'p2s-dns-profile' { Add-LzResult 'p2s-dns-profile' 'Manual' 'The hub pushes no DNS to P2S clients: the exported azurevpnconfig.xml must carry the DC DNS servers and be re-imported after every peering change (connectivity C-06).' }
@@ -288,7 +322,12 @@ Invoke-LzCheck 'pim' {
 
 # ------------------------------------------------------------------ S4 / S5 / S6
 Invoke-LzCheck 'law' {
-    $law = Get-AzOperationalInsightsWorkspace -Name $n.law -ResourceGroupName $n.rg_mon -ErrorAction SilentlyContinue
+    if ((Test-LzConfigKey $Config 'central_log_analytics_workspace_id') -and $Config.central_log_analytics_workspace_id) {
+        $central = Get-AzResource -ResourceId $Config.central_log_analytics_workspace_id -ErrorAction Stop
+        Add-LzResult 'law' ($central ? 'Pass' : 'Fail') 'configured central workspace exists; platform retention and cap are outside workload scope'
+        return
+    }
+    $law = Get-AzOperationalInsightsWorkspace -Name $n.law -ResourceGroupName $n.rg_mon -ErrorAction Stop
     $ok = $law -and $law.retentionInDays -eq [int]$Config.law_retention_days -and $law.WorkspaceCapping.DailyQuotaGb -eq [double]$Config.law_daily_cap_gb
     Add-LzResult 'law' ($ok ? 'Pass' : 'Fail') "retention=$($law.retentionInDays) dailyCap=$($law.WorkspaceCapping.DailyQuotaGb)"
 }

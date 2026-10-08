@@ -69,8 +69,11 @@ BeforeAll {
     function Register-AzResourceProvider { param($ProviderNamespace) }
     function Register-AzProviderFeature { param($ProviderNamespace, $FeatureName) }
     function Get-AzRoleDefinition { param($Name, $Id) [pscustomobject]@{ Id = '11111111-1111-1111-1111-111111111111'; Name = $Name } }
-    function Get-AzRoleEligibilitySchedule { param($Scope, $Filter) }
-    function New-AzRoleEligibilityScheduleRequest { param($Name, $Scope, $PrincipalId, $RoleDefinitionId, $RequestType, $Justification, $ScheduleInfoStartDateTime, $ExpirationType, $TargetRoleEligibilityScheduleId) }
+    function Get-AzRoleEligibilitySchedule { [CmdletBinding()] param($Scope, $Filter) }
+    function Invoke-AzRestMethod { [CmdletBinding()] param($Method, $Path, $Payload) }
+    function New-AzRoleEligibilityScheduleRequest { [CmdletBinding()] param($Name, $Scope, $PrincipalId, $RoleDefinitionId, $RequestType, $Justification, $ScheduleInfoStartDateTime, $ExpirationType, $ExpirationDuration, $TargetRoleEligibilityScheduleId) }
+    function Get-AzRoleManagementPolicyAssignment { [CmdletBinding()] param($Scope) [pscustomobject]@{ RoleDefinitionId = '11111111-1111-1111-1111-111111111111'; PolicyId = "$Scope/providers/Microsoft.Authorization/roleManagementPolicies/test-policy" } }
+    function Get-AzRoleManagementPolicy { [CmdletBinding()] param($Scope, $Name) [pscustomobject]@{ Rule = @([pscustomobject]@{ Id = 'Expiration_Admin_Eligibility'; MaximumDuration = 'P90D'; IsExpirationRequired = $true }) } }
     function Invoke-NIC26WithRetry { param([scriptblock]$ScriptBlock, $MaxMinutes, $Activity) & $ScriptBlock }
     function Get-MgGroup { param($Filter, $ConsistencyLevel, $CountVariable) }
     function New-MgGroup { param($DisplayName, $MailEnabled, $MailNickname, $SecurityEnabled, $Description) [pscustomobject]@{ Id = '22222222-2222-2222-2222-222222222222' } }
@@ -343,16 +346,60 @@ Describe 'New-LzEntraGroups.ps1 (S0)' -Tag 'Scripts' {
 }
 
 Describe 'Initialize-LzPim.ps1 (S3)' -Tag 'Scripts' {
-    BeforeEach { Mock New-AzRoleEligibilityScheduleRequest {} }
+    BeforeEach { Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 201; Content = '{"properties":{"status":"Provisioned"}}' } } }
     It 'default run submits no request' {
         $plan = & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -WarningAction SilentlyContinue -InformationAction SilentlyContinue
-        Should -Invoke New-AzRoleEligibilityScheduleRequest -Times 0
+        Should -Invoke Invoke-AzRestMethod -Times 0
         @($plan).Count | Should -Be 9
         @($plan | Where-Object { -not $_.Scope.StartsWith("/subscriptions/$script:Sub") }) | Should -BeNullOrEmpty
     }
     It '-Execute submits one AdminAssign per missing eligibility' {
         $null = & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -WarningAction SilentlyContinue -InformationAction SilentlyContinue
-        Should -Invoke New-AzRoleEligibilityScheduleRequest -Times 9 -Exactly -ParameterFilter { $RequestType -eq 'AdminAssign' }
+        Should -Invoke Invoke-AzRestMethod -Times 9 -Exactly -ParameterFilter { ($Payload | ConvertFrom-Json).properties.requestType -eq 'AdminAssign' }
+        Should -Invoke Invoke-AzRestMethod -Times 9 -Exactly -ParameterFilter { ($Payload | ConvertFrom-Json).properties.scheduleInfo.expiration.type -eq 'AfterDuration' -and ($Payload | ConvertFrom-Json).properties.scheduleInfo.expiration.duration -eq 'P90D' -and $ErrorAction -eq 'Stop' }
+    }
+    It 'rejects a duration above policy without sending requests' {
+        $prior = $env:NIC26_PIM_ELIGIBILITY_DURATION
+        try {
+            $env:NIC26_PIM_ELIGIBILITY_DURATION = 'P91D'
+            { & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue } | Should -Throw '*exceeds the policy*'
+            Should -Invoke Invoke-AzRestMethod -Times 0
+        }
+        finally { $env:NIC26_PIM_ELIGIBILITY_DURATION = $prior }
+    }
+    It 'propagates a service rejection as a terminating failure' {
+        Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"ExpirationRule"}}' } }
+        { & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue } | Should -Throw '*ExpirationRule*'
+    }
+    It 'submits the configured principal and subscription-scoped role in the ARM payload' {
+        $null = & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue
+        Should -Invoke Invoke-AzRestMethod -Times 9 -Exactly -ParameterFilter {
+            $body = $Payload | ConvertFrom-Json
+            $Method -eq 'PUT' -and $Path.StartsWith("/subscriptions/$global:LzTestSub/") -and
+            $body.properties.principalId -in @($script:Config.group_object_ids.grp_lab_operators, $script:Config.group_object_ids.grp_azl_admins, $script:Config.group_object_ids.grp_azl_operators) -and
+            $body.properties.roleDefinitionId.StartsWith("/subscriptions/$global:LzTestSub/providers/Microsoft.Authorization/roleDefinitions/")
+        }
+    }
+    It 'rejects an HTTP-success response carrying a denied request' {
+        Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 201; Content = '{"properties":{"status":"Denied"}}' } }
+        { & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue } | Should -Throw '*unsuccessful status*'
+    }
+    It 'rejects an HTTP-success response without a request status' {
+        Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 201; Content = '{"properties":{}}' } }
+        { & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue } | Should -Throw '*no request status*'
+    }
+    It 'preserves existing eligibility without new policy or grant requests' {
+        Mock Get-AzRoleEligibilitySchedule {
+            [pscustomobject]@{ Scope = $Scope; RoleDefinitionId = "/subscriptions/$global:LzTestSub/providers/Microsoft.Authorization/roleDefinitions/11111111-1111-1111-1111-111111111111"; Id = 'existing-schedule' }
+        }
+        $plan = & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue
+        @($plan | Where-Object Action -NE 'none').Count | Should -Be 0
+        Should -Invoke Invoke-AzRestMethod -Times 0
+    }
+    It 'does not mistake a denied schedule read for missing eligibility' {
+        Mock Get-AzRoleEligibilitySchedule { throw 'Schedule read denied' }
+        { & (Join-Path $script:ScriptDir 'Initialize-LzPim.ps1') -Config $script:Config -Execute -Confirm:$false -InformationAction SilentlyContinue } | Should -Throw '*Schedule read denied*'
+        Should -Invoke Invoke-AzRestMethod -Times 0
     }
 }
 

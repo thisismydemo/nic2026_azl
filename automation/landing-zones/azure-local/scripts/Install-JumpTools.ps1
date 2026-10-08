@@ -8,7 +8,7 @@
     version and skips what is already correct, so a re-run is safe.
 
     Every install is machine-wide: winget --scope machine, Install-PSResource -Scope AllUsers, Windows features, the Office
-    Deployment Tool. Nothing auto-updates. -Execute is refused while a version in the file is still 'TODO-PIN' for a selected tool.
+    Deployment Tool and MSIX provisioning. Office updates are disabled; Store update policy remains a live acceptance check. -Execute is refused while a version in the file is still 'TODO-PIN' for a selected tool.
     Not installed by design: Azure VPN Client, Windows Admin Center, RVTools.
 
     Dot-sourcing the file defines the functions without running anything (the tests do this).
@@ -81,6 +81,95 @@ function Get-PendingPins {
 }
 
 # ---- read wrappers (no changes) ------------------------------------------------------------------------------------------
+function Get-JumpMsixManifest {
+    param([string] $Path)
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $entry = $archive.GetEntry('AppxManifest.xml')
+        if ($null -eq $entry) { throw 'Package has no AppxManifest.xml.' }
+        $settings = [Xml.XmlReaderSettings]::new()
+        $settings.DtdProcessing = [Xml.DtdProcessing]::Prohibit
+        $settings.XmlResolver = $null
+        $stream = $entry.Open()
+        $reader = [Xml.XmlReader]::Create($stream, $settings)
+        try { $document = [xml]::new(); $document.Load($reader); return $document }
+        finally { $reader.Dispose(); $stream.Dispose() }
+    }
+    finally { $archive.Dispose() }
+}
+
+function Assert-JumpMsixPackage {
+    param([string] $Path, [System.Collections.IDictionary] $Pin)
+    if ($Pin.Sha256 -notmatch '^[A-Fa-f0-9]{64}$' -or (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -cne $Pin.Sha256) {
+        throw "Package SHA-256 mismatch: $($Pin.Name)."
+    }
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Subject -cne $Pin.Publisher) {
+        throw "Package signature mismatch: $($Pin.Name)."
+    }
+    $manifest = Get-JumpMsixManifest -Path $Path
+    $identity = $manifest.Package.Identity
+    foreach ($field in @('Name', 'Version', 'Publisher')) {
+        if ([string]$identity.GetAttribute($field) -cne [string]$Pin[$field]) { throw "Package identity $field mismatch: $($Pin.Name)." }
+    }
+    if ($identity.GetAttribute('ProcessorArchitecture') -cne $Pin.Architecture) { throw "Package architecture mismatch: $($Pin.Name)." }
+    return $manifest
+}
+
+function Get-ProvisionedJumpMsixVersion {
+    param([System.Collections.IDictionary] $Pin)
+    $expected = '{0}_{1}_{2}__{3}' -f $Pin.Name, $Pin.Version, $Pin.Architecture, $Pin.PublisherId
+    $packages = @(Get-AppxProvisionedPackage -Online -ErrorAction Stop)
+    if (@($packages | Where-Object { $_.PackageName -ceq $expected }).Count -ne 1) { return $null }
+    # DISM's provisioned main package alone does not establish framework availability.
+    # AllUsers is an inventory of staged/registered frameworks, not proof of every user's registration or launch.
+    $frameworks = @(Get-AppxPackage -AllUsers -PackageTypeFilter Framework -ErrorAction Stop)
+    foreach ($dependency in $Pin.Dependencies) {
+        $packageMatches = @($frameworks | Where-Object {
+            $_.Name -ceq $dependency.Name -and [string]$_.Version -ceq $dependency.Version -and
+            $_.Publisher -ceq $dependency.Publisher -and ([string]$_.Architecture).ToLowerInvariant() -ceq $dependency.Architecture -and
+            [string]$_.Status -eq 'Ok' -and $_.InstallLocation
+        })
+        if ($packageMatches.Count -ne 1) { return $null }
+    }
+    return $Pin.Version
+}
+
+function Invoke-JumpMsixProvisioning {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called only within Invoke-JumpTools Execute and ShouldProcess gate.')]
+    param([System.Collections.IDictionary] $Spec)
+    $pin = $Spec.Msix
+    if ($pin.DownloadUrl -notmatch '^https://') { throw 'MSIX download requires HTTPS.' }
+    $directory = Join-Path ([IO.Path]::GetTempPath()) ('nic26-msix-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    # Store download only acquires files. Every artifact is independently checked before provisioning.
+    & winget download --id $pin.StoreId --source msstore --exact --architecture $pin.Architecture --download-directory $directory --skip-license --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Windows App dependency download failed (exit $LASTEXITCODE)." }
+    $main = Join-Path $directory 'pinned-main.msix'
+    Invoke-WebRequest -Uri $pin.DownloadUrl -OutFile $main
+    $manifest = Assert-JumpMsixPackage -Path $main -Pin $pin
+    $dependencyPaths = [Collections.Generic.List[string]]::new()
+    $files = @(Get-ChildItem -LiteralPath (Join-Path $directory 'Dependencies') -File)
+    $required = @($manifest.Package.Dependencies.PackageDependency)
+    if ($required.Count -ne $pin.Dependencies.Count) { throw 'Required dependency set does not match the pins.' }
+    foreach ($dependency in $required) {
+        $packageMatches = @($pin.Dependencies | Where-Object { $_.Name -ceq $dependency.Name -and $_.Publisher -ceq $dependency.Publisher })
+        if ($packageMatches.Count -ne 1 -or [version]$packageMatches[0].Version -lt [version]$dependency.MinVersion) { throw "Missing or insufficient dependency pin: $($dependency.Name)." }
+        $dependencyPin = $packageMatches[0]
+        $candidates = @($files | Where-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -ceq $dependencyPin.Sha256 })
+        if ($candidates.Count -ne 1) { throw "Pinned dependency unavailable: $($dependency.Name)." }
+        $dependencyManifest = Assert-JumpMsixPackage -Path $candidates[0].FullName -Pin $dependencyPin
+        if (@($dependencyManifest.SelectNodes("/*[local-name()='Package']/*[local-name()='Dependencies']/*[local-name()='PackageDependency']")).Count -gt 0) {
+            throw "Unresolved transitive package dependencies: $($dependency.Name)."
+        }
+        $dependencyPaths.Add($candidates[0].FullName)
+    }
+    # No package state is changed until every main/dependency check above has passed.
+    Add-AppxProvisionedPackage -Online -PackagePath $main -DependencyPackagePath $dependencyPaths.ToArray() -SkipLicense -ErrorAction Stop | Out-Null
+    # Provisioning makes the package available to new profiles. Existing-profile registration and launch are separate live checks.
+}
+
 function Get-InstalledWingetVersion {
     param([string] $Id, [string] $Source)
     $arguments = @('list', '--id', $Id, '--exact', '--disable-interactivity')
@@ -294,6 +383,7 @@ function Get-JumpComponentVersion {
     param($Component, $Spec, [string] $ExtensionDirectory)
     switch ($Component.Kind) {
         'winget' { Get-InstalledWingetVersion -Id $Component.Name -Source $Component.Data.Source }
+        'msix' { Get-ProvisionedJumpMsixVersion -Pin $Component.Data }
         'psresource' { Get-InstalledPSResourceVersion -Name $Component.Name }
         'az-extension' { Get-InstalledAzExtensionVersion -Name $Component.Name }
         'az-bicep' { Get-InstalledAzBicepVersion }
@@ -305,12 +395,12 @@ function Get-JumpComponentVersion {
     }
 }
 
-# 'N/A' means the component is not version-pinned (a Store package): presence is enough. A feature waiting for a restart counts as installed.
+# A feature waiting for a restart counts as installed. Package versions must match exactly.
 function Test-JumpComponentCorrect {
     param($Component, $Installed)
     if (-not $Installed) { return $false }
     if ($Component.Kind -eq 'feature') { return ([string]$Installed -in @('Installed', 'InstallPending')) }
-    return ($Component.Version -ceq 'N/A' -or [string]$Installed -ceq [string]$Component.Version)
+    return ($Component.Version -cne 'N/A' -and [string]$Installed -ceq [string]$Component.Version)
 }
 
 function Invoke-JumpTools {
@@ -367,6 +457,9 @@ function Invoke-JumpTools {
         # A tool can have several components (a package plus extensions, several modules). Each is checked before it is
         # scheduled; a correct component is never installed again.
         $components = [System.Collections.Generic.List[object]]::new()
+        if ($spec.Contains('Msix')) {
+            $components.Add([pscustomobject]@{ Kind = 'msix'; Name = $spec.Msix.Name; Version = $spec.Msix.Version; Data = $spec.Msix })
+        }
         if ($spec.Contains('Packages')) {
             foreach ($package in $spec.Packages) {
                 $components.Add([pscustomobject]@{ Kind = 'winget'; Name = $package.Id; Version = $package.Version; Data = $package })
@@ -410,6 +503,7 @@ function Invoke-JumpTools {
                 try {
                     if (-not $PSCmdlet.ShouldProcess($component.Name, "Install $($component.Version)")) { if ($result -ne 'Failed') { $result = 'Planned' }; continue }
                     switch ($component.Kind) {
+                        'msix' { Invoke-JumpMsixProvisioning -Spec $spec }
                         'winget' {
                             $arguments = @('install', '--id', $component.Name, '--exact', '--scope', 'machine', '--silent',
                                 '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
