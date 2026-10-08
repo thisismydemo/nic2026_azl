@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "subscription_id_avd", "subscription_id_azl",
-    "avd_vnet_prefix", "avd_subnets", "azl_spoke_vnet_id", "azl_spoke_prefix", "onprem_compute_prefixes",
+    "avd_vnet_prefix", "avd_subnets", "azl_spoke_vnet_id", "azl_spoke_prefix", "jump_admin_source_prefix", "onprem_compute_prefixes",
     "dns_resolver_inbound_ip", "secondary_dns_ip", "avd_budget_monthly",
     "host_pools", "rdp_properties", "scaling_plan",
     "entra_groups", "group_object_ids", "demo_users", "ca_policy_name", "ca_mode",
@@ -33,6 +33,7 @@
     },
     "azl_spoke_vnet_id": { "$ref": "#/$defs/resourceIdOrEmpty", "description": "Azure Local spoke VNet id (output of lz-azure-local); empty before it exists." },
     "azl_spoke_prefix": { "$ref": "#/$defs/cidr" },
+    "jump_admin_source_prefix": { "$ref": "#/$defs/cidr", "pattern": "/32$", "description": "Dedicated jump workspace private IPv4 host prefix; refresh after address changes." },
     "onprem_compute_prefixes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/cidr" } },
     "dns_resolver_inbound_ip": { "$ref": "#/$defs/ipv4", "description": "Static IP of the DNS Private Resolver inbound endpoint (section 4.5)." },
     "enable_private_endpoints": { "type": "boolean", "description": "Owner decision D-029. false (default) = public endpoints, no privatelink zone, links or resolver; true = private-endpoint design." },

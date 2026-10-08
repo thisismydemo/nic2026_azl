@@ -16,6 +16,7 @@ avd_subnets:
   dnsin: 10.100.9.128/28
 azl_spoke_vnet_id: ""            # output of lz-azure-local; empty until it exists
 azl_spoke_prefix: 10.100.6.0/24
+jump_admin_source_prefix: 192.0.2.10/32 # replace with the dedicated jump private IPv4 host prefix
 onprem_compute_prefixes:
   - 192.168.110.0/24
   - 192.168.120.0/24
