@@ -127,10 +127,10 @@ function Get-ProvisionedJumpMsixVersion {
     $frameworks = @(Get-AppxPackage -AllUsers -PackageTypeFilter Framework -ErrorAction Stop)
     foreach ($dependency in $Pin.Dependencies) {
         $packageMatches = @($frameworks | Where-Object {
-            $_.Name -ceq $dependency.Name -and [string]$_.Version -ceq $dependency.Version -and
-            $_.Publisher -ceq $dependency.Publisher -and ([string]$_.Architecture).ToLowerInvariant() -ceq $dependency.Architecture -and
-            [string]$_.Status -eq 'Ok' -and $_.InstallLocation
-        })
+                $_.Name -ceq $dependency.Name -and [string]$_.Version -ceq $dependency.Version -and
+                $_.Publisher -ceq $dependency.Publisher -and ([string]$_.Architecture).ToLowerInvariant() -ceq $dependency.Architecture -and
+                [string]$_.Status -eq 'Ok' -and $_.InstallLocation
+            })
         if ($packageMatches.Count -ne 1) { return $null }
     }
     return $Pin.Version
