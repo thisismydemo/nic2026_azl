@@ -121,7 +121,7 @@ Describe 'Script conventions (contract §7)' -Tag 'Scripts' {
         Should -Invoke Get-AzResource -Times 0 -Exactly
     }
     It 'retains a known manual result and reports duplicate unknown names only once' {
-        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks idempotency,unknown-check,UNKNOWN-CHECK -InformationAction SilentlyContinue)
+        $rows = @(& (Join-Path $script:ScriptDir 'Test-LandingZone.ps1') -Config $script:Config -Checks idempotency, unknown-check, UNKNOWN-CHECK -InformationAction SilentlyContinue)
         $rows.Count | Should -Be 2
         ($rows | Where-Object Check -EQ idempotency).Status | Should -Be 'Manual'
         @($rows | Where-Object Status -EQ Fail).Count | Should -Be 1
