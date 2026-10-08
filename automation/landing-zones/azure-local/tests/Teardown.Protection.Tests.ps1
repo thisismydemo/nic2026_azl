@@ -6,6 +6,9 @@
     Author: Kristopher Turner
     Version: 1.0.0
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification = 'Synthetic fixture state is shared with Pester mock callbacks and removed in AfterAll.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Local cmdlet stubs throw instead of changing resources; production guards are exercised with mocks.')]
+param()
 BeforeAll {
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
@@ -16,19 +19,23 @@ BeforeAll {
     if ($errors.Count) { throw 'Teardown source does not parse.' }
     foreach ($name in 'Get-LzArmCollection', 'Assert-LzVaultUnprotected', 'Assert-LzClusterAbsent', 'Test-LzArmResourcePresent') {
         $definition = $ast.Find({ param($node)
-            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
-        }, $true)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+            }, $true)
         . ([scriptblock]::Create($definition.Extent.Text))
     }
     function Invoke-AzRestMethod { [CmdletBinding()] param($Method, $Path) throw 'Unmocked ARM call.' }
     function Get-AzResource { [CmdletBinding()] param($ResourceGroupName, $ResourceType) throw 'Unmocked resource call.' }
     function Get-AzContext { [pscustomobject]@{ Subscription = [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000000' } } }
+    function Set-AzContext { [CmdletBinding(SupportsShouldProcess)] param($SubscriptionId) throw 'Unmocked context switch.' }
     function Get-AzResourceGroup { [CmdletBinding()] param($Name) $null }
     function Remove-AzResourceGroup { [CmdletBinding()] param($Name, [switch]$Force) throw 'Unmocked removal.' }
     $script:vault = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-example/providers/Microsoft.RecoveryServices/vaults/vault-example'
     $script:collection = "$script:vault/backupProtectedItems?api-version=2025-08-01"
     $script:next = "https://management.azure.com$script:collection&page=2"
     $script:config = Get-Content (Join-Path $PSScriptRoot '../terraform/terraform.example.tfvars.json') -Raw | ConvertFrom-Json
+    $global:NIC26TeardownFixture = @{}
+    $global:NIC26TeardownFixture.managementId = "/subscriptions/$($script:config.subscription_id)/resourceGroups/$($script:config.names.rg_mgmt)"
+    $global:NIC26TeardownFixture.clusterId = "/subscriptions/$($script:config.subscription_id)/resourceGroups/$($script:config.names.rg_azl)"
 }
 
 Describe 'Actual teardown protection guards' {
@@ -36,7 +43,11 @@ Describe 'Actual teardown protection guards' {
         Mock Invoke-AzRestMethod {
             if ($Path -match '/(backupProtectedItems|replicationProtectedItems)\?') {
                 [pscustomobject]@{ StatusCode = 200; Content = '{"value":[]}' }
-            } else {
+            }
+            elseif ($Path -match '/resourceGroups/[^/]+\?' -and ($Path -split '\?')[0] -ne $global:NIC26TeardownFixture.clusterId) {
+                [pscustomobject]@{ StatusCode = 404; Content = '{"error":{"code":"ResourceGroupNotFound"}}' }
+            }
+            else {
                 [pscustomobject]@{ StatusCode = 200; Content = (@{ id = ($Path -split '\?')[0] } | ConvertTo-Json) }
             }
         }
@@ -127,7 +138,7 @@ Describe 'Actual teardown protection guards' {
         { Test-LzArmResourcePresent -ResourceId $script:vault -ApiVersion '2025-02-01' } | Should -Throw '*expected resource*'
     }
     It 'does not delete the vault resource group after an S6 inventory failure' {
-        Mock Invoke-AzRestMethod { throw 'inventory denied' }
+        Mock Invoke-AzRestMethod { throw 'inventory denied' } -ParameterFilter { $Path -like '*/providers/Microsoft.RecoveryServices/*' }
         Mock Remove-AzResourceGroup {}
         $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'failed-vault.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
         ($plan | Where-Object { $_.Stage -eq 'S6' -and $_.Action -eq 'check' }).Status | Should -BeLike 'failed:*'
@@ -140,4 +151,60 @@ Describe 'Actual teardown protection guards' {
         ($plan | Where-Object { $_.Stage -eq 'S5' -and $_.Action -eq 'check' }).Status | Should -BeLike 'failed:*'
         Should -Invoke Remove-AzResourceGroup -Times 0 -Exactly
     }
+    It 'reports an already absent management group without deleting it' {
+        Mock Remove-AzResourceGroup {}
+        $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'absent.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -EQ 'S7').Status | Should -Be 'already absent'
+        Should -Invoke Remove-AzResourceGroup -Times 0 -Exactly
+    }
+    It 'stops before deletion when the management group cannot be read' {
+        Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 403; Content = '{"error":{"code":"AuthorizationFailed"}}' } } -ParameterFilter { ($Path -split '\?')[0] -eq $global:NIC26TeardownFixture.managementId }
+        Mock Remove-AzResourceGroup {}
+        $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'read-denied.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -EQ 'S7').Status | Should -BeLike 'failed:*absence not proven*'
+        Should -Invoke Remove-AzResourceGroup -Times 0 -Exactly
+    }
+    It 'claims deletion only after an exact post-removal not-found response' {
+        $global:NIC26TeardownFixture.removed = $false
+        Mock Invoke-AzRestMethod {
+            if ($global:NIC26TeardownFixture.removed) { [pscustomobject]@{ StatusCode = 404; Content = '{"error":{"code":"ResourceGroupNotFound"}}' } }
+            else { [pscustomobject]@{ StatusCode = 200; Content = (@{ id = $global:NIC26TeardownFixture.managementId } | ConvertTo-Json) } }
+        } -ParameterFilter { ($Path -split '\?')[0] -eq $global:NIC26TeardownFixture.managementId }
+        Mock Remove-AzResourceGroup { $global:NIC26TeardownFixture.removed = $true }
+        $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'removed.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -EQ 'S7').Status | Should -Be 'deleted'
+        Should -Invoke Remove-AzResourceGroup -Times 1 -Exactly -ParameterFilter { $Name -eq (Split-Path $global:NIC26TeardownFixture.managementId -Leaf) -and $Force -and $ErrorAction -eq 'Stop' }
+        Should -Invoke Invoke-AzRestMethod -Times 2 -Exactly -ParameterFilter { $Path -eq "$($global:NIC26TeardownFixture.managementId)?api-version=2021-04-01" }
+    }
+    It 'does not claim deletion when removal fails' {
+        Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 200; Content = (@{ id = $global:NIC26TeardownFixture.managementId } | ConvertTo-Json) } } -ParameterFilter { ($Path -split '\?')[0] -eq $global:NIC26TeardownFixture.managementId }
+        Mock Remove-AzResourceGroup { throw 'removal denied' }
+        $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'remove-denied.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -EQ 'S7').Status | Should -BeLike 'failed:*removal denied*'
+        Should -Invoke Remove-AzResourceGroup -Times 1 -Exactly
+    }
+    It 'does not claim deletion when the post-read is present or denied' -TestCases @(@{PostCode=200 }, @{PostCode=403 }) {
+        param($PostCode)
+        $global:NIC26TeardownFixture.postCode = $PostCode
+        $global:NIC26TeardownFixture.removed = $false
+        Mock Invoke-AzRestMethod {
+            if ($global:NIC26TeardownFixture.removed -and $global:NIC26TeardownFixture.postCode -eq 403) { [pscustomobject]@{ StatusCode = 403; Content = '{"error":{"code":"AuthorizationFailed"}}' } }
+            else { [pscustomobject]@{ StatusCode = 200; Content = (@{ id = $global:NIC26TeardownFixture.managementId } | ConvertTo-Json) } }
+        } -ParameterFilter { ($Path -split '\?')[0] -eq $global:NIC26TeardownFixture.managementId }
+        Mock Remove-AzResourceGroup { $global:NIC26TeardownFixture.removed = $true }
+        $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'unverified.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -EQ 'S7').Status | Should -BeLike 'failed:*'
+        Should -Invoke Remove-AzResourceGroup -Times 1 -Exactly
+    }
+    It 'does not delete in a mismatched active subscription' {
+        Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = 200; Content = (@{ id = $global:NIC26TeardownFixture.managementId } | ConvertTo-Json) } } -ParameterFilter { ($Path -split '\?')[0] -eq $global:NIC26TeardownFixture.managementId }
+        Mock Get-AzContext { [pscustomobject]@{ Subscription = [pscustomobject]@{ Id = 'different-subscription' } } }
+        Mock Set-AzContext {}
+        Mock Remove-AzResourceGroup {}
+        $plan = & $script:source -Config $script:config -PlanPath (Join-Path $TestDrive 'wrong-context.json') -Execute -Confirm:$false -InformationAction SilentlyContinue -WarningAction SilentlyContinue
+        ($plan | Where-Object Stage -EQ 'S7').Status | Should -BeLike 'failed:*context does not match*'
+        Should -Invoke Remove-AzResourceGroup -Times 0 -Exactly
+    }
 }
+
+AfterAll { Remove-Variable -Name NIC26TeardownFixture -Scope Global -ErrorAction SilentlyContinue }

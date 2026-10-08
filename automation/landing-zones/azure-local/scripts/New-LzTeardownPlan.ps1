@@ -26,7 +26,7 @@
 .NOTES
     Author: Kristopher Turner
     Contact: kris@hybridsolutions.cloud
-    Version: 1.2.0
+    Version: 1.3.0
     Requires Az.Accounts, Az.Resources, Az.Network, Az.KeyVault, Az.RecoveryServices. Rotate copied credentials in their
     source systems at lab close (keyvault-and-secrets.md §6) - a manual step listed in the plan.
 #>
@@ -88,7 +88,7 @@ function Get-LzArmCollection {
             if (-not $next.IsAbsoluteUri) { throw 'Protection inventory continuation is not an absolute URI.' }
         }
     }
-    return ,$items.ToArray()
+    return , $items.ToArray()
 }
 
 function Assert-LzVaultUnprotected {
@@ -144,8 +144,8 @@ function Get-LzTeardownPlan {
     $peeringAction = $ownsPlatformItems ? 'delete-peering' : 'keep'
     $policyAction = $ownsPlatformItems ? 'delete-policy-assignments' : 'keep'
     $identityNote = $ownsPlatformItems ?
-        'Remove template-owned groups/PIM and initiative with their dedicated tooling.' :
-        'Remove workload-owned groups/PIM with their dedicated tooling; preserve the platform-owned management-group initiative.'
+    'Remove template-owned groups/PIM and initiative with their dedicated tooling.' :
+    'Remove workload-owned groups/PIM with their dedicated tooling; preserve the platform-owned management-group initiative.'
     $rg = { param($k) "$subPrefix" + "resourceGroups/$($n.$k)" }
     $steps = @(
         ConvertTo-LzStep 'S9' 'manual'  'Test-LandingZone.ps1' 'Run once more and keep the report before teardown.' -Manual 'yes'
@@ -222,7 +222,18 @@ foreach ($step in $plan) {
             }
             'delete-rg' {
                 $name = Split-Path $step.Target -Leaf
-                if (Get-AzResourceGroup -Name $name -ErrorAction SilentlyContinue) { $null = Remove-AzResourceGroup -Name $name -Force }
+                if (-not (Test-LzArmResourcePresent -ResourceId $step.Target -ApiVersion '2021-04-01')) {
+                    $step.Status = 'already absent'
+                    break
+                }
+                $deleteContext = Get-AzContext
+                if (-not $deleteContext -or $deleteContext.Subscription.Id -ne $sub) {
+                    throw 'Resource-group removal context does not match the target subscription.'
+                }
+                $null = Remove-AzResourceGroup -Name $name -Force -ErrorAction Stop
+                if (Test-LzArmResourcePresent -ResourceId $step.Target -ApiVersion '2021-04-01') {
+                    throw 'Resource group remains present after removal; deletion not verified.'
+                }
                 $step.Status = 'deleted'
             }
             'delete-kv-purge' {
