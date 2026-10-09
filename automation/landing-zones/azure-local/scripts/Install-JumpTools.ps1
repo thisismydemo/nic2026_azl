@@ -7,8 +7,11 @@
     installed, what is wanted, what it would do). With -Execute (elevated session) it installs what is missing or at the wrong
     version and skips what is already correct, so a re-run is safe.
 
-    Machine-wide scope is the requirement: winget --scope machine, Install-PSResource -Scope AllUsers, system Azure CLI extensions, Windows features, the Office
+    Machine-wide scope is the requirement: interactive winget --scope machine or the pinned Microsoft.WinGet.Client with
+    Scope System under SYSTEM, Install-PSResource -Scope AllUsers, system Azure CLI extensions, Windows features, the Office
     Deployment Tool and MSIX provisioning. WSL distributions remain a scope acceptance gap; do not treat a successful run as proof that all tools meet that requirement. Office updates are disabled; Store update policy remains a live acceptance check. -Execute is refused while a version in the file is still 'TODO-PIN' for a selected tool.
+    The SYSTEM backend requires the pinned winget-client prerequisite. Catalog versions require separate HKLM product-code/version
+    or machine MSIX provisioning evidence; provisioning does not prove every operator's registration or launch.
     Not installed by design: Azure VPN Client, Windows Admin Center, RVTools.
 
     Dot-sourcing the file defines the functions without running anything (the tests do this).
@@ -283,8 +286,65 @@ function Invoke-JumpCodexSetup {
     # Retain uniquely named temporary artifacts for diagnosis; never copy authentication or home directories.
 }
 
+function Test-JumpSystemContext {
+    if (-not $IsWindows) { return $false }
+    return [Security.Principal.WindowsIdentity]::GetCurrent().IsSystem
+}
+
+function Import-JumpPackageClient {
+    param([string] $ClientVersion)
+    if (-not $ClientVersion) {
+        $configuration = Get-JumpConfiguration -Path (Join-Path $PSScriptRoot 'jump-tools.versions.psd1')
+        $ClientVersion = $configuration.Tools['winget-client'].Modules['Microsoft.WinGet.Client']
+    }
+    $root = [IO.Path]::GetFullPath($env:ProgramFiles).TrimEnd('\') + '\'
+    $modules = @(Get-Module -ListAvailable -Name Microsoft.WinGet.Client | Where-Object {
+            [string]$_.Version -ceq $ClientVersion -and $_.ModuleBase.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)
+        })
+    if ($modules.Count -ne 1) { throw 'Install the exact pinned Microsoft.WinGet.Client module machine-wide before using the SYSTEM backend.' }
+    Import-Module -Name $modules[0].Path -Force -ErrorAction Stop
+}
+
+function Get-JumpMachineUninstallEntry {
+    foreach ($path in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')) {
+        if (Test-Path -LiteralPath $path) {
+            Get-ChildItem -LiteralPath $path -ErrorAction Stop | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction Stop }
+        }
+    }
+}
+
+function Get-JumpClientInstalledVersion {
+    param([string] $Id, [string] $Source, [string] $ClientVersion)
+    if (-not $Id -or -not $Source) { throw 'SYSTEM package inventory requires an exact package ID and source.' }
+    Import-JumpPackageClient -ClientVersion $ClientVersion
+    $packages = @(Get-WinGetPackage -Id $Id -Source $Source -MatchOption Equals -ErrorAction Stop)
+    if ($packages.Count -eq 0) { return $null }
+    if ($packages.Count -ne 1 -or $packages[0].Id -cne $Id -or $packages[0].Source -cne $Source) { throw 'Package catalog identity is ambiguous or does not match the requested ID/source.' }
+    $package = $packages[0]
+    if ([string]::IsNullOrWhiteSpace($package.InstalledVersion)) { throw 'Package catalog returned no installed version.' }
+    # Catalog correlation alone proves neither machine scope nor every operator's registration.
+    $metadata = $package.GetPackageVersionInfo($package.InstalledVersion)
+    $machine = @(Get-JumpMachineUninstallEntry | Where-Object {
+            $_.PSChildName -in $metadata.ProductCodes -and $_.PSObject.Properties['DisplayVersion'] -and
+            [string]$_.DisplayVersion -ceq $package.InstalledVersion
+        })
+    if ($machine.Count -gt 1) { throw 'Machine package registration is ambiguous.' }
+    if ($machine.Count -eq 1) { return $package.InstalledVersion }
+    if (@($metadata.PackageFamilyNames).Count -gt 0) {
+        $provisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction Stop | Where-Object {
+                $_.PackageName -match '^(?<Name>[^_]+)_(?<Version>[^_]+)_(?<Architecture>[^_]+)_(?<Resource>[^_]*)_(?<Publisher>[^_]+)$' -and
+                ($Matches.Name + '_' + $Matches.Publisher) -cin $metadata.PackageFamilyNames -and
+                $Matches.Version -ceq $package.InstalledVersion
+            })
+        if ($provisioned.Count -gt 1) { throw 'Machine package provisioning is ambiguous.' }
+        if ($provisioned.Count -eq 1) { return $package.InstalledVersion }
+    }
+    return $null
+}
+
 function Get-InstalledWingetVersion {
-    param([string] $Id, [string] $Source)
+    param([string] $Id, [string] $Source, [string] $ClientVersion)
+    if (Test-JumpSystemContext) { return Get-JumpClientInstalledVersion -Id $Id -Source $Source -ClientVersion $ClientVersion }
     $arguments = @('list', '--id', $Id, '--exact', '--scope', 'machine', '--disable-interactivity')
     if ($Source) { $arguments += @('--source', $Source) }
     $output = & winget @arguments 2>$null
@@ -302,15 +362,37 @@ function Get-InstalledPSResourceVersion {
     return [string] $resource.Version
 }
 
-function Get-JumpAzSystemExtensionDirectory {
+function Get-JumpAzSystemCommand {
     $command = Get-Command az -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -eq $command) { return $null }
+    if ($null -eq $command) {
+        # A newly installed MSI updates machine PATH, but the current process can still have its old PATH.
+        foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)} | Where-Object { $_ })) {
+            $candidate = Join-Path $root 'Microsoft SDKs/Azure/CLI2/wbin/az.cmd'
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+        }
+        return $null
+    }
     $source = [IO.Path]::GetFullPath($command.Source)
     $trusted = @($env:ProgramFiles, ${env:ProgramFiles(x86)} | Where-Object { $_ })
     if (-not @($trusted | Where-Object { $source.StartsWith(([IO.Path]::GetFullPath($_).TrimEnd('\') + '\'), [StringComparison]::OrdinalIgnoreCase) }).Count) { return $null }
     # Windows MSI CLI layout: wbin/az.cmd, with Python's purelib at Lib/site-packages.
     if ([IO.Path]::GetFileName($source) -ine 'az.cmd' -or (Split-Path (Split-Path $source -Parent) -Leaf) -ine 'wbin') { return $null }
+    return $source
+}
+
+function Get-JumpAzSystemExtensionDirectory {
+    $source = Get-JumpAzSystemCommand
+    if (-not $source) { return $null }
     return Join-Path (Split-Path (Split-Path $source -Parent) -Parent) 'Lib/site-packages/azure-cli-extensions'
+}
+
+function Invoke-JumpAzCommand {
+    param([string[]] $Arguments)
+    $source = Get-JumpAzSystemCommand
+    if (-not $source) { throw 'Azure CLI command requires a trusted machine installation.' }
+    $output = & $source @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "Azure CLI command failed (exit $LASTEXITCODE)." }
+    return $output
 }
 
 function Test-JumpAzExtensionPath {
@@ -321,11 +403,13 @@ function Test-JumpAzExtensionPath {
 
 function Get-InstalledAzExtensionVersion {
     param([string] $Name)
-    $json = & az extension list --output json 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
+    $systemDirectory = Get-JumpAzSystemExtensionDirectory
+    if (-not $systemDirectory) { return $null }
+    $json = Invoke-JumpAzCommand -Arguments @('extension', 'list', '--output', 'json')
+    if (-not $json) { throw 'Azure CLI extension inventory returned no JSON.' }
     $extension = @($json | ConvertFrom-Json) | Where-Object { $_.name -eq $Name } | Select-Object -First 1
     if ($null -eq $extension) { return $null }
-    if (-not (Test-JumpAzExtensionPath -Path $extension.path -Name $Name -SystemDirectory (Get-JumpAzSystemExtensionDirectory))) { return $null }
+    if (-not (Test-JumpAzExtensionPath -Path $extension.path -Name $Name -SystemDirectory $systemDirectory)) { return $null }
     return [string] $extension.version
 }
 
@@ -440,6 +524,21 @@ function Get-WindowsFeatureState {
     return [string] (Get-WindowsFeature -Name $Name).InstallState
 }
 
+function Get-JumpCodeSystemCommand {
+    if ([string]::IsNullOrWhiteSpace($env:ProgramFiles)) { throw 'Machine Program Files location is unavailable.' }
+    $command = Join-Path $env:ProgramFiles 'Microsoft VS Code/bin/code.cmd'
+    if (-not (Test-Path -LiteralPath $command -PathType Leaf)) { throw 'VS Code system command is unavailable.' }
+    return $command
+}
+
+function Invoke-JumpCodeCommand {
+    param([Parameter(Mandatory)][string[]] $Arguments)
+    $command = Get-JumpCodeSystemCommand
+    $output = & $command @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "VS Code system command failed with exit code $LASTEXITCODE." }
+    return $output
+}
+
 function Get-VSCodeExtensionVersion {
     param([string] $Id, [string] $Directory)
     # An explicit CLI directory alone does not prove the default for new operators.
@@ -451,8 +550,8 @@ function Get-VSCodeExtensionVersion {
     }
     catch { return $null }
     if (-not [string]::Equals($configured, $expected, [StringComparison]::OrdinalIgnoreCase)) { return $null }
-    $lines = & code --list-extensions --show-versions --extensions-dir $Directory 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
+    try { $lines = Invoke-JumpCodeCommand -Arguments @('--list-extensions', '--show-versions', '--extensions-dir', $Directory) }
+    catch { return $null }
     foreach ($line in $lines) {
         if ($line -match ('^' + [regex]::Escape($Id) + '@(?<Version>\S+)$')) { return $Matches.Version }
     }
@@ -469,7 +568,36 @@ function Get-OfficeBuild {
 
 # ---- mutating wrappers (every change goes through one of these) ------------------------------------------------------
 function Invoke-Winget {
-    param([string[]] $Arguments)
+    param([string[]] $Arguments, [string] $ClientVersion)
+    if (Test-JumpSystemContext) {
+        if ($Arguments.Count -eq 0 -or $Arguments[0] -cne 'install') { throw 'SYSTEM backend supports only pinned package installs.' }
+        $values = @{}
+        $flags = @()
+        for ($i = 1; $i -lt $Arguments.Count; $i++) {
+            $argument = $Arguments[$i]
+            if ($argument -in @('--id', '--source', '--version', '--scope', '--override')) {
+                if ($values.ContainsKey($argument) -or ++$i -ge $Arguments.Count) { throw 'Missing or duplicate package argument.' }
+                $values[$argument] = $Arguments[$i]
+            }
+            elseif ($argument -in @('--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')) { $flags += $argument }
+            else { throw "Unsupported SYSTEM package argument: $argument" }
+        }
+        foreach ($required in @('--id', '--source', '--version', '--scope')) {
+            if (-not $values.ContainsKey($required) -or [string]::IsNullOrWhiteSpace($values[$required])) { throw "Missing pinned package argument: $required" }
+        }
+        if ($values['--scope'] -cne 'machine' -or $flags -notcontains '--exact' -or $flags -notcontains '--silent') { throw 'SYSTEM installs require exact matching, silent mode and machine scope.' }
+        Import-JumpPackageClient -ClientVersion $ClientVersion
+        $parameters = @{ Id = $values['--id']; Source = $values['--source']; Version = $values['--version']; Scope = 'System'; Mode = 'Silent'; MatchOption = 'Equals'; ErrorAction = 'Stop'; Confirm = $false }
+        if ($values.ContainsKey('--override')) { $parameters.Override = $values['--override'] }
+        $result = @(Install-WinGetPackage @parameters)
+        if ($result.Count -ne 1) { throw 'SYSTEM package installation did not return one successful result.' }
+        if ($result[0].Status -cne 'Ok') {
+            $failure = [InvalidOperationException]::new("SYSTEM package installation did not return one successful result: $($result[0].Status).")
+            $failure.Data['RebootRequired'] = $result[0].RebootRequired
+            throw $failure
+        }
+        return $result[0]
+    }
     & winget @Arguments
     if ($LASTEXITCODE -ne 0) { throw "winget failed (exit $LASTEXITCODE)." }
 }
@@ -491,8 +619,7 @@ function Invoke-AzCli {
         $previousDirectory = [Environment]::GetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', 'Process')
         try {
             [Environment]::SetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', $systemDirectory, 'Process')
-            & az @Arguments
-            if ($LASTEXITCODE -ne 0) { throw "az failed (exit $LASTEXITCODE)." }
+            Invoke-JumpAzCommand -Arguments $Arguments
         }
         finally {
             $restoreDirectory = if ($null -eq $previousDirectory) { [NullString]::Value } else { $previousDirectory }
@@ -500,8 +627,7 @@ function Invoke-AzCli {
         }
     }
     else {
-        & az @Arguments
-        if ($LASTEXITCODE -ne 0) { throw "az failed (exit $LASTEXITCODE)." }
+        Invoke-JumpAzCommand -Arguments $Arguments
     }
 }
 
@@ -529,8 +655,7 @@ function Set-MachineExtensionsDirectory {
 
 function Invoke-Code {
     param([string] $Id, [string] $Version, [string] $Directory)
-    & code --install-extension "$Id@$Version" --extensions-dir $Directory --force
-    if ($LASTEXITCODE -ne 0) { throw "VS Code extension $Id failed." }
+    $null = Invoke-JumpCodeCommand -Arguments @('--install-extension', "$Id@$Version", '--extensions-dir', $Directory, '--force')
 }
 
 function Set-WingetAutoUpdate {
@@ -611,9 +736,9 @@ function Invoke-OfficeSetup {
 
 # The installed version of one component, read through the (mockable) read wrappers. Used before an install (what is there) and after it (did it land).
 function Get-JumpComponentVersion {
-    param($Component, $Spec, [string] $ExtensionDirectory)
+    param($Component, $Spec, [string] $ExtensionDirectory, [string] $ClientVersion)
     switch ($Component.Kind) {
-        'winget' { Get-InstalledWingetVersion -Id $Component.Name -Source $Component.Data.Source }
+        'winget' { Get-InstalledWingetVersion -Id $Component.Name -Source $Component.Data.Source -ClientVersion $ClientVersion }
         'msix' { Get-ProvisionedJumpMsixVersion -Pin $Component.Data }
         'psresource' { Get-InstalledPSResourceVersion -Name $Component.Name }
         'az-extension' { Get-InstalledAzExtensionVersion -Name $Component.Name }
@@ -666,6 +791,7 @@ function Invoke-JumpTools {
 
     $keys = @(if ($requested.Count -gt 0) { $requested } else { $tools.Keys })
     if ($SkipOffice) { $keys = @($keys | Where-Object { $_ -ne 'office' }) }
+    if ((Test-JumpSystemContext) -and $keys -contains 'winget-client') { $keys = @('winget-client') + @($keys | Where-Object { $_ -ne 'winget-client' }) }
     if ($VerifyOnly -and $keys.Count -eq 0) { throw 'Verification requires at least one selected tool.' }
 
     # Pins are checked for the selected tools only, so one unresolved pin blocks its own tool and nothing else.
@@ -681,6 +807,7 @@ function Invoke-JumpTools {
     elseif ($pins.Count -gt 0) { Write-Warning "Unresolved pins (execution is refused until they are set): $($pins -join ', ')" }
 
     $results = [System.Collections.Generic.List[object]]::new()
+    $clientVersion = if ($tools.Contains('winget-client')) { $tools['winget-client'].Modules['Microsoft.WinGet.Client'] } else { $null }
     $extensionDirectory = Join-Path $env:ProgramData 'JumpTools\VSCodeExtensions'
 
     foreach ($key in $keys) {
@@ -725,7 +852,7 @@ function Invoke-JumpTools {
 
         foreach ($component in $components) {
             try {
-                $installed = Get-JumpComponentVersion -Component $component -Spec $spec -ExtensionDirectory $extensionDirectory
+                $installed = Get-JumpComponentVersion -Component $component -Spec $spec -ExtensionDirectory $extensionDirectory -ClientVersion $clientVersion
             }
             catch {
                 if (-not $VerifyOnly) { throw }
@@ -761,7 +888,8 @@ function Invoke-JumpTools {
                             if ($component.Data.Source) { $arguments += @('--source', $component.Data.Source) }
                             if ($component.Version -cne 'N/A') { $arguments += @('--version', $component.Version) }
                             if ($component.Data.Contains('Override') -and $component.Data.Override) { $arguments += @('--override', $component.Data.Override) }
-                            Invoke-Winget -Arguments $arguments
+                            $packageResult = Invoke-Winget -Arguments $arguments -ClientVersion $clientVersion
+                            if ($packageResult -and $packageResult.PSObject.Properties['RebootRequired'] -and $packageResult.RebootRequired) { $reboot = $true }
                             Set-WingetAutoUpdate
                         }
                         'psresource' { Install-PSResourcePinned -Name $component.Name -Version $component.Version }
@@ -797,13 +925,14 @@ function Invoke-JumpTools {
                     }
                     # Install-then-verify: an exit code of 0 does not prove the pinned version landed (winget can pick another one).
                     if ($verify) {
-                        $after = Get-JumpComponentVersion -Component $component -Spec $spec -ExtensionDirectory $extensionDirectory
+                        $after = Get-JumpComponentVersion -Component $component -Spec $spec -ExtensionDirectory $extensionDirectory -ClientVersion $clientVersion
                         if (-not (Test-JumpComponentCorrect -Component $component -Installed $after)) {
                             throw "installed, but found '$after' where '$($component.Version)' is pinned"
                         }
                     }
                 }
                 catch {
+                    if ($_.Exception.Data.Contains('RebootRequired') -and $_.Exception.Data['RebootRequired']) { $reboot = $true }
                     $result = 'Failed'
                     Write-Log "$key`: $($component.Name) failed: $($_.Exception.Message)"
                 }

@@ -118,6 +118,7 @@ enable_backup: true
 backup_policy:
   schedule_time_utc: "03:00"
   retention_days: 7
+  soft_delete_retention_days: 14
 enable_policy_assignments: true
 arc_onboard_sp_object_id: 00000000-0000-0000-0000-000000000000
 

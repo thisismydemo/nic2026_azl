@@ -94,7 +94,8 @@ Describe 'the real versions file' {
         foreach ($key in 'powershell7', 'az-powershell', 'envchecker', 'graph', 'azure-cli', 'bicep', 'terraform', 'packer', 'ansible-wsl', 'git', 'vscode', 'office', 'rsat', 'local-identity', 'windows-app', 'drawio', 'azcopy', 'storage-explorer') {
             $c.Tools.Keys | Should -Contain $key
         }
-        $c.Tools.vscode.Extensions.Keys.Count | Should -Be 9
+        $c.Tools.vscode.Extensions.Keys.Count | Should -Be 10
+        $c.Tools.vscode.Extensions['openai.chatgpt'] | Should -Be '26.1007.21434'
         $c.Tools.office.DownloadSha256 | Should -Match '^[0-9A-Fa-f]{64}$'
         $c.Tools.office.DownloadUrl | Should -Match '^https://'
     }

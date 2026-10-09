@@ -4,6 +4,12 @@
 # selected tools; 'N/A' is reserved for built-in Windows features; package versions must match exactly.
 @{
     Tools              = @{
+        # CLI is unsupported under SYSTEM; this pinned module supplies Microsoft's supported machine package API.
+        # Official PowerShell Gallery release checked 8 Oct 2026; package backend integration is verified separately.
+        'winget-client'    = @{
+            Version = '1.29.380'
+            Modules = @{ 'Microsoft.WinGet.Client' = '1.29.380' }
+        }
         'powershell7'      = @{
             Version  = '7.6.6.0'
             Packages = @(@{ Id = 'Microsoft.PowerShell'; Version = '7.6.6.0'; Source = 'winget' })
@@ -153,6 +159,7 @@
                     Override = '/VERYSILENT /MERGETASKS=!runcode,addcontextmenufiles,addcontextmenufolders,addtopath'
                 })
             Extensions = @{
+                'openai.chatgpt'                      = '26.1007.21434'
                 'ms-vscode.PowerShell'                = '2025.4.0'
                 'ms-azuretools.vscode-bicep'          = '0.48.1'
                 'hashicorp.terraform'                 = '2.40.0'

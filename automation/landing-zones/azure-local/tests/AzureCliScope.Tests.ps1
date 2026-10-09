@@ -25,23 +25,49 @@ Describe 'Azure CLI extension scope' {
         Get-JumpAzSystemExtensionDirectory | Should -Be $script:SystemRoot
     }
     It 'refuses an extension mutation that omits system scope before calling az' {
-        Mock az { throw 'Native call should not occur' }
+        Mock Invoke-JumpAzCommand { throw 'Native call should not occur' }
         { Invoke-AzCli @('extension', 'add', '--name', 'ssh') } | Should -Throw '*--system*'
-        Should -Invoke az -Times 0
+        Should -Invoke Invoke-JumpAzCommand -Times 0
     }
     It 'refuses an unresolved machine directory before calling az' {
         Mock Get-JumpAzSystemExtensionDirectory { $null }
-        Mock az { throw 'Native call should not occur' }
+        Mock Invoke-JumpAzCommand { throw 'Native call should not occur' }
         { Invoke-AzCli @('extension', 'add', '--name', 'ssh', '--system') } | Should -Throw '*trusted*'
-        Should -Invoke az -Times 0
+        Should -Invoke Invoke-JumpAzCommand -Times 0
     }
     It 'restores the process system-directory override after a native failure' {
         $original = [Environment]::GetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', 'Process')
         $authDirectory = [Environment]::GetEnvironmentVariable('AZURE_CONFIG_DIR', 'Process')
         Mock Get-JumpAzSystemExtensionDirectory { $script:SystemRoot }
-        Mock az { throw 'Synthetic native failure' }
+        Mock Invoke-JumpAzCommand { throw 'Synthetic native failure' }
         { Invoke-AzCli @('extension', 'add', '--name', 'ssh', '--system') } | Should -Throw '*Synthetic*'
         [Environment]::GetEnvironmentVariable('AZURE_EXTENSION_SYS_DIR', 'Process') | Should -Be $original
         [Environment]::GetEnvironmentVariable('AZURE_CONFIG_DIR', 'Process') | Should -Be $authDirectory
+    }
+    It 'does not invoke the CLI before its prerequisite exists' {
+        Mock Get-JumpAzSystemExtensionDirectory { $null }
+        Mock Invoke-JumpAzCommand { throw 'Should not be invoked' }
+        Get-InstalledAzExtensionVersion -Name ssh | Should -BeNullOrEmpty
+        Should -Invoke Invoke-JumpAzCommand -Times 0
+    }
+    It 'does not treat a failed CLI inventory as a missing extension' {
+        Mock Get-JumpAzSystemExtensionDirectory { $script:SystemRoot }
+        Mock Invoke-JumpAzCommand { throw 'Inventory denied' }
+        { Get-InstalledAzExtensionVersion -Name ssh } | Should -Throw '*Inventory denied*'
+    }
+    It 'rejects malformed inventory JSON' {
+        Mock Get-JumpAzSystemExtensionDirectory { $script:SystemRoot }
+        Mock Invoke-JumpAzCommand { 'invalid JSON' }
+        { Get-InstalledAzExtensionVersion -Name ssh } | Should -Throw
+    }
+    It 'accepts only the machine path in a successful inventory' {
+        Mock Get-JumpAzSystemExtensionDirectory { $script:SystemRoot }
+        Mock Invoke-JumpAzCommand { @(@{name='ssh';version='1.2.3';path=(Join-Path $script:SystemRoot 'ssh')}) | ConvertTo-Json -Compress }
+        Get-InstalledAzExtensionVersion -Name ssh | Should -Be '1.2.3'
+    }
+    It 'finds a newly installed machine CLI when the process PATH is stale' {
+        Mock Get-Command { $null } -ParameterFilter { $Name -eq 'az' }
+        Mock Test-Path { $LiteralPath -eq (Join-Path $env:ProgramFiles 'Microsoft SDKs/Azure/CLI2/wbin/az.cmd') }
+        Get-JumpAzSystemCommand | Should -Be (Join-Path $env:ProgramFiles 'Microsoft SDKs/Azure/CLI2/wbin/az.cmd')
     }
 }

@@ -131,10 +131,11 @@
     "backup_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schedule_time_utc", "retention_days"],
+      "required": ["schedule_time_utc", "retention_days", "soft_delete_retention_days"],
       "properties": {
         "schedule_time_utc": { "$ref": "#/$defs/timeOfDay" },
-        "retention_days": { "type": "integer", "minimum": 1, "maximum": 9999 }
+        "retention_days": { "type": "integer", "minimum": 1, "maximum": 9999 },
+        "soft_delete_retention_days": { "type": "integer", "minimum": 14, "maximum": 180 }
       }
     },
     "images": {
