@@ -47,11 +47,22 @@ Create, from code, the resources the design describes: resource groups; resource
 
 **IP planning rules (Microsoft Learn):** the management IP pool is at least six consecutive addresses on the nodes' subnet, outside the node addresses, with a gateway that reaches Azure; nothing in the infrastructure may use `10.96.0.0/12` or `10.244.0.0/16`; DNS servers used by the nodes and the Arc Resource Bridge cannot be changed after deployment.
 
+### WinPE evidence and intended OS-disk handoff
+
+Before provisioning, the requested workflow includes a non-destructive WinPE checkpoint. The tool is tentatively called Beacon; its exact repository/version, supported hardware/checks, networking and disk-discovery responsibilities, upload behavior and provisioning consumer must be verified before this workflow is treated as implemented.
+
+- Review per-node networking/firewall probe results with collection time and the exact path tested. A successful probe does not establish every firewall rule or full site readiness.
+- Verify the approved Azure Storage evidence destination, authentication and sanitized upload receipt. Keep credentials out of files, boot images, transcripts, screenshots and public examples; document actual failure handling.
+- Match the intended OS media using node identity, disk serial or unique ID and controller/location against reviewed inventory. Pass the verified identity through the actual supported output format to the provisioning consumer.
+- Stop when targets are ambiguous or evidence is missing. Never select a disk using disk number or capacity alone. The discovery checkpoint performs no destructive disk operation.
+
+This is a planning and acceptance requirement. Exact tool support, upload and disk handoff remain unverified until the checks run and evidence is recorded; a presentation slide or simulated example is not runtime proof.
+
 ## Step 3: Install the OS and register the nodes
 
 **Supported route:** install the Azure Stack HCI OS on each node from the release media, then register each node with Azure Arc using the Configurator app or the registration script. Choose the registration variant that matches your outbound design: without proxy, with proxy, or with the Arc gateway (the Arc gateway must be chosen now; it cannot be enabled after deployment).
 
-**Preview alternative:** simplified machine provisioning mounts a maintenance-environment ISO through the BMC virtual media, uses an ownership voucher per node, and lets Azure install the OS and connect Arc. It is a **preview**, supported only on listed hardware, and its limitations (for example regarding the Arc gateway) must be checked against your version. A session lab used it on hardware outside the supported list as a lab choice; it is not a deployment recommendation.
+**Preview alternative:** simplified machine provisioning mounts a maintenance-environment ISO through the BMC virtual media, uses an ownership voucher per node, and lets Azure install the OS and connect Arc. It is a **preview**, supported only on listed hardware, and its limitations (for example regarding the Arc gateway) must be checked against your version. The session's exact hardware/release/connectivity support review and execution evidence remain pending; do not treat an unsupported lab path as a deployment recommendation or claim a successful deployment without evidence.
 
 Verify before moving on: every node appears in the registration resource group as an Arc machine, ready for deployment, and all machines run the same OS version with the same network adapter configuration.
 

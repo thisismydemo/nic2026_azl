@@ -11,6 +11,22 @@ How to plan an Azure Local deployment so that Deploy is an input file, not a dis
 3. Put every resulting value in one deployment configuration file (the session repo uses `environment/azure-local/environment.yml`, copied from an example file; the session also shows the `infrastructure.yml` design export). Nothing is typed by hand at deployment time.
 4. Do not start Deploy until the planning gate at the end of this guide is green.
 
+## Whole-site discovery before purchasing or deploying
+
+Start with existing equipment versus a new purchase. Both routes need a verified site design; an inventory of the cluster nodes alone is insufficient. Keep raw inventory and complete configuration exports protected and private, and share only reviewed sanitized examples.
+
+| Evidence | What to record and review |
+|---|---|
+| Every server | Model, serial/service tag, CPU/memory, firmware/BMC, NIC models and ports, per-port MAC addresses and link capabilities, drives/capacity/serials, controllers, boot media and intended OS disk; reconcile labels and cabling |
+| Fabric and boundaries | ToR and OOB switches, firewall devices, uplinks and software; management, compute, storage and OOB paths, gateways, routing, DNS/NTP, egress and return paths |
+| Complete configuration | Full sanitized switch/firewall exports covering VLANs/subnets, port membership, tagged/untagged settings, trunks, MTU, routing, ACLs, NAT and required endpoints; compare observed configuration with design and record discrepancies |
+| Tool provenance | Exact source/version, dependencies, access requirements, collection time, missing fields and supported vendor/model/firmware; verify available vendor management endpoints and schemas rather than assuming uniform support |
+| Design handoff | Review OEM JSON field mapping into the approved infrastructure YAML; preserve approved choices and flag missing or contradictory evidence rather than blindly overwriting values |
+
+Explicitly decide whether management and compute share a VLAN, use separate VLANs on shared adapters, or use dedicated adapters. VLAN isolation and physical convergence are separate choices. Map the approved choice and physical port/MAC evidence into Network ATC intents, including the storage/RDMA switch requirements.
+
+Select supported inventory and OS-provisioning tools for your hardware vendor and release, then record their versions and validate the collected evidence. A successfully tested networking/firewall path proves that path at that time; it does not prove every rule or full site readiness. Before OS installation, positively identify the approved boot disk and preserve every device outside the approved scope.
+
 ## Decision 1: Release
 
 | | |
