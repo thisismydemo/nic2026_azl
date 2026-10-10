@@ -134,15 +134,15 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `handouts/Azure_Migrate_to_Azure_Local.md`
 
-### Network ATC intent design on one screen
+### Whole-site fabric evidence and Network ATC intent design
 
-**Goal:** Read the intent design.
+**Goal:** Trace reviewed whole-site evidence into the approved intent design without overwriting decisions.
 
-**In the repo:** `handouts/Network_ATC_Design.md`, `handouts/Planning_and_Design_Decisions.md`
+**In the repo:** `handouts/Planning_and_Design_Decisions.md`, `handouts/Network_ATC_Design.md`
 
-### Simplified machine provisioning (preview, recorded)
+### WinPE evidence and deterministic OS-disk provisioning handoff
 
-**Goal:** Understand the flow and its limits.
+**Goal:** Understand the evidence gate before provisioning and the ambiguity stop without executing destructive operations.
 
 **In the repo:** `handouts/Deployment_Guide.md`
 

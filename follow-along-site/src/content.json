@@ -164,32 +164,32 @@
     },
     {
       "id": "az-1-7-intent-design",
-      "title": "Network ATC intent design on one screen",
+      "title": "Whole-site fabric evidence and Network ATC intent design",
       "section": "1.7",
       "mode": "slide",
       "minutes": 1.5,
       "followAlong": {
         "level": "read",
-        "goal": "Read the intent design.",
+        "goal": "Trace reviewed whole-site evidence into the approved intent design without overwriting decisions.",
         "needs": [],
         "steps": [],
         "troubleshooting": [],
         "cleanup": [],
         "repoPaths": [
-          "handouts/Network_ATC_Design.md",
-          "handouts/Planning_and_Design_Decisions.md"
+          "handouts/Planning_and_Design_Decisions.md",
+          "handouts/Network_ATC_Design.md"
         ]
       }
     },
     {
       "id": "az-2-3-provisioning",
-      "title": "Simplified machine provisioning (preview, recorded)",
+      "title": "WinPE evidence and deterministic OS-disk provisioning handoff",
       "section": "2.3",
       "mode": "recorded",
       "minutes": 0.5,
       "followAlong": {
         "level": "read",
-        "goal": "Understand the flow and its limits.",
+        "goal": "Understand the evidence gate before provisioning and the ambiguity stop without executing destructive operations.",
         "needs": [],
         "steps": [],
         "troubleshooting": [],
