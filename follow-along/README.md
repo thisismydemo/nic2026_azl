@@ -1,6 +1,6 @@
 # Follow-along guide — Azure Local, Discovery to Day 2
 
-_Generated from the demo-guide content by `npm run docs`. Mostly watch and read. Full follow-along only where no cluster is needed: the Surveyor assessment on the synthetic workbook and the Bicep what-if. Every other demo is a read-along with the repo path._
+_Generated from the demo-guide content by `npm run docs`. Mostly watch and read. Full follow-along only where no cluster is needed: the Surveyor assessment on the synthetic workbook, the Trailwright design record and its infrastructure.yml export, and the Bicep what-if. Every other demo is a read-along with the repo path._
 
 Session: Hybrid Cloud: Plan, Deploy, and Operate Azure Local from Discovery to Day 2. Thu 15 Oct 2026, 09:50 (W. Europe Time).
 
@@ -63,6 +63,38 @@ Replace the placeholders in the commands with your own values:
 - Save or discard the project.
 
 **In the repo:** `handouts/Azure_Local_Sizing_Guide.md`
+
+### Trailwright: the design record becomes infrastructure.yml
+
+**Goal:** Record an Azure Local design in Trailwright, let validation check it and export the infrastructure file.
+
+**You need**
+
+- A browser
+- No cluster and no Azure subscription required
+- Your own design values, or documentation values (for example 192.0.2.0/24 addresses)
+
+**Steps**
+
+1. **Open Trailwright and start a project.** Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and start a new project. Choose a connected, hyperconverged deployment with two machines and switched storage.
+   - You should see: The guided steps show only the questions your answers need.
+2. **Enter the management network with too few addresses.** In the management network step, enter an IP pool of five addresses.
+   - You should see: Validation reports that the pool needs at least six contiguous addresses and links the Microsoft Learn source.
+3. **Fix the pool and finish the design.** Widen the pool to six or more addresses, then complete the network intents, identity and connectivity steps.
+   - You should see: The validation summary has no errors.
+4. **Export the infrastructure file.** Export infrastructure.yml (and, if you want, the Bicep parameter starting point) and open it in an editor.
+   - You should see: Each design answer appears as a value in the file.
+
+**Troubleshooting**
+
+- A step is missing: it appears only when an earlier answer needs it; check the deployment type and storage connectivity answers.
+- The export is a starting point: review every value before you use it with a deployment template.
+
+**Clean up**
+
+- Save the project file locally or discard it; nothing is stored in Azure.
+
+**In the repo:** `handouts/Planning_and_Design_Decisions.md`
 
 ### Cloud-driven deployment: the what-if
 
@@ -140,11 +172,23 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `handouts/Planning_and_Design_Decisions.md`, `handouts/Network_ATC_Design.md`
 
-### WinPE evidence and deterministic OS-disk provisioning handoff
+### Beacon: the pre-deployment check before any OS (recorded)
 
-**Goal:** Understand the evidence gate before provisioning and the ambiguity stop without executing destructive operations.
+**Goal:** Understand what a pre-deployment check covers before any OS is installed.
 
 **In the repo:** `handouts/Deployment_Guide.md`
+
+### Two routes: ZTP simplified provisioning (recorded) and the route B build plan (live)
+
+**Goal:** Compare the two provisioning routes and what each needs before the cloud deployment.
+
+**In the repo:** `handouts/Deployment_Guide.md`
+
+### Sonar: the real deployment, step by step, beside the time-lapse
+
+**Goal:** See what a cloud deployment of Azure Local does step by step and where its logs are.
+
+**In the repo:** `automation/azure-local/cluster-deploy/README.md`
 
 ### Network ATC intents on the running cluster
 
