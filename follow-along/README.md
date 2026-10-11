@@ -66,21 +66,21 @@ Replace the placeholders in the commands with your own values:
 
 ### Trailwright: the design record becomes infrastructure.yml
 
-**Goal:** Record an Azure Local design in Trailwright, let validation check it and export the infrastructure file.
+**Goal:** Open the IIC design record in Trailwright, let validation catch a bad value, fix it and export the infrastructure file.
 
 **You need**
 
 - A browser
 - No cluster and no Azure subscription required
-- Your own design values, or documentation values (for example 192.0.2.0/24 addresses)
+- The IIC Trailwright project from the repo (src/design/trailwright-iic-example.trailwright.json), the same file the presenter opens; or your own design values
 
 **Steps**
 
-1. **Open Trailwright and start a project.** Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and start a new project. Choose a connected, hyperconverged deployment with two machines and switched storage.
-   - You should see: The guided steps show only the questions your answers need.
-2. **Enter the management network with too few addresses.** In the management network step, enter an IP pool of five addresses.
+1. **Open Trailwright and the IIC project.** Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and open the IIC project file from the repo (src/design/trailwright-iic-example.trailwright.json). To use your own design instead, start a new project with a connected, hyperconverged deployment of two machines.
+   - You should see: The project summary shows the IIC answers: nodes, storage, intents, identity, connectivity and landing zone.
+2. **Shorten the management pool to five addresses.** In the management network step, change the end address so the IP pool holds only five addresses.
    - You should see: Validation reports that the pool needs at least six contiguous addresses and links the Microsoft Learn source.
-3. **Fix the pool and finish the design.** Widen the pool to six or more addresses, then complete the network intents, identity and connectivity steps.
+3. **Fix the pool and check the design.** Widen the pool to six or more addresses (or restore the original end address), then review the network intents, identity and connectivity steps.
    - You should see: The validation summary has no errors.
 4. **Export the infrastructure file.** Export infrastructure.yml (and, if you want, the Bicep parameter starting point) and open it in an editor.
    - You should see: Each design answer appears as a value in the file.
@@ -94,7 +94,7 @@ Replace the placeholders in the commands with your own values:
 
 - Save the project file locally or discard it; nothing is stored in Azure.
 
-**In the repo:** `handouts/Planning_and_Design_Decisions.md`
+**In the repo:** `src/design/trailwright-iic-example.trailwright.json`, `handouts/Planning_and_Design_Decisions.md`
 
 ### Cloud-driven deployment: the what-if
 
@@ -184,9 +184,9 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `handouts/Deployment_Guide.md`
 
-### Sonar: the real deployment, step by step, beside the time-lapse
+### Sonar: the recorded real deployment, replayed step by step beside the time-lapse
 
-**Goal:** See what a cloud deployment of Azure Local does step by step and where its logs are.
+**Goal:** See what a cloud deployment of Azure Local does step by step, replayed from a recording, and where its logs are.
 
 **In the repo:** `automation/azure-local/cluster-deploy/README.md`
 
