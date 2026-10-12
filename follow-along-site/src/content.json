@@ -5,7 +5,7 @@
   "date": "Thu 15 Oct 2026, 09:50 (W. Europe Time)",
   "length": 60,
   "level": 400,
-  "followAlongPolicy": "Mostly watch and read. Full follow-along only where no cluster is needed: the Surveyor assessment on the synthetic workbook and the Bicep what-if. Every other demo is a read-along with the repo path.",
+  "followAlongPolicy": "Mostly watch and read. Full follow-along only where no cluster is needed: the Surveyor assessment on the synthetic workbook, the Trailwright design record and its infrastructure.yml export, and the Bicep what-if. Every other demo is a read-along with the repo path.",
   "variables": [
     {
       "name": "<sub>",
@@ -33,12 +33,12 @@
     {
       "id": "1",
       "title": "Plan & Discover",
-      "minutes": 12
+      "minutes": 13
     },
     {
       "id": "2",
       "title": "Deploy",
-      "minutes": 9
+      "minutes": 11
     },
     {
       "id": "3",
@@ -48,12 +48,12 @@
     {
       "id": "3B",
       "title": "Migrate",
-      "minutes": 3
+      "minutes": 1.5
     },
     {
       "id": "4",
       "title": "Day-2 Operations",
-      "minutes": 15
+      "minutes": 13.5
     },
     {
       "id": "5",
@@ -182,14 +182,85 @@
       }
     },
     {
-      "id": "az-2-3-provisioning",
-      "title": "WinPE evidence and deterministic OS-disk provisioning handoff",
-      "section": "2.3",
+      "id": "az-1-12-trailwright",
+      "title": "Trailwright: the design record becomes infrastructure.yml",
+      "section": "1.12",
+      "mode": "live+recorded",
+      "minutes": 1.5,
+      "followAlong": {
+        "level": "full",
+        "goal": "Open the IIC design record in Trailwright, let validation catch a bad value, fix it and export the infrastructure file.",
+        "needs": [
+          "A browser",
+          "No cluster and no Azure subscription required",
+          "The IIC Trailwright project from the repo (src/design/trailwright-iic-example.trailwright.json), the same file the presenter opens; or your own design values"
+        ],
+        "steps": [
+          {
+            "title": "Open Trailwright and the IIC project",
+            "instructions": "Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and open the IIC project file from the repo (src/design/trailwright-iic-example.trailwright.json). To use your own design instead, start a new project with a connected, hyperconverged deployment of two machines.",
+            "command": "",
+            "check": "The project summary shows the IIC answers: nodes, storage, intents, identity, connectivity and landing zone."
+          },
+          {
+            "title": "Shorten the management pool to five addresses",
+            "instructions": "In the management network step, change the end address so the IP pool holds only five addresses.",
+            "command": "",
+            "check": "Validation reports that the pool needs at least six contiguous addresses and links the Microsoft Learn source."
+          },
+          {
+            "title": "Fix the pool and check the design",
+            "instructions": "Widen the pool to six or more addresses (or restore the original end address), then review the network intents, identity and connectivity steps.",
+            "command": "",
+            "check": "The validation summary has no errors."
+          },
+          {
+            "title": "Export the infrastructure file",
+            "instructions": "Export infrastructure.yml (and, if you want, the Bicep parameter starting point) and open it in an editor.",
+            "command": "",
+            "check": "Each design answer appears as a value in the file."
+          }
+        ],
+        "troubleshooting": [
+          "A step is missing: it appears only when an earlier answer needs it; check the deployment type and storage connectivity answers.",
+          "The export is a starting point: review every value before you use it with a deployment template."
+        ],
+        "cleanup": [
+          "Save the project file locally or discard it; nothing is stored in Azure."
+        ],
+        "repoPaths": [
+          "src/design/trailwright-iic-example.trailwright.json",
+          "handouts/Planning_and_Design_Decisions.md"
+        ]
+      }
+    },
+    {
+      "id": "az-2-2-beacon",
+      "title": "Beacon: the pre-deployment check before any OS (recorded)",
+      "section": "2.2",
       "mode": "recorded",
       "minutes": 0.5,
       "followAlong": {
         "level": "read",
-        "goal": "Understand the evidence gate before provisioning and the ambiguity stop without executing destructive operations.",
+        "goal": "Understand what a pre-deployment check covers before any OS is installed.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "handouts/Deployment_Guide.md"
+        ]
+      }
+    },
+    {
+      "id": "az-2-3-provisioning",
+      "title": "Two routes: ZTP simplified provisioning (recorded) and the route B build plan (live)",
+      "section": "2.3",
+      "mode": "live+recorded",
+      "minutes": 1,
+      "followAlong": {
+        "level": "read",
+        "goal": "Compare the two provisioning routes and what each needs before the cloud deployment.",
         "needs": [],
         "steps": [],
         "troubleshooting": [],
@@ -258,6 +329,24 @@
         "repoPaths": [
           "automation/azure-local/cluster-deploy/README.md",
           "automation/azure-local/cluster-deploy/bicep"
+        ]
+      }
+    },
+    {
+      "id": "az-2-4-sonar",
+      "title": "Sonar: the recorded real deployment, replayed step by step beside the time-lapse",
+      "section": "2.4",
+      "mode": "live+recorded",
+      "minutes": 1,
+      "followAlong": {
+        "level": "read",
+        "goal": "See what a cloud deployment of Azure Local does step by step, replayed from a recording, and where its logs are.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-deploy/README.md"
         ]
       }
     },
@@ -396,6 +485,24 @@
       }
     },
     {
+      "id": "az-3-6-workload-platform",
+      "title": "Workload platform: SDN enabled by Arc, six logical networks and their NSGs",
+      "section": "3.6",
+      "mode": "live",
+      "minutes": 1,
+      "followAlong": {
+        "level": "read",
+        "goal": "Read how logical networks and network security groups are defined for each workload tier on an Azure Local instance with SDN enabled by Azure Arc.",
+        "needs": [],
+        "steps": [],
+        "troubleshooting": [],
+        "cleanup": [],
+        "repoPaths": [
+          "automation/azure-local/cluster-configure"
+        ]
+      }
+    },
+    {
       "id": "az-3-7-readiness-green",
       "title": "Acceptance: the readiness gate, red to green",
       "section": "3.7",
@@ -418,7 +525,7 @@
       "title": "Azure Migrate: VMware to Azure Local (recorded)",
       "section": "3B",
       "mode": "recorded",
-      "minutes": 3,
+      "minutes": 1.5,
       "followAlong": {
         "level": "read",
         "goal": "Read the migration guide.",
@@ -468,6 +575,45 @@
       }
     },
     {
+      "id": "az-4-2-agent",
+      "title": "Signal to diagnosis: the Observability Agent investigates the drive fault (preview)",
+      "section": "4.2",
+      "mode": "live+recorded",
+      "minutes": 0.5,
+      "followAlong": {
+        "level": "read",
+        "goal": "Investigate an Azure Monitor alert with the Azure Copilot Observability Agent (preview) in your own subscription.",
+        "needs": [
+          "Access to Azure Copilot in your tenant",
+          "An Azure Monitor workspace associated with the subscription (it holds the issues)",
+          "Issue Contributor, Monitoring Contributor or Contributor on that workspace to save an issue",
+          "A fired Azure Monitor alert in a region where the agent is available"
+        ],
+        "steps": [
+          {
+            "title": "Start an investigation from an alert",
+            "instructions": "Open a fired alert in Azure Monitor > Alerts and select Investigate. Confirm the scope the agent proposes.",
+            "command": "",
+            "check": "The agent reports its plan, then findings, hypotheses ruled out and next steps."
+          },
+          {
+            "title": "Keep the result",
+            "instructions": "Select Create issue to save the investigation as an Azure Monitor issue in your Azure Monitor workspace.",
+            "command": "",
+            "check": "The issue is listed under Monitor > Issues with the investigation attached."
+          }
+        ],
+        "troubleshooting": [
+          "Asked for an Azure Monitor workspace: associate the subscription with one (once per subscription).",
+          "No Investigate action: check that your account has Azure Copilot access."
+        ],
+        "cleanup": [
+          "Close or delete test issues; chat and investigations are billed per use."
+        ],
+        "repoPaths": []
+      }
+    },
+    {
       "id": "az-4-2-drift",
       "title": "Fault 2: Network ATC intent drift (live)",
       "section": "4.2",
@@ -490,7 +636,7 @@
       "title": "Fault 3: node failure (recorded incident, live commentary)",
       "section": "4.2",
       "mode": "recorded",
-      "minutes": 2,
+      "minutes": 1.5,
       "followAlong": {
         "level": "none",
         "goal": "Not run outside the lab.",
@@ -506,7 +652,7 @@
       "title": "Capacity: a decision, not a chart",
       "section": "4.3",
       "mode": "live",
-      "minutes": 2,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Read the capacity method.",
@@ -542,7 +688,7 @@
       "title": "Planned ASR failover to Azure: start and result",
       "section": "4.5",
       "mode": "live+recorded",
-      "minutes": 2,
+      "minutes": 1.5,
       "followAlong": {
         "level": "read",
         "goal": "Read the Site Recovery procedure.",
