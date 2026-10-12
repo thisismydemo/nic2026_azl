@@ -9,7 +9,9 @@ Implements design/azure-local/landing-zone.md §10 (stages S-1..S9) under the ru
 | S-1 Decommission | §10.2, P-10 | Removes the PREVIOUS deployment from the subscription — review run first, then only hash-verified, owner-approved items, layer by layer, with lock/Key Vault/resource-group safeguards and an audit file | `scripts/Remove-PreviousAzureLocalDeployment.ps1` | same |
 | S0 Bootstrap | §10.2 | Providers + `AzureLocalZTP` feature, Entra groups, `rg_sec` + Terraform state storage `st_tfstate` | `scripts/Register-LzProviders.ps1`, `scripts/New-LzEntraGroups.ps1`, `bicep/bootstrap.bicep` | same scripts and the same bootstrap template (state storage is needed before the first `terraform init`) |
 | S1 Governance | §2, §3 | 7 resource groups, allowed-locations (Deny), require-tag (Deny on RGs) and inherit-tag (Modify) assignments, activity-log DINE assignment + diagnostic setting, budget (50/80/100 % actual, 100 % forecast), Defender CSPM + Servers/KeyVault/Storage plan flags, initiative definition at MG scope | `main.bicep` S1 modules, `initiative.bicep` (MG scope) | `main.tf` |
-| S2 Network | §4 | Spoke VNet + 5 subnets, 5 NSGs, route table (no routes, BGP propagation on), own `privatelink.vaultcore.azure.net` zone (P-11) linked to spoke + identity (+ AVD) **only with `enable_private_endpoints=true`** (off by default, D-029), optional Monitor zones, peerings: spoke<->hub (gateway transit), spoke->AVD, spoke<->identity and spoke<->management (P-13, behind flags) | `modules/network.bicep`, `modules/vnet-peering.bicep` | `s2-network.tf` |
+| S2 Network | §4 | Azure-side spoke VNet + 5 subnets, 5 NSGs, route table (no routes, BGP propagation on), own `privatelink.vaultcore.azure.net` zone (P-11) linked to spoke + identity (+ AVD) **only with `enable_private_endpoints=true`** (off by default, D-029), optional Monitor zones, peerings: spoke<->hub (gateway transit), spoke->AVD, spoke<->identity and spoke<->management (P-13, behind flags) | `modules/network.bicep`, `modules/vnet-peering.bicep` | `s2-network.tf` |
+
+**Placement boundary:** this S2 VNet is only for Azure-side landing-zone services, failover/test targets and operator/control-plane connectivity. It does not host the Azure Local cluster, Azure Local AVD session-host VMs or SOFS/FSLogix guest VMs. Those resources use Azure Local logical networks backed by physical VLANs/Network ATC intents. See [AzureLocal/azurelocal-avd](https://github.com/AzureLocal/azurelocal-avd) and [AzureLocal/azurelocal-sofs-fslogix](https://github.com/AzureLocal/azurelocal-sofs-fslogix).
 | S3 Security | §5, §6, K-1..K-5 | Deployment identity, ops vault (purge protection off) and cluster vault (purge protection on), private endpoints + zone groups only with `enable_private_endpoints=true` (D-029: both vaults public by default), diagnostics, vault RBAC, deployment identity Contributor + constrained RBAC Administrator, readers group roles, PIM eligibilities (script by default) | `modules/security.bicep`, `role-assignment-sub.bicep`, `pim-eligibility*.bicep`, `scripts/Initialize-LzPim.ps1` | `s3-security.tf`, same script |
 | S4 Monitoring | §7.1, §7.2 | Log Analytics (30 d, daily cap), action group (e-mail), DCE behind `enable_monitor_private_link` | `modules/monitoring.bicep` | `s4-monitoring.tf` |
 | S5 Cluster prerequisites | §9, §6.2 | Witness storage (GPv2, LRS, shared key on, public on), optional voucher storage, RBAC on the cluster RG (lab-operators Owner, admins onboarding roles, Azure Local RP app) | `modules/cluster-prereqs.bicep` | `s5-cluster-prereqs.tf` |
@@ -138,6 +140,67 @@ The orchestrator generates the jump-server local-admin credential on the first S
 ## Manual steps
 
 PIM role settings (8 h, MFA, justification) and a test activation; owner change approval and rights for the hub, identity and management peerings and the identity zone link; DC conditional forwarders `vault.azure.net` -> `168.63.129.16` (P-07); P2S profile re-import with the DC DNS servers after every peering change (C-06); `Copy-DemoSecrets.ps1` on the jump server (S8); HCS env-name registry PR for `tp`/`nic26` before the first secret; Day-2 Ready: initiative assignment, Defender for Servers P2, Insights DCR, maintenance configuration, ASR/backup policies.
+
+## Automation identity
+
+One identity runs the Azure side of the build from the jump server: Arc registration of the nodes (`Invoke-AzStackHciArcInitialization -ArmAccessToken`, OEM-image route, Arc names = host names, D-044), the cluster template (`azure-local/cluster-deploy/bicep/main.bicep`, Local Identity with Key Vault, D-008) and, only when switched on, simplified machine provisioning (`azure-local/os-provisioning/bicep/main.bicep`). It is the user-assigned managed identity `id_deploy` (attached to the jump server) or a service principal whose app ID and secret are Key Vault references. The environment file chooses it in the `automation_identity` block:
+
+```yaml
+automation_identity:
+  type: managed-identity                 # or service-principal
+  managed_identity_name: id-iic-nic26-deploy-eus-01   # default identity.deployment_identity_name; lives in rg_sec
+  managed_identity_client_id_secret: keyvault://<ops vault>/<secret>   # optional; needed when the VM has several identities
+  # service_principal_app_id_secret / service_principal_secret_secret: keyvault:// references (service-principal)
+  # service_principal_object_id: the enterprise application object ID (the landing zone needs it to grant roles)
+  grant_roles: true                      # S3 grants the roles below
+  simplified_provisioning: false         # true adds the os-provisioning roles
+```
+
+**Roles.** The single source is [`automation-identity-roles.json`](automation-identity-roles.json); Bicep (`loadJsonContent` in `main.bicep`, module `modules/automation-identity-rbac.bicep`), Terraform (`terraform/s3-automation-identity.tf`) and the read-only check all read it. Role definition IDs are in `bicep/modules/built-in-roles.bicep` (the only file allowed to hold them; the ID table is in landing-zone.md §6.2.1). Nothing is granted at subscription scope.
+
+| Scope | Role | Why | Feature | Source |
+|---|---|---|---|---|
+| `rg_azl` | Azure Connected Machine Onboarding | Arc registration creates the Arc machines | core | [Learn: assign permissions, prerequisites](https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#prerequisites) |
+| `rg_azl` | Azure Connected Machine Resource Administrator | Arc registration manages the machines and installs the mandatory extensions | core | same |
+| `rg_azl` | Azure Stack HCI Administrator | clusters, deploymentSettings, edgeDevices; its built-in condition allows assigning only the Azure Local service roles the template gives the node identities (Device Management, Connected InfraVMs, Connected Machine Resource Manager) | core | [Learn: assign Azure permissions for deployment](https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment) |
+| `rg_azl` | Reader | read Arc machines, witness account, deployment state | core | same |
+| `rg_azl` | Storage Account Contributor | create the audit-log account `st_diag` and its lifecycle rule; read the witness key for `<cluster>-WitnessStorageKey` | core | same |
+| `rg_azl` | Locks Contributor | the CanNotDelete lock on `st_diag` (Contributor and the Learn set cannot write locks) | core | [Learn: who can create locks](https://learn.microsoft.com/azure/azure-resource-manager/management/lock-resources#who-can-create-or-delete-locks) |
+| `rg_sec` | Monitoring Contributor | nested deployments into `rg_sec` (vault modules) and the vault audit diagnostic setting | core | [Learn: Azure Monitor roles](https://learn.microsoft.com/azure/azure-monitor/fundamentals/roles-permissions-security) |
+| `kv_azl` | Key Vault Data Access Administrator | assign Secrets Officer and Certificates Officer to the node Arc identities | core | [Learn: assign Azure permissions for deployment](https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment) |
+| `kv_azl` | Key Vault Secrets Officer | write `<cluster>-LocalAdminCredential` and `<cluster>-WitnessStorageKey` | core | same |
+| `kv_azl` | Key Vault Contributor | vault management plane (public-access toggle); the vault itself comes from S3 | core | same |
+| `kv_ops` | Key Vault Secrets User | read the node credentials the deployment secrets are copied from (already granted to `id_deploy` by S3, so skipped for it) | core | [Learn: Key Vault RBAC](https://learn.microsoft.com/azure/key-vault/general/rbac-guide#azure-built-in-roles-for-key-vault-data-plane-operations) |
+| `rg_azl` | Contributor | Microsoft.Edge site, site configuration, edge machines | simplified_provisioning | [Learn: simplified provisioning prerequisites](https://learn.microsoft.com/azure/azure-local/deploy/simplified-machine-provisioning?view=azloc-2609#prerequisites); [azurelocal.cloud ZTP: Owner, or Contributor + RBAC Administrator](https://azurelocal.cloud/azurelocal-ztp/azure-portal-provisioning.html) |
+| `rg_azl` | Role Based Access Control Administrator, **ABAC-constrained** to Role Based Access Control Administrator and Azure Connected Machine Resource Manager, service principals only, never itself | the template's edge-machine delegation and the Azure Local resource provider role | simplified_provisioning | same; [Learn: constrain roles and principal types](https://learn.microsoft.com/azure/role-based-access-control/delegate-role-assignments-examples#example-constrain-roles-and-principal-types) |
+| `kv_azl` | Role Based Access Control Administrator, **ABAC-constrained** to Role Based Access Control Administrator, service principals only, never itself | the template's edge-machine delegation on the vault | simplified_provisioning | same |
+
+Learn's deployment checklist also says "user access administrator and contributor on the subscription"; the resource-group and vault set above is the narrower equivalent Learn documents on the permissions page. The landing zone's existing S3 assignments to `id_deploy` (Contributor and constrained Role Based Access Control Administrator at subscription scope, design §6.2) are left unchanged; removing them is an owner decision after one end-to-end run under the set above (open checks: Arc registration reading resource-provider state at subscription scope, and the managed resource group simplified provisioning creates).
+
+**Grant (what-if first, owner approval before `-Execute`).** The roles are part of stage S3 and only deploy when `grant_roles` is true:
+
+```powershell
+Import-Module ..\..\shared\powershell\NIC26.Automation
+$cfg = Get-NIC26Config -Scope azure-local
+ConvertTo-NIC26BicepParam -Solution . -Config $cfg -Execute          # writes bicep/main.generated.bicepparam (local, git-ignored)
+.\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg -Stage S1,S3,S5  # what-if; the new roleAssignments appear under rbac-automation-identity-*
+.\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg -Stage S1,S3,S5 -Tool Terraform -BackendConfig <backend file>   # parity plan
+```
+
+S1 is in the set because the assignments target `rg_azl`, which S1 creates (after a teardown it does not exist and an S3-only run fails on the missing resource group); S5 puts the witness account back into it. When `rg_azl` exists, `-Stage S3` is enough.
+
+**Attach to the jump server (managed identity).** The jump server may live in another subscription (`external_jump_vm_id`). Attaching keeps its system-assigned identity: `Update-AzVM -ResourceGroupName <rg> -VM (Get-AzVM -ResourceGroupName <rg> -Name <vm>) -IdentityType SystemAssignedUserAssigned -IdentityId <id_deploy resource ID>`. The person running it needs Virtual Machine Contributor on the VM and Managed Identity Operator on the identity ([Learn: configure managed identities on a VM](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities?pivots=qs-configure-powershell-windows-vm)). Owner approval: it changes the VM.
+
+**Sign in and check.** `automation/shared/scripts/NIC26.AutomationIdentity.ps1` (dot-source):
+
+```powershell
+. ..\..\shared\scripts\NIC26.AutomationIdentity.ps1
+$id = Connect-NIC26AutomationIdentity -AutomationIdentity $cfg.automation_identity -TenantId $cfg.tenant_id -SubscriptionId $cfg.subscription_id -AsPlainText
+# on each node: Invoke-AzStackHciArcInitialization -TenantId ... -SubscriptionID ... -ResourceGroup ... -Region ... -Cloud AzureCloud -ArmAccessToken $id.Token -AccountID $id.AccountId
+Test-NIC26AutomationIdentityRoles -PrincipalId <principal ID> -SubscriptionId $cfg.subscription_id -Names $names | Format-Table Status, ScopeKey, Role, Key
+```
+
+`Connect-NIC26AutomationIdentity` resolves Key Vault references with the current (operator) sign-in, then signs in process-scoped as the automation identity and returns the token as a SecureString (`-AsPlainText` for the cmdlet; memory only). `Test-NIC26AutomationIdentityRoles` is read-only and reports `Present`, `Inherited`, `CoveredByOwner`, `Unconstrained`, `Constrained-Mismatch`, `Missing`, plus `NotRequired` for every other assignment the identity holds; `-FailOnGap` throws on a gap.
 
 ## Tests and gates
 

@@ -64,6 +64,12 @@ param manage_pim_in_iac = false
 param kv_soft_delete_days = 7
 param kv_public_network_access = { ops: 'Enabled', azl: 'Enabled' }
 param azl_rp_app_object_id = '00000000-0000-0000-0000-000000000000'
+param automation_identity = {
+  type: 'managed-identity'
+  managed_identity_name: 'id-iic-nic26-deploy-eus-01'
+  grant_roles: true
+  simplified_provisioning: true
+}
 
 param central_log_analytics_workspace_id = ''
 param deploy_platform_scope_items = false

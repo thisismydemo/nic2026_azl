@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nic26.contoso.com/schemas/security.environment.schema.json",
+  "title": "NIC 2026 security baseline environment (environment/shared/security/security.yml)",
+  "description": "Azure Policy, Microsoft Defender for Cloud and Microsoft Sentinel inputs for automation/shared/security. Subscriptions, region and base tags come from the shared environment file. Values only; no secrets. Unknown keys are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["subscription_keys", "workspace", "dcr", "defender", "policy", "sentinel", "tags"],
+  "$defs": {
+    "resourceId": { "type": "string", "pattern": "^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/.+$" },
+    "machineId": { "type": "string", "pattern": "^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/(Microsoft\\.HybridCompute/machines|Microsoft\\.Compute/virtualMachines)/[^/]+$" }
+  },
+  "properties": {
+    "subscription_keys": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "Keys into shared environment 'subscriptions' that receive the Defender plans and the policy set." },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subscription_key", "resource_group_name", "name", "retention_days", "daily_cap_gb", "alert_name_prefix"],
+      "properties": {
+        "subscription_key": { "type": "string" },
+        "resource_group_name": { "type": "string" },
+        "name": { "type": "string", "pattern": "^law-[a-z0-9-]{3,59}$" },
+        "retention_days": { "type": "integer", "minimum": 30, "maximum": 730 },
+        "daily_cap_gb": { "type": "integer", "minimum": -1, "description": "-1 = no cap. A cap is a safeguard, not a cost tool (Learn: Set daily cap on Log Analytics workspace)." },
+        "alert_name_prefix": { "type": "string" },
+        "action_group_id": { "type": "string", "description": "Action group for the daily-cap alerts; empty = no action." }
+      }
+    },
+    "dcr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "association_name", "machine_resource_ids"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^dcr-[a-z0-9-]{3,60}$" },
+        "association_name": { "type": "string" },
+        "machine_resource_ids": { "type": "array", "items": { "$ref": "#/$defs/machineId" } }
+      }
+    },
+    "defender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cspm", "servers_plan", "storage", "keyvault", "arm"],
+      "properties": {
+        "cspm": { "type": "boolean" },
+        "servers_plan": { "enum": ["P1", "P2", "off"] },
+        "storage": { "type": "boolean" },
+        "storage_malware_scan_cap_gb": { "type": "integer", "minimum": -1 },
+        "keyvault": { "type": "boolean" },
+        "arm": { "type": "boolean" },
+        "agentless_vm_scanning": { "type": "boolean" },
+        "file_integrity_monitoring": { "type": "boolean" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assignment_prefix", "exemption_prefix", "allowed_locations", "allowed_locations_effect", "required_resource_group_tag", "inherit_tags"],
+      "properties": {
+        "assignment_prefix": { "type": "string", "maxLength": 40 },
+        "exemption_prefix": { "type": "string", "maxLength": 40 },
+        "allowed_locations": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "allowed_locations_effect": { "enum": ["Audit", "Deny", "Disabled"] },
+        "required_resource_group_tag": { "type": "string" },
+        "inherit_tags": { "type": "array", "items": { "type": "string" } },
+        "ama_exempt_machine_ids": { "type": "array", "items": { "$ref": "#/$defs/machineId" } },
+        "remediation_excluded_resource_groups": { "type": "array", "items": { "type": "string" } },
+        "ama_remediation_hold_vm_ids": { "type": "array", "items": { "$ref": "#/$defs/machineId" } }
+      }
+    },
+    "sentinel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entra_diagnostic_setting_name", "entra_log_categories", "content_hub_solutions", "analytics_rules"],
+      "properties": {
+        "entra_diagnostic_setting_name": { "type": "string" },
+        "entra_log_categories": { "type": "array", "items": { "type": "string" } },
+        "content_hub_solutions": { "type": "array", "items": { "type": "string" } },
+        "analytics_rules": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "tags": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 256 } }
+  }
+}

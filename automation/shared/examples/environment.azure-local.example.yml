@@ -79,12 +79,38 @@ identity:
   model: local-identity-keyvault
   dns_zone: nic26.iic.local
   deployment_identity_name: id-iic-nic26-deploy-eus-01
-  local_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-local-admin-username
-  local_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-local-admin-password
+  # Deployment local admin (LocalAdminCredential): a non-built-in member of local Administrators on every node (Learn: do
+  # not use the built-in Administrator account).
+  local_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-cluster-admin-username
+  local_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-cluster-admin-password
+# Automation identity used by the scripts for Arc registration, cluster deploy and os-provisioning
+# (automation/landing-zones/azure-local/README.md "Automation identity"). type: managed-identity (a user-assigned identity
+# attached to the jump server; default name = identity.deployment_identity_name) or service-principal (app ID and secret
+# read from Key Vault, service_principal_object_id for the role assignments). grant_roles: the landing zone (S3) grants
+# the roles in automation-identity-roles.json; simplified_provisioning adds the os-provisioning roles.
+automation_identity:
+  type: managed-identity
+  managed_identity_name: id-iic-nic26-deploy-eus-01
+  managed_identity_client_id_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-automation-identity-client-id
+  # service-principal alternative:
+  # type: service-principal
+  # service_principal_app_id_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-automation-sp-app-id
+  # service_principal_secret_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-automation-sp-secret
+  # service_principal_object_id: 00000000-0000-0000-0000-000000000000
+  grant_roles: true
+  simplified_provisioning: false   # true only when os-provisioning (simplified machine provisioning) runs
 witness:
   type: cloud
   storage_account_name: stiicnic26witeus01
-  storage_key_secret: keyvault://kv-iic-nic26-azl-eus-01/WitnessStorageKey
+  storage_key_secret: keyvault://kv-iic-nic26-azl-eus-01/nic26-clus01-WitnessStorageKey
+
+# Optional: node host name -> Arc machine name when they differ. Simplified machine provisioning names the Arc machine
+# <device-id>-1 (edgeMachines/<node> properties.arcMachineResourceId); omit a node when its Arc machine carries the host name.
+# arc_machine_names:
+#   nic26-01-n01: <device-id>-1
+#   nic26-01-n02: <device-id>-1
+
+
 
 nodes:
   - name: nic26-01-n01
@@ -107,19 +133,36 @@ vlans:
   oob:        { id: 90, name: nic26-oob-90, subnet: 10.101.64.0/24, gateway: 10.101.64.1, routed: true, dhcp_range: { start: 10.101.64.50, end: 10.101.64.80 } }
 
 # --- Network ATC intents (network-design.md 6.1) -----------------------------------------------------------------------
+# Adapter names are a variable: physical port -> the name the node OS reports (Get-NetAdapter -Physical on every node;
+# identical across nodes). They depend on how the OS was installed:
+#   simplified machine provisioning: Port1..Port6 (Port0 = the BMC USB NIC, not used)
+#   OEM image: Embedded NIC 1/2, SLOT 3 Port 1/2, SLOT 6 Port 1/2
+# The intents reference these values through YAML anchors, so switching routes edits this map only.
+adapter_names:
+  lom1: &lom1 Port1
+  lom2: &lom2 Port2
+  slot3_port1: &slot3_port1 Port3
+  slot3_port2: &slot3_port2 Port4
+  slot6_port1: &slot6_port1 Port5
+  slot6_port2: &slot6_port2 Port6
+
+# Three intents (networking pattern "custom"): Management on the LOMs, Compute and Storage on the two 25G cards. Each
+# intent takes one port per card AND one per ToR switch, so a card or a switch loss degrades an intent but never removes
+# it (network-design §2.3.2). Cabling assumed: LOM1, Slot 3 P1, Slot 6 P2 on sw-01; LOM2, Slot 3 P2, Slot 6 P1 on sw-02.
+# Management is untagged (the LOM switch ports are access ports in the management VLAN).
 intents:
   - name: Management
     traffic_types: [Management]
-    adapters: [NIC1, NIC2]
+    adapters: [*lom1, *lom2]                     # LOM1 sw-01, LOM2 sw-02; untagged
     overrides: { jumbo_packet: 1514 }
   - name: Compute
     traffic_types: [Compute]
-    adapters: ["SLOT 3 Port 1", "SLOT 6 Port 2"]
+    adapters: [*slot3_port1, *slot6_port1]       # Slot 3 P1 sw-01, Slot 6 P1 sw-02; VM VLANs tagged on the vNIC by the logical networks
     overrides: { jumbo_packet: 1514, rdma_enabled: false }
   - name: Storage
     traffic_types: [Storage]
-    adapters: ["SLOT 3 Port 2", "SLOT 6 Port 1"]
-    overrides: { jumbo_packet: 9014, rdma_protocol: null, storage_vlans: [711, 712], enable_storage_auto_ip: false }
+    adapters: [*slot3_port2, *slot6_port2]       # same order as storage_vlans: Slot 3 P2 sw-02, VLAN 711 (smb1); Slot 6 P2 sw-01, VLAN 712 (smb2)
+    overrides: { jumbo_packet: 9014, rdma_protocol: iWARP, storage_vlans: [711, 712], enable_storage_auto_ip: false }   # required with RDMA: match the adapters (Get-NetAdapterAdvancedProperty -RegistryKeyword *NetworkDirectTechnology)
 
 # --- IP plan (network-design.md 4.2) -----------------------------------------------------------------------------------
 ip_plan:
@@ -135,19 +178,19 @@ ip_plan:
 
 qos:
   storage_priority: 3
-  cluster_priority: 7
+  cluster_priority: 7            # Network ATC default; must equal the ToR heartbeat class (the NIC 2026 lab as built uses 5 to match its existing ToRs, network-design §6.2, §12 #9)
   storage_bandwidth_percent: 50
   cluster_bandwidth_percent: 2   # 10 GbE links (S4112F-ON is SFP+); 1 only for 25 GbE
   jumbo_frame_size: 9014
 
 logical_networks:
-  - name: lnet-iic-nic26-compute-eus
+  - name: lnet-iic-nic26-compute-vlan110-eus
     vlan_id: 110
     subnet: 192.168.110.0/24
     gateway: 192.168.110.1
     ip_pool: { start: 192.168.110.20, end: 192.168.110.99 }
     dns_servers: [10.100.4.36, 10.100.4.37]
-  - name: lnet-iic-nic26-avd-eus
+  - name: lnet-iic-nic26-avd-vlan120-eus
     vlan_id: 120
     subnet: 192.168.120.0/24
     gateway: 192.168.120.1

@@ -4,6 +4,34 @@ BeforeAll {
     $script:pins = Join-Path $TestDrive 'pins.psd1'
     Set-Content $script:pins "@{ Tools = @{ git = @{ Version = '1.2.3'; Packages = @(@{Id='Example.Git';Version='1.2.3';Source='winget'}) } } }"
 }
+Describe 'Operator machine inventory fallback' {
+    BeforeEach {
+        Mock Test-JumpSystemContext { $false }
+        Mock Get-JumpClientInstalledVersion { '1.2.3' }
+    }
+    It 'uses exact pinned machine proof when the CLI source fails' {
+        Mock winget { $global:LASTEXITCODE = 5 }
+        Get-InstalledWingetVersion -Id 'Example.Tool' -Source 'winget' -ClientVersion '1.29.380' | Should -Be '1.2.3'
+        Should -Invoke Get-JumpClientInstalledVersion -Times 1 -Exactly -ParameterFilter {
+            $Id -ceq 'Example.Tool' -and $Source -ceq 'winget' -and $ClientVersion -ceq '1.29.380'
+        }
+    }
+    It 'propagates rejection of ambiguous fallback inventory' {
+        Mock winget { $global:LASTEXITCODE = 5 }
+        Mock Get-JumpClientInstalledVersion { throw 'Machine package registration is ambiguous.' }
+        { Get-InstalledWingetVersion -Id 'Example.Tool' -Source 'winget' -ClientVersion '1.29.380' } | Should -Throw '*ambiguous*'
+    }
+    It 'preserves successful CLI parsing without querying the fallback' {
+        Mock winget { $global:LASTEXITCODE = 0; 'Example Tool  Example.Tool  1.2.3  winget' }
+        Get-InstalledWingetVersion -Id 'Example.Tool' -Source 'winget' -ClientVersion '1.29.380' | Should -Be '1.2.3'
+        Should -Invoke Get-JumpClientInstalledVersion -Times 0
+    }
+    It 'preserves successful CLI absence without querying the fallback' {
+        Mock winget { $global:LASTEXITCODE = 0; 'No matching installed package' }
+        Get-InstalledWingetVersion -Id 'Example.Tool' -Source 'winget' -ClientVersion '1.29.380' | Should -BeNullOrEmpty
+        Should -Invoke Get-JumpClientInstalledVersion -Times 0
+    }
+}
 Describe 'Read-only pinned tool verification' {
     BeforeEach { Mock Invoke-Winget { throw 'Verification must never install' } }
     It 'reports a matching pin as Passed without installation' {
@@ -16,6 +44,15 @@ Describe 'Read-only pinned tool verification' {
     It 'fails a mismatch without attempting repair' {
         Mock Get-JumpComponentVersion { '0.1.0' }
         (Invoke-JumpTools -VerifyOnly -VersionsPath $script:pins -PassThru).Result | Should -Be 'Failed'
+        Should -Invoke Invoke-Winget -Times 0
+    }
+    It 'allows read-only module initialization without WhatIf suppressing inventory' {
+        Mock Get-JumpComponentVersion {
+            if ($WhatIfPreference) { throw 'Read-only compatibility module initialization was suppressed' }
+            '1.2.3'
+        }
+        $r=Invoke-JumpTools -VerifyOnly -VersionsPath $script:pins -PassThru
+        $r.Result | Should -Be 'Passed'
         Should -Invoke Invoke-Winget -Times 0
     }
     It 'fails inventory errors without attempting repair' {
@@ -54,8 +91,8 @@ param([string[]] $Only, [string] $VersionsPath = 'overwritten')
 function Invoke-JumpTools {
     param([switch] $VerifyOnly, [switch] $PassThru, [string[]] $Only, [switch] $SkipOffice, [string] $VersionsPath, [string] $AdditionalVersionsPath)
     if (-not $VerifyOnly -or -not $PassThru -or $Only -notcontains 'git') { throw 'Arguments lost' }
-    if ($VersionsPath -eq 'passed') { [pscustomobject]@{Result='Passed'} }
-    elseif ($VersionsPath -eq 'failed') { [pscustomobject]@{Result='Failed'} }
+    if ($VersionsPath -eq 'passed') { [pscustomobject]@{Tool='wrapper-argument-fixture';Result='Passed'} }
+    elseif ($VersionsPath -eq 'failed') { [pscustomobject]@{Tool='wrapper-argument-fixture';Result='Failed'} }
     elseif ($VersionsPath -eq 'error') { throw 'Inventory failed' }
 }
 '@

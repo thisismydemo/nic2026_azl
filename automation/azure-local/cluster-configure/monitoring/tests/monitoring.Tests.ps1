@@ -27,6 +27,36 @@ Describe 'monitoring specifics' {
     }
 }
 
+Describe 'Day-2 build 12 Oct (D-054): workspace, Insights DCR shape, recommended and health alerts' {
+    It 'Bicep and Terraform create the lab workspace only behind create_workspace and author the Insights DCR in the dialog shape' {
+        $b = Get-Content (Join-Path $PSScriptRoot '..\bicep\main.bicep') -Raw
+        $t = Get-Content (Join-Path $PSScriptRoot '..\terraform\main.tf') -Raw
+        $b | Should -Match "Microsoft.OperationalInsights/workspaces@[0-9-]+' = if \(create_workspace\)"
+        $t | Should -Match 'count\s+= var\.create_workspace \? 1 : 0'
+        foreach ($x in $b, $t) {
+            $x | Should -Match 'perfCounterDataSource'
+            $x | Should -Match 'eventLogsDataSource'
+            $x | Should -Match 'insights_extra_event_channels'
+        }
+    }
+    It 'the six Learn recommended metric alerts and the health routing rule are in both tracks and named from the catalog' {
+        $b = Get-Content (Join-Path $PSScriptRoot '..\bicep\main.bicep') -Raw
+        $t = Get-Content (Join-Path $PSScriptRoot '..\terraform\main.tf') -Raw
+        $m = Get-Content (Join-Path $PSScriptRoot '..\solution.yml') -Raw
+        foreach ($k in 'alert_cpu', 'alert_memory', 'alert_vol_read_latency', 'alert_vol_write_latency', 'alert_net_in', 'alert_net_out', 'alert_health_routing') {
+            $m | Should -Match $k; $b | Should -Match $k; $t | Should -Match $k
+        }
+        $b | Should -Match 'Microsoft.Insights/metricAlerts@'
+        $t | Should -Match 'azurerm_monitor_metric_alert'
+    }
+    It 'Enable-ClusterInsights installs the health-alerts extension with the portal publisher and type' {
+        $s = Get-Content (Join-Path $PSScriptRoot '..\scripts\Enable-ClusterInsights.ps1') -Raw
+        $s | Should -Match 'AzureEdgeAlerts'
+        $s | Should -Match "Microsoft\.AzureStack\.HCI\.Alerts"
+        $s | Should -Match "AlertsForWindowsHCI"
+    }
+}
+
 Describe 'node-down rule looks back far enough (review R-35)' {
     It 'Bicep and Terraform give the node-down rule a one-hour window and every rule a Computer dimension' {
         $b = Get-Content (Join-Path $PSScriptRoot '..\bicep\main.bicep') -Raw

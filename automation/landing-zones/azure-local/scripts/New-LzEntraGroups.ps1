@@ -24,6 +24,7 @@
     Requires Microsoft.Graph.Groups and Connect-MgGraph -Scopes 'Group.ReadWrite.All' (Group.Read.All suffices for WhatIf).
     Requires the NIC26.Automation module (Get-NIC26SolutionManifest, New-NIC26ResourceName) unless -GroupNames is given.
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'The Microsoft Graph access token from the Azure CLI is converted in memory for Connect-MgGraph; it is never printed or stored.')]
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
 param(
     [string] $SolutionPath = (Split-Path -Parent $PSScriptRoot),
@@ -34,6 +35,17 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if (-not (Get-Command Get-MgContext -ErrorAction SilentlyContinue)) {
+    throw 'Microsoft.Graph.Groups is required. Install/import it before running the Azure Local bootstrap.'
+}
+if (-not (Get-MgContext)) {
+    $graphToken = az account get-access-token --resource-type ms-graph --query accessToken -o tsv
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($graphToken)) {
+        throw 'No Microsoft Graph context and Azure CLI could not provide a Microsoft Graph token.'
+    }
+    Connect-MgGraph -AccessToken (ConvertTo-SecureString $graphToken -AsPlainText -Force) -NoWelcome | Out-Null
+}
 
 function Resolve-LzGroupNames {
     [CmdletBinding()]

@@ -41,7 +41,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$null = Set-AzContext -WhatIf:$false -SubscriptionId $SubscriptionId
+# Keep the caller's context when it is already on the subscription (two tenants can expose the same subscription id).
+if ((Get-AzContext).Subscription.Id -ne $SubscriptionId) { $null = Set-AzContext -WhatIf:$false -SubscriptionId $SubscriptionId }
 $vault = Get-AzRecoveryServicesVault -ResourceGroupName $VaultResourceGroup -Name $VaultName
 if (-not $vault) {
     throw "Recovery Services vault '$VaultName' was not found."

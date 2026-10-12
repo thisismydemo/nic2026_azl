@@ -83,7 +83,7 @@ function Get-NIC26NameRegistry {
         @{ Type = 'vhd'; Template = 'vhd-{purpose}-{instance}'; Description = 'Azure Local VM virtual hard disk; -Purpose is the VM resource name'; MaxLength = 80; Global = $true; PurposeIsParentName = $true; Example = 'vhd-vm-iic-nic26-avd-azl-01-01' }
         @{ Type = 'cl'; Template = $std; Description = 'Azure Local custom location'; MaxLength = 64; Example = 'cl-iic-nic26-azl-eus-01' }
         @{ Type = 'arb'; Template = $std; Description = 'Arc Resource Bridge'; MaxLength = 64; Example = 'arb-iic-nic26-azl-eus-01' }
-        @{ Type = 'lnet'; Template = '{type}-{org}-{token}-{purpose}-{region}'; Description = 'Azure Local logical network (region, no instance)'; MaxLength = 64; Example = 'lnet-iic-nic26-compute-eus' }
+        @{ Type = 'lnet'; Template = '{type}-{org}-{token}-{purpose}-{region}'; Description = 'Azure Local logical network (region, no instance); purpose = <purpose>-vlan<id>, so the VLAN is in the name'; MaxLength = 64; Example = 'lnet-iic-nic26-compute-vlan110-eus' }
         @{ Type = 'img'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Azure Local VM image; purpose = <os>-<ver>'; MaxLength = 80; Global = $true; Example = 'img-iic-nic26-win11-avd-25h2' }
         @{ Type = 'dep'; Template = '{type}-{org}-{token}-{purpose}-{instance}'; Description = 'Deployment name; purpose = solution'; MaxLength = 64; Global = $true; Example = 'dep-iic-nic26-lz-avd-01' }
         @{ Type = 'budget'; Template = '{type}-{org}-{token}-{purpose}-{instance}'; Description = 'Budget (local convention, no region); purpose = landing zone'; MaxLength = 63; Global = $true; Example = 'budget-iic-nic26-avd-01' }

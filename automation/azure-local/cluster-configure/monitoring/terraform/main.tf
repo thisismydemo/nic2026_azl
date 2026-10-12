@@ -5,7 +5,9 @@
 locals {
   rg_mon_id     = "/subscriptions/${var.subscription_id}/resourceGroups/${var.names["rg_mon"]}"
   cluster_rg_id = "/subscriptions/${var.subscription_id}/resourceGroups/${var.names["rg_azl"]}"
-  law_id        = var.log_analytics_workspace_id != "" ? var.log_analytics_workspace_id : "${local.rg_mon_id}/providers/Microsoft.OperationalInsights/workspaces/${var.names["law"]}"
+  derived_law   = "${local.rg_mon_id}/providers/Microsoft.OperationalInsights/workspaces/${var.names["law"]}"
+  law_id        = var.create_workspace ? azurerm_log_analytics_workspace.law[0].id : (var.log_analytics_workspace_id != "" ? var.log_analytics_workspace_id : local.derived_law)
+  cluster_id    = "${local.cluster_rg_id}/providers/Microsoft.AzureStackHCI/clusters/${var.cluster_name}"
   ag_id         = var.action_group_id != "" ? var.action_group_id : "${local.rg_mon_id}/providers/Microsoft.Insights/actionGroups/${var.names["ag_ops"]}"
   tags          = merge(var.tags, { "managed-by" = "terraform" })
   insights_dcr  = "${local.rg_mon_id}/providers/Microsoft.Insights/dataCollectionRules/${var.names["dcr_insights"]}"
@@ -26,7 +28,7 @@ locals {
       dimension   = "Computer"
     }
     alert_intent_drift = {
-      description = "Network ATC intent drift / failed provisioning (channel added by Enable-ClusterInsights -ExtraEventChannels)."
+      description = "Network ATC intent drift / failed provisioning (Network ATC channel in the Insights DCR, D-054)."
       severity    = 2
       query       = "Event | where EventLog =~ \"Microsoft-Windows-Networking-NetworkATC/Operational\" | where EventLevelName in (\"Warning\", \"Error\") | summarize count() by Computer, EventID"
       dimension   = "Computer"
@@ -40,13 +42,28 @@ locals {
   }
 }
 
+# nic26 lab workspace (optional, D-054)
+resource "azurerm_log_analytics_workspace" "law" {
+  count                           = var.create_workspace ? 1 : 0
+  name                            = var.names["law"]
+  resource_group_name             = var.names["rg_mon"]
+  location                        = var.location
+  sku                             = "PerGB2018"
+  retention_in_days               = var.law_retention_days
+  daily_quota_gb                  = var.law_daily_cap_gb
+  allow_resource_only_permissions = true
+  internet_ingestion_enabled      = true
+  internet_query_enabled          = true
+  tags                            = local.tags
+}
+
 resource "azurerm_monitor_data_collection_rule" "insights" {
   count               = var.manage_insights_dcr_in_iac ? 1 : 0
   name                = var.names["dcr_insights"]
   resource_group_name = var.names["rg_mon"]
   location            = var.location
   kind                = "Windows"
-  description         = "Azure Local Insights (cost-conscious): five counters + health and SDDC channels (design 7.2)."
+  description         = "Azure Local Insights: the five counters and the health and SDDC channels the Insights dialog configures, plus the demo channels (design 7.2, D-054)."
   tags                = local.tags
   destinations {
     log_analytics {
@@ -60,9 +77,9 @@ resource "azurerm_monitor_data_collection_rule" "insights" {
   }
   data_sources {
     performance_counter {
-      name                          = "AzureStackHCI-Perf"
+      name                          = "perfCounterDataSource"
       streams                       = ["Microsoft-Perf"]
-      sampling_frequency_in_seconds = 60
+      sampling_frequency_in_seconds = var.insights_sampling_seconds
       counter_specifiers = [
         "\\Memory\\Available Bytes",
         "\\Network Interface(*)\\Bytes Total/sec",
@@ -72,12 +89,12 @@ resource "azurerm_monitor_data_collection_rule" "insights" {
       ]
     }
     windows_event_log {
-      name    = "AzureStackHCI-Events"
+      name    = "eventLogsDataSource"
       streams = ["Microsoft-Event"]
-      x_path_queries = [
+      x_path_queries = concat([
+        "Microsoft-Windows-SDDC-Management/Operational!*[System[(EventID=3000 or EventID=3001 or EventID=3002 or EventID=3003 or EventID=3004)]]",
         "microsoft-windows-health/operational!*",
-        "microsoft-windows-sddc-management/operational!*[System[(EventID=3000 or EventID=3001 or EventID=3002 or EventID=3003 or EventID=3004)]]",
-      ]
+      ], var.insights_extra_event_channels)
     }
   }
 }
@@ -152,6 +169,64 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "alert" {
   }
   action {
     action_groups = [local.ag_id]
+  }
+}
+
+# Recommended metric alerts on the cluster resource (Learn: Enable recommended alert rules for Azure Local).
+locals {
+  metric_alerts = {
+    alert_cpu               = { metric = "Hyper-V Hypervisor Logical Processor\\% Total Run Time", op = "GreaterThan", threshold = 80, text = "Percentage CPU above 80 % (recommended alert rule)" }
+    alert_memory            = { metric = "Memory\\Available Bytes", op = "LessThan", threshold = 1073741824, text = "Available memory below 1 GB (recommended alert rule)" }
+    alert_vol_read_latency  = { metric = "Cluster CSVFS\\Avg. sec/Read", op = "GreaterThan", threshold = 0.5, text = "Volume read latency above 500 ms (recommended alert rule)" }
+    alert_vol_write_latency = { metric = "Cluster CSVFS\\Avg. sec/Write", op = "GreaterThan", threshold = 0.5, text = "Volume write latency above 500 ms (recommended alert rule)" }
+    alert_net_in            = { metric = "Network Adapter\\Bytes Received/sec", op = "GreaterThan", threshold = 500000000000, text = "Network in above 500 GB/s (recommended alert rule, Learn threshold)" }
+    alert_net_out           = { metric = "Network Adapter\\Bytes Sent/sec", op = "GreaterThan", threshold = 200000000000, text = "Network out above 200 GB/s (recommended alert rule, Learn threshold)" }
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "recommended" {
+  for_each            = var.enable_recommended_metric_alerts ? local.metric_alerts : {}
+  name                = var.names[each.key]
+  resource_group_name = var.names["rg_mon"]
+  scopes              = [local.cluster_id]
+  description         = "${var.cluster_name}: ${each.value.text}."
+  severity            = 3
+  frequency           = "PT5M"
+  window_size         = "PT15M"
+  auto_mitigate       = true
+  tags                = local.tags
+  criteria {
+    metric_namespace = "Microsoft.AzureStackHCI/clusters"
+    metric_name      = each.value.metric
+    aggregation      = "Average"
+    operator         = each.value.op
+    threshold        = each.value.threshold
+    dimension {
+      name     = "ClusterNodeName"
+      operator = "Include"
+      values   = ["*"]
+    }
+  }
+  action {
+    action_group_id = local.ag_id
+  }
+}
+
+# Health alerts (AzureEdgeAlerts) on the cluster -> action group (Learn: Respond to Azure Local health alerts, step 2).
+resource "azurerm_monitor_alert_processing_rule_action_group" "health" {
+  count                = var.enable_health_alert_routing ? 1 : 0
+  name                 = var.names["alert_health_routing"]
+  resource_group_name  = var.names["rg_mon"]
+  scopes               = [local.cluster_id]
+  add_action_group_ids = [local.ag_id]
+  description          = "Routes the Azure Local OS health alerts (AzureEdgeAlerts extension) raised on ${var.cluster_name} to the ops action group."
+  enabled              = true
+  tags                 = local.tags
+  condition {
+    signal_type {
+      operator = "NotEquals"
+      values   = ["Metric"]
+    }
   }
 }
 

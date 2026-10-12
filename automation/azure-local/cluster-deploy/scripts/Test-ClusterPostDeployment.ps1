@@ -56,7 +56,10 @@ Invoke-PostCheck -Name 'cluster resource provisioned and connected' -Test {
     $c = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.AzureStackHCI/clusters/${clusterName}?api-version=2025-09-15-preview"
     Assert-Post ($c.properties.provisioningState -eq 'Succeeded') "provisioningState=$($c.properties.provisioningState)"
     Assert-Post ($c.properties.status -in 'ConnectedRecently', 'Connected') "status=$($c.properties.status)"
-    "status=$($c.properties.status); version=$($c.properties.clusterVersion); identityProvider check via deploymentSettings"
+    # The cluster version is reported under properties.reportedProperties (T-5.3.13); properties.clusterVersion is absent.
+    $version = if ($c.properties.PSObject.Properties.Name -contains 'reportedProperties' -and $c.properties.reportedProperties.PSObject.Properties.Name -contains 'clusterVersion') { $c.properties.reportedProperties.clusterVersion } else { 'not reported' }
+    Assert-Post ($version -ne 'not reported') 'reportedProperties.clusterVersion not reported'
+    "status=$($c.properties.status); version=$version"
 }
 Invoke-PostCheck -Name 'deployment settings: Deploy pass Success' -Test {
     $s = Get-ClusterDeploymentSettingsState -SubscriptionId $sub -ResourceGroupName $rg -ClusterName $clusterName
@@ -72,7 +75,7 @@ Invoke-PostCheck -Name 'Local Identity: identityProvider = LocalIdentity in depl
 Invoke-PostCheck -Name 'Arc machines connected (all configured nodes)' -Test {
     $bad = @()
     foreach ($n in $inputs.nodes) {
-        $m = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$($n.name)?api-version=2024-07-10"
+        $m = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$(Get-ClusterDeployArcMachineName -Node $n -Inputs $inputs)?api-version=2024-07-10"
         if ($m.properties.status -ne 'Connected') { $bad += "$($n.name)=$($m.properties.status)" }
     }
     Assert-Post ($bad.Count -eq 0) ($bad -join ', '); "$($inputs.nodes.Count) node(s) Connected"
@@ -81,7 +84,7 @@ Invoke-PostCheck -Name 'Arc extensions on every node (incl. AzureEdgeAKVBackupFo
     $required = 'AzureEdgeAKVBackupForWindows', 'AzureEdgeLifecycleManager', 'AzureEdgeDeviceManagement', 'AzureEdgeTelemetryAndDiagnostics'
     $problems = @()
     foreach ($n in $inputs.nodes) {
-        $ext = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$($n.name)/extensions?api-version=2024-07-10"
+        $ext = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$(Get-ClusterDeployArcMachineName -Node $n -Inputs $inputs)/extensions?api-version=2024-07-10"
         $names = @($ext.value | ForEach-Object { $_.name })
         foreach ($req in $required) { if ($names -notcontains $req) { $problems += "$($n.name) missing $req" } }
         $failed = @($ext.value | Where-Object { $_.properties.provisioningState -ne 'Succeeded' } | ForEach-Object { "$($n.name)/$($_.name)=$($_.properties.provisioningState)" })
@@ -107,8 +110,9 @@ Invoke-PostCheck -Name 'cloud witness storage account present (GPv2, Standard_LR
 }
 Invoke-PostCheck -Name 'cluster vault: deployment secrets and backed-up secrets present (names only)' -Test {
     $all = @(Get-AzKeyVaultSecret -VaultName $inputs.kv_azl_name | Select-Object -ExpandProperty Name)
-    $ece = @("$clusterName-LocalAdminCredential", "$clusterName-WitnessStorageKey") | Where-Object { $all -contains $_ }
-    $backup = @($all | Where-Object { $_ -ne "$clusterName-LocalAdminCredential" -and $_ -ne "$clusterName-WitnessStorageKey" })
+    $eceNames = Get-ClusterDeploySecretName -Inputs $inputs
+    $ece = @($eceNames.LocalAdmin, $eceNames.WitnessKey) | Where-Object { $all -contains $_ }
+    $backup = @($all | Where-Object { $_ -notin $eceNames.LocalAdmin, $eceNames.WitnessKey })
     Assert-Post ($ece.Count -eq 2) "ECE secrets present: $($ece -join ',')"
     Assert-Post ($backup.Count -ge 1) 'no backed-up secrets (BitLocker / RecoveryAdmin) found yet - the Key Vault backup extension writes them after deployment'
     "ece=$($ece.Count); backed-up secret names=$($backup.Count)"
@@ -118,7 +122,7 @@ Invoke-PostCheck -Name 'cluster vault: node identities hold Secrets Officer + Ce
     $ra = @(Get-AzRoleAssignment -Scope $kv.ResourceId | Where-Object { $_.Scope -eq $kv.ResourceId })
     $missing = @()
     foreach ($n in $inputs.nodes) {
-        $m = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$($n.name)?api-version=2024-07-10"
+        $m = Get-AzlResource -Path "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.HybridCompute/machines/$(Get-ClusterDeployArcMachineName -Node $n -Inputs $inputs)?api-version=2024-07-10"
         foreach ($role in 'Key Vault Secrets Officer', 'Key Vault Certificates Officer') {
             if (-not ($ra | Where-Object { $_.ObjectId -eq $m.identity.principalId -and $_.RoleDefinitionName -eq $role })) { $missing += "$($n.name):$role" }
         }
@@ -147,16 +151,30 @@ $nodeSkip = ($SkipNodeChecks -or -not $session)
 $nodeSkipReason = if ($SkipNodeChecks) { '-SkipNodeChecks' } else { 'no node session' }
 
 Invoke-PostCheck -Name 'nodes Up (Get-ClusterNode)' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
-    $n = Invoke-Command -Session $session -ScriptBlock { Get-ClusterNode | Select-Object Name, State }
+    # State is converted to its name ON THE NODE: over remoting the ClusterNodeState enum arrives as its number (Up = 0).
+    $n = Invoke-Command -Session $session -ScriptBlock { Get-ClusterNode | ForEach-Object { [pscustomobject]@{ Name = $_.Name; State = $_.State.ToString() } } }
     $down = @($n | Where-Object { $_.State -ne 'Up' }); Assert-Post ($down.Count -eq 0) (($down | ForEach-Object { "$($_.Name)=$($_.State)" }) -join ','); ($n | ForEach-Object { "$($_.Name)=Up" }) -join ','
 }
 Invoke-PostCheck -Name 'cloud witness online (Get-ClusterQuorum)' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
-    $q = Invoke-Command -Session $session -ScriptBlock { $w = (Get-ClusterQuorum).QuorumResource; [pscustomobject]@{ Name = $w.Name; State = $w.State; Type = $w.ResourceType.Name } }
+    # ClusterResourceState is converted on the node as well (Online = 2 over remoting).
+    $q = Invoke-Command -Session $session -ScriptBlock { $w = (Get-ClusterQuorum).QuorumResource; [pscustomobject]@{ Name = $w.Name; State = $w.State.ToString(); Type = $w.ResourceType.Name } }
     Assert-Post ($q.Type -eq 'Cloud Witness' -and $q.State -eq 'Online') "witness=$($q.Type) state=$($q.State)"; "$($q.Name): $($q.State)"
 }
-Invoke-PostCheck -Name 'storage healthy (Get-StorageSubSystem / Get-VirtualDisk)' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
-    $s = Invoke-Command -Session $session -ScriptBlock { [pscustomobject]@{ Sub = (Get-StorageSubSystem -FriendlyName 'Clustered*' | Select-Object -First 1).HealthStatus; Disks = @(Get-VirtualDisk | Where-Object { $_.HealthStatus -ne 'Healthy' }).Count; Faults = @(Get-StorageSubSystem -FriendlyName 'Clustered*' | Debug-StorageSubSystem).Count } }
-    Assert-Post ($s.Sub -eq 'Healthy' -and $s.Disks -eq 0) "subsystem=$($s.Sub) unhealthyDisks=$($s.Disks) faults=$($s.Faults)"; "subsystem=Healthy; faults=$($s.Faults)"
+Invoke-PostCheck -Name 'storage healthy (pool, virtual disks, storage faults)' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
+    # The clustered subsystem also turns Warning for non-storage faults such as Microsoft.Health.FaultType.Cluster.UpdateAvailable
+    # (a solution update is offered; updates stay manual). Judge storage on the pool, the virtual disks and the storage faults only.
+    $s = Invoke-Command -Session $session -ScriptBlock {
+        $faults = @(Get-HealthFault -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.FaultType })
+        [pscustomobject]@{
+            Pool   = @(Get-StoragePool -IsPrimordial $false | ForEach-Object { "$($_.FriendlyName)=$($_.HealthStatus)" })
+            Disks  = @(Get-VirtualDisk | Where-Object { [string]$_.HealthStatus -ne 'Healthy' } | ForEach-Object { "$($_.FriendlyName)=$($_.HealthStatus)" })
+            Faults = $faults
+        }
+    }
+    $other = @($s.Faults | Where-Object { $_ -ne 'Microsoft.Health.FaultType.Cluster.UpdateAvailable' })
+    $badPool = @($s.Pool | Where-Object { $_ -notlike '*=Healthy' })
+    Assert-Post ($badPool.Count -eq 0 -and $s.Disks.Count -eq 0 -and $other.Count -eq 0) "pool=$($s.Pool -join ',') unhealthyDisks=$($s.Disks -join ',') faults=$($other -join ',')"
+    "pool=$($s.Pool -join ','); unhealthy virtual disks=0; storage faults=0; other faults=$(@($s.Faults).Count - $other.Count) (UpdateAvailable)"
 }
 Invoke-PostCheck -Name 'Network ATC intents Success (Get-NetIntentStatus)' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
     $i = Invoke-Command -Session $session -ScriptBlock { Get-NetIntentStatus | Select-Object IntentName, Host, ConfigurationStatus, ProvisioningStatus }
@@ -165,15 +183,24 @@ Invoke-PostCheck -Name 'Network ATC intents Success (Get-NetIntentStatus)' -Skip
 }
 Invoke-PostCheck -Name 'RDMA on storage adapters only; jumbo 9014 on storage' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
     $storageAdapters = @(($inputs.intents | Where-Object { $_.traffic_types -contains 'Storage' }).adapters)
-    $r = Invoke-Command -Session $session -ArgumentList (, $storageAdapters) -ScriptBlock {
-        param($sa)
+    $allAdapters = @($inputs.intents | ForEach-Object { $_.adapters })
+    $r = Invoke-Command -Session $session -ArgumentList (, $allAdapters) -ScriptBlock {
+        param($aa)
         $rdma = Get-NetAdapterRdma | Where-Object Enabled | Select-Object -ExpandProperty Name
-        $jumbo = Get-NetAdapterAdvancedProperty -DisplayName 'Jumbo Packet' -ErrorAction SilentlyContinue | Where-Object { $sa -contains $_.Name } | Select-Object Name, DisplayValue
+        $jumbo = Get-NetAdapterAdvancedProperty -RegistryKeyword '*JumboPacket' -ErrorAction SilentlyContinue | Where-Object { $aa -contains $_.Name } | Select-Object Name, RegistryValue
         [pscustomobject]@{ Rdma = @($rdma); Jumbo = @($jumbo) }
     }
     $unexpected = @($r.Rdma | Where-Object { $storageAdapters -notcontains $_ -and $_ -notlike 'vSMB*' -and $_ -notlike 'vEthernet*' })
     Assert-Post ($unexpected.Count -eq 0) "RDMA enabled outside storage: $($unexpected -join ',')"
-    "rdma=$($r.Rdma -join ','); jumbo=$(($r.Jumbo | ForEach-Object { "$($_.Name)=$($_.DisplayValue)" }) -join ',')"
+    $missing = @($storageAdapters | Where-Object { $r.Rdma -notcontains $_ })
+    Assert-Post ($missing.Count -eq 0) "RDMA not enabled on storage adapter(s): $($missing -join ',')"
+    # Jumbo per intent: the intent's override (default 1514) on every adapter of that intent (GPT review, 10 Oct).
+    $wrong = foreach ($i in $inputs.intents) {
+        $want = if ($i.overrides -and $i.overrides.jumbo_packet) { [string]$i.overrides.jumbo_packet } else { '1514' }
+        foreach ($a in $i.adapters) { $have = [string](@($r.Jumbo | Where-Object Name -eq $a | Select-Object -ExpandProperty RegistryValue) -join ''); if ($have -ne $want) { "$a=$have (want $want)" } }
+    }
+    Assert-Post (@($wrong).Count -eq 0) "jumbo mismatch: $(@($wrong) -join ',')"
+    "rdma=$($r.Rdma -join ','); jumbo=$(($r.Jumbo | ForEach-Object { "$($_.Name)=$($_.RegistryValue -join '')" }) -join ',')"
 }
 Invoke-PostCheck -Name 'Local Identity: node in WORKGROUP and ADAware = 2' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
     $li = Invoke-Command -Session $session -ScriptBlock { [pscustomobject]@{ Domain = (Get-CimInstance Win32_ComputerSystem).Domain; ADAware = (Get-ClusterResource 'Cluster Name' | Get-ClusterParameter ADAware).Value } }
@@ -181,6 +208,10 @@ Invoke-PostCheck -Name 'Local Identity: node in WORKGROUP and ADAware = 2' -Skip
 }
 Invoke-PostCheck -Name 'live migration bound to storage networks (R-03 verification)' -Skip:$nodeSkip -SkipReason $nodeSkipReason -Test {
     $lm = Invoke-Command -Session $session -ScriptBlock { [pscustomobject]@{ Max = (Get-VMHost).MaximumVirtualMachineMigrations; Nets = @(Get-VMMigrationNetwork | Select-Object -ExpandProperty Subnet) } }
+    # Every migration subnet must be a storage subnet (keeps live migration off the 1 Gb management path, design §6.3).
+    $storageSubnets = @('storage_a', 'storage_b' | ForEach-Object { $inputs.vlans.$_.subnet } | Where-Object { $_ })
+    $offStorage = @($lm.Nets | Where-Object { $storageSubnets -notcontains $_ })
+    Assert-Post ($lm.Nets.Count -gt 0 -and $offStorage.Count -eq 0) "migration subnets not limited to storage ($($storageSubnets -join ',')): $($lm.Nets -join ',')"
     "MaximumVirtualMachineMigrations=$($lm.Max); migration subnets=$($lm.Nets -join ',')"
 }
 if ($session) { Remove-PSSession -Session $session }

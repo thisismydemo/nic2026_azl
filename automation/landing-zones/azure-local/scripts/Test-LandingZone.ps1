@@ -105,8 +105,9 @@ Invoke-LzCheck 'policy-precheck' {
     # Review R-04: list every assignment at or above the subscription; flag Deny/DINE effects that could block the build.
     $assignments = @(Get-AzPolicyAssignment -Scope $subScope -IncludeDescendent:$false -ErrorAction Stop)
     $suspicious = foreach ($a in $assignments) {
-        $def = $a.Properties.PolicyDefinitionId
-        $name = $a.Properties.DisplayName
+        # Az.Resources returns flattened policy-assignment properties in current releases.
+        $def = [string]$a.PolicyDefinitionId
+        $name = [string]$a.DisplayName
         if ($name -match 'deny|not allowed|disable public|purge protection|shared key|private endpoint|peering|extension|allowed resource types|allowed locations' -and $a.Name -notlike "asg-*nic26*") { "$name [$def]" }
     }
     $detail = "$($assignments.Count) assignment(s) in scope; review list: " + (($suspicious | Select-Object -First 15) -join '; ')
@@ -345,8 +346,9 @@ Invoke-LzCheck 'deploy-identity' {
     $ra = @(Get-AzRoleAssignment -ObjectId $id.PrincipalId -Scope $subScope | Where-Object Scope -EQ $subScope)
     $contrib = $ra | Where-Object RoleDefinitionName -EQ 'Contributor'
     $rbac = $ra | Where-Object RoleDefinitionName -EQ 'Role Based Access Control Administrator'
-    $ok = $contrib -and $rbac -and $rbac.Condition
-    Add-LzResult 'deploy-identity' ($ok ? 'Pass' : 'Fail') "Contributor=$([bool]$contrib) RBACAdmin=$([bool]$rbac) condition=$([bool]($rbac.Condition))"
+    $rbacCondition = if ($rbac) { [bool]$rbac[0].Condition } else { $false }
+    $ok = $contrib -and $rbac -and $rbacCondition
+    Add-LzResult 'deploy-identity' ($ok ? 'Pass' : 'Fail') "Contributor=$([bool]$contrib) RBACAdmin=$([bool]$rbac) condition=$rbacCondition"
 }
 Invoke-LzCheck 'rp-app-role' {
     $ra = @(Get-AzRoleAssignment -ObjectId $Config.azl_rp_app_object_id -ResourceGroupName $n.rg_azl -ErrorAction SilentlyContinue | Where-Object RoleDefinitionName -EQ 'Azure Connected Machine Resource Manager')

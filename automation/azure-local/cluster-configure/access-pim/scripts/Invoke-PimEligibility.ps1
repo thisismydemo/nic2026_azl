@@ -41,7 +41,10 @@ foreach ($cmd in 'Get-AzRoleEligibilitySchedule', 'New-AzRoleEligibilitySchedule
 $scope = "/subscriptions/$($inputs.subscription_id)"
 
 $plan = foreach ($row in @($inputs.pim_assignments)) {
-    $principalId = [string]$inputs.group_object_ids.($row.group)
+    # group_object_ids is keyed by the landing-zone catalog keys (grp_azl_admins); pim_assignments may use the short key (azl_admins).
+    $groupKeys = @($inputs.group_object_ids.PSObject.Properties.Name)
+    $key = if ($groupKeys -contains $row.group) { $row.group } elseif ($groupKeys -contains "grp_$($row.group)") { "grp_$($row.group)" } else { $null }
+    $principalId = if ($key) { [string]$inputs.group_object_ids.$key } else { '' }
     if ([string]::IsNullOrWhiteSpace($principalId) -or $principalId -eq '00000000-0000-0000-0000-000000000000') { throw "group_object_ids.$($row.group) is empty or a placeholder - run the landing-zone group script first." }
     $roleDef = Get-AzRoleDefinition -Name $row.role
     if (-not $roleDef) { throw "Built-in role not found in this tenant: $($row.role)" }

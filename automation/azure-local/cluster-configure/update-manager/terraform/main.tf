@@ -38,7 +38,7 @@ resource "azurerm_maintenance_assignment_dynamic_scope" "arc" {
   maintenance_configuration_id = azurerm_maintenance_configuration.guest.id
 
   filter {
-    resource_types = ["microsoft.hybridcompute/machines"] # (verify) accepted spelling for Arc-enabled servers
+    resource_types = var.dynamic_scope_resource_types
     os_types       = var.dynamic_scope_os_types
     tag_filter     = "All"
     dynamic "tags" {

@@ -61,6 +61,11 @@ variable "nodes" {
     error_message = "cluster_name must differ from every node name."
   }
 }
+variable "arc_machine_names" {
+  description = "Node host name -> Arc machine name where they differ (simplified provisioning: <device-id>-1). Missing = host name."
+  type        = map(string)
+  default     = {}
+}
 variable "intents" {
   type = list(object({
     name          = string

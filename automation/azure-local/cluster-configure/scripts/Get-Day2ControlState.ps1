@@ -295,6 +295,7 @@ function Test-Day2PimAccessState {
         $group = Get-Day2RequiredText -Object $assignment -Name 'group'
         $role = Get-Day2RequiredText -Object $assignment -Name 'role'
         $id = [string](Get-Day2Field -Object $groups -Name $group)
+        if ([string]::IsNullOrWhiteSpace($id)) { $id = [string](Get-Day2Field -Object $groups -Name "grp_$group") }   # landing-zone catalog keys (grp_azl_admins)
         if ([string]::IsNullOrWhiteSpace($id) -or $id -eq '00000000-0000-0000-0000-000000000000') {
             throw "Placeholder or missing group ID: $group."
         }

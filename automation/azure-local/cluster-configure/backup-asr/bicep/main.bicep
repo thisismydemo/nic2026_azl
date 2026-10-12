@@ -9,6 +9,9 @@ param subscription_id string
 param location string
 #disable-next-line no-unused-params
 param tags object
+@description('Azure VMs protected by scripts/Enable-AzureVmBackup.ps1 (declared because the converters render every input).')
+#disable-next-line no-unused-params
+param backup_azure_vms array = []
 param names object
 param asr_policy object = {
   replication_frequency_seconds: 300

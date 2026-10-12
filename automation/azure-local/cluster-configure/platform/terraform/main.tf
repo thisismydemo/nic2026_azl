@@ -36,7 +36,7 @@ module "logical_network" {
 
 resource "azapi_resource" "storage_path" {
   for_each  = local.paths
-  type      = "Microsoft.AzureStackHCI/storageContainers@2025-02-01-preview"
+  type      = "Microsoft.AzureStackHCI/storageContainers@2026-04-01-preview"
   name      = each.key
   parent_id = local.rg_id
   location  = var.location
@@ -49,7 +49,7 @@ resource "azapi_resource" "storage_path" {
 
 resource "azapi_resource" "image" {
   for_each  = local.imgs
-  type      = "Microsoft.AzureStackHCI/marketplaceGalleryImages@2025-04-01-preview"
+  type      = "Microsoft.AzureStackHCI/marketplaceGalleryImages@2026-04-01-preview"
   name      = var.names["img_${each.key}"]
   parent_id = local.rg_id
   location  = var.location
@@ -71,7 +71,7 @@ resource "azapi_resource" "image" {
 
 resource "azapi_resource" "nsg" {
   count     = var.enable_network_security_group ? 1 : 0
-  type      = "Microsoft.AzureStackHCI/networkSecurityGroups@2025-02-01-preview"
+  type      = "Microsoft.AzureStackHCI/networkSecurityGroups@2026-04-01-preview"
   name      = var.names["nsg_azl_compute"]
   parent_id = local.rg_id
   location  = var.location

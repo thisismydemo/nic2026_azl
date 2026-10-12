@@ -72,6 +72,8 @@ param kv_soft_delete_days int = 7
 @description('{ ops: Enabled|Disabled, azl: Enabled|Disabled } (design §5.3).')
 param kv_public_network_access object
 param azl_rp_app_object_id string
+@description('automation_identity block of the environment file: type (managed-identity | service-principal), managed_identity_name (default names.id_deploy, in rg_sec), service_principal_object_id, grant_roles (S3 creates the assignments of automation-identity-roles.json), simplified_provisioning (adds the os-provisioning roles). The *_secret references are read by the scripts only. {} = nothing granted.')
+param automation_identity object = {}
 
 @description('Resource ID of the centrally managed Log Analytics workspace (platform management subscription). When set, no workload workspace is created and every diagnostic and collection setting points at it.')
 param central_log_analytics_workspace_id string = ''
@@ -386,6 +388,60 @@ module subscriptionRbac 'modules/role-assignment-sub.bicep' = if (s3) {
       { principalId: group_object_ids.grp_azl_readers, principalType: 'Group', role: 'LogAnalyticsReader' }
       { principalId: group_object_ids.grp_azl_readers, principalType: 'Group', role: 'MonitoringReader' }
     ]
+  }
+}
+
+// Automation identity (design §6.2 note, README "Automation identity"): least-privilege roles at the cluster resource
+// group, the security resource group and the two vaults, read from ../automation-identity-roles.json. Granted only when
+// automation_identity.grant_roles is true; the os-provisioning roles only when simplified_provisioning is also true.
+var aiRoleMap = loadJsonContent('../automation-identity-roles.json').assignments
+var aiGrant = s3 && bool(automation_identity.?grant_roles ?? false)
+var aiType = automation_identity.?type ?? 'managed-identity'
+var aiMiName = automation_identity.?managed_identity_name ?? names.id_deploy
+var aiIsDeployIdentity = aiType == 'managed-identity' && aiMiName == names.id_deploy
+var aiFeatures = bool(automation_identity.?simplified_provisioning ?? false) ? ['core', 'simplified_provisioning'] : ['core']
+var aiItems = filter(aiRoleMap, a => contains(aiFeatures, a.feature) && !(aiIsDeployIdentity && bool(a.?granted_by_s3 ?? false)))
+
+// Read only for a managed identity other than names.id_deploy (conditional so ARM never looks it up otherwise).
+resource aiExistingIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = if (aiGrant && aiType == 'managed-identity' && !aiIsDeployIdentity) {
+  scope: resourceGroup(names.rg_sec)
+  name: aiMiName
+}
+
+var aiPrincipalId = aiType == 'service-principal'
+  ? (empty(automation_identity.?service_principal_object_id ?? '') ? fail('automation_identity.type is service-principal: service_principal_object_id is required to grant roles.') : automation_identity.service_principal_object_id)
+  : (aiIsDeployIdentity ? security!.outputs.deployIdentityPrincipalId : aiExistingIdentity!.properties.principalId)
+
+module automationIdentityRgAzl 'modules/automation-identity-rbac.bicep' = if (aiGrant) {
+  name: 'rbac-automation-identity-rg-azl'
+  scope: resourceGroup(names.rg_azl)
+  dependsOn: [resourceGroups]
+  params: {
+    principal_id: aiPrincipalId
+    rg_assignments: filter(aiItems, a => a.scope == 'rg_azl')
+  }
+}
+
+module automationIdentityRgSec 'modules/automation-identity-rbac.bicep' = if (aiGrant) {
+  name: 'rbac-automation-identity-rg-sec'
+  scope: resourceGroup(names.rg_sec)
+  dependsOn: [resourceGroups]
+  params: {
+    principal_id: aiPrincipalId
+    rg_assignments: filter(aiItems, a => a.scope == 'rg_sec')
+    key_vault_name: names.kv_azl
+    vault_assignments: filter(aiItems, a => a.scope == 'kv_azl')
+  }
+}
+
+module automationIdentityKvOps 'modules/automation-identity-rbac.bicep' = if (aiGrant && !empty(filter(aiItems, a => a.scope == 'kv_ops'))) {
+  name: 'rbac-automation-identity-kv-ops'
+  scope: resourceGroup(names.rg_sec)
+  dependsOn: [resourceGroups]
+  params: {
+    principal_id: aiPrincipalId
+    key_vault_name: names.kv_ops
+    vault_assignments: filter(aiItems, a => a.scope == 'kv_ops')
   }
 }
 

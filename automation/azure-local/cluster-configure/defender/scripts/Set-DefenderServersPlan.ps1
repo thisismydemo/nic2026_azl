@@ -15,12 +15,17 @@ param(
     [Parameter(Mandatory)][ValidateSet('Apply', 'Remove')][string]$Action,
     [ValidateSet('Bicep', 'Terraform')][string]$Tool = 'Bicep',
     [string]$BackendConfig,
+    [switch]$AllowRemove,
     [switch]$Execute
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\..\scripts\Day2.Common.ps1')
 $solutionRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+
+# D-055 (12 Oct 2026): the lab runs Defender for Cloud as production (automation/shared/security owns the plan set on both
+# landing-zone subscriptions). Turning Defender for Servers off is no longer part of the replay; it needs -AllowRemove.
+if ($Action -eq 'Remove' -and -not $AllowRemove) { throw 'Remove turns Defender for Servers off, which D-055 rules out for the lab. Pass -AllowRemove only on an owner decision.' }
 
 if ($Tool -eq 'Bicep' -and $Action -eq 'Remove') {
     # Remove = redeploy with the plan off (what-if first, create with -Execute) — handled as an Apply with an override.

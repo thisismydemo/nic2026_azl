@@ -468,7 +468,7 @@
     },
     {
       "id": "az-3-5-policy",
-      "title": "Security and governance baseline",
+      "title": "Security baseline as production: Policy, Defender for Cloud and Sentinel",
       "section": "3.5",
       "mode": "live",
       "minutes": 2,
@@ -480,6 +480,7 @@
         "troubleshooting": [],
         "cleanup": [],
         "repoPaths": [
+          "automation/shared/security",
           "automation/azure-local/cluster-configure/policy"
         ]
       }

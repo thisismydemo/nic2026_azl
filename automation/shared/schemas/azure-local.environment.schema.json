@@ -54,6 +54,135 @@
     "secret_refs"
   ],
   "properties": {
+    "arc_machine_names": {
+      "type": "object",
+      "description": "Node host name -> Microsoft.HybridCompute/machines name, when they differ. Simplified machine provisioning names the Arc machine <device-id>-1 (edgeMachines/<node> properties.arcMachineResourceId). Kept out of nodes[] so device automation never carries Azure IDs. Missing node = host name.",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9-]{1,15}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+      }
+    },
+    "node_preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Node preparation before cluster Validate (os-provisioning Initialize-ProvisionedNode.ps1 and Initialize-OemNode.ps1): OEM drivers that replace inbox drivers (Learn: inbox drivers are not supported) and the data disks ClearDisks may clear.",
+      "properties": {
+        "sbe_bundle": {
+          "type": "string",
+          "description": "Local path of the approved OEM Solution Builder Extension bundle: the zip, or the folder it unpacks to (SBE_*.xml manifest with per-file SHA-256 + SBE_*.zip payload). Drivers with sbe_path are extracted from it and verified against that manifest (never committed)."
+        },
+        "drivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "hardware_id",
+              "version",
+              "inf"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "sbe_path"
+                ]
+              },
+              {
+                "required": [
+                  "source_path",
+                  "sha256"
+                ]
+              }
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]{2,40}$"
+              },
+              "hardware_id": {
+                "type": "string",
+                "description": "PnP hardware ID prefix the driver must bind to, e.g. PCI\\VEN_8086&DEV_159B"
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+){1,3}$"
+              },
+              "inf": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+\\.inf$"
+              },
+              "sbe_path": {
+                "type": "string",
+                "description": "Folder of the driver inside the SBE payload, e.g. DriversGE\\Network\\Intel\\E810\\3VT4C; hashes come from the SBE manifest."
+              },
+              "source_path": {
+                "type": "string",
+                "description": "Alternative to sbe_path: local folder with the approved, unmodified driver package (never committed)."
+              },
+              "sha256": {
+                "type": "object",
+                "description": "With source_path: file name -> expected SHA-256 (from the OEM SWBOM).",
+                "additionalProperties": {
+                  "type": "string",
+                  "pattern": "^[A-Fa-f0-9]{64}$"
+                }
+              }
+            }
+          }
+        },
+        "data_disks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "bus_type",
+            "model_pattern",
+            "boot_model_pattern"
+          ],
+          "description": "ClearDisks stage (both routes, before Validate): which disks of each node are the Storage Spaces Direct data disks. The boot/system disk is excluded by IsBoot/IsSystem AND boot_model_pattern; only disks of bus_type whose model matches model_pattern are cleared, and their number must equal count, otherwise the stage refuses.",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64,
+              "description": "Expected data disks per node."
+            },
+            "bus_type": {
+              "type": "string",
+              "enum": [
+                "NVMe",
+                "SAS",
+                "SATA",
+                "SCM"
+              ],
+              "description": "Get-PhysicalDisk BusType of the data disks."
+            },
+            "model_pattern": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Wildcard patterns (-like) matched against Get-PhysicalDisk Model or FriendlyName of the data disks."
+            },
+            "boot_model_pattern": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Wildcard patterns of the boot device model; the IsBoot/IsSystem disk must match one, and any disk that matches is never touched."
+            }
+          }
+        }
+      }
+    },
     "tags": {
       "type": "object",
       "description": "Optional scope tag overrides merged with shared tags, including the workload tag from naming standard 3a.",
@@ -321,6 +450,189 @@
       "$ref": "#/$defs/guid",
       "description": "Object id of the Microsoft.AzureStackHCI Resource Provider first-party application in this tenant."
     },
+    "create_workspace": {
+      "type": "boolean",
+      "description": "cluster-configure/monitoring: create the lab workspace names.law (D-054)."
+    },
+    "manage_insights_dcr_in_iac": {
+      "type": "boolean",
+      "description": "cluster-configure/monitoring: author the Insights DCR in IaC in the dialog's shape (D-054)."
+    },
+    "insights_sampling_seconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 300
+    },
+    "insights_extra_event_channels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Extra XPath channels in the Insights DCR."
+    },
+    "enable_recommended_metric_alerts": {
+      "type": "boolean"
+    },
+    "enable_health_alert_routing": {
+      "type": "boolean"
+    },
+    "observability_agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Azure Copilot Observability Agent prerequisites (D-047): Azure Monitor workspace, Issue Contributor principals, subscriptions to associate.",
+      "required": [
+        "amw_name",
+        "resource_group",
+        "associate_subscriptions"
+      ],
+      "properties": {
+        "amw_name": {
+          "type": "string",
+          "pattern": "^amw-[a-z0-9-]+$"
+        },
+        "resource_group": {
+          "type": "string",
+          "pattern": "^rg-[a-z0-9-]+$"
+        },
+        "associate_subscriptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "issue_contributors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "object_id",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "object_id": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F-]{36}$"
+              },
+              "type": {
+                "enum": [
+                  "User",
+                  "Group",
+                  "ServicePrincipal"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "maintenance_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "cluster-configure/update-manager: maintenance window (start 'yyyy-MM-dd HH:mm', duration 'HH:mm', Windows time zone, recurrence).",
+      "required": [
+        "start_date_time",
+        "duration",
+        "time_zone",
+        "recur_every"
+      ],
+      "properties": {
+        "start_date_time": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"
+        },
+        "duration": {
+          "type": "string",
+          "pattern": "^[0-9]{2}:[0-9]{2}$"
+        },
+        "time_zone": {
+          "type": "string"
+        },
+        "recur_every": {
+          "type": "string"
+        }
+      }
+    },
+    "patch_classifications": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reboot_setting": {
+      "enum": [
+        "IfRequired",
+        "Never",
+        "Always"
+      ]
+    },
+    "dynamic_scope_tags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "dynamic_scope_os_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "Windows",
+          "Linux"
+        ]
+      }
+    },
+    "dynamic_scope_resource_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assessment_scope_tags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "backup_azure_vms": {
+      "type": "array",
+      "description": "cluster-configure/backup-asr: Azure VMs protected with the Azure VM backup policy.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "resource_group",
+          "name"
+        ],
+        "properties": {
+          "resource_group": {
+            "type": "string",
+            "pattern": "^rg-[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "vm_insights_scope_tags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
     "log_analytics_workspace_id": {
       "$ref": "#/$defs/resourceIdOrEmpty",
       "description": "Landing-zone output recorded for the deploy and Day-2 solutions."
@@ -390,6 +702,69 @@
           "$ref": "#/$defs/secretRef"
         }
       }
+    },
+    "automation_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Identity the scripts sign in with for Arc registration, cluster deploy and os-provisioning (landing-zone README, Automation identity). Roles: automation/landing-zones/azure-local/automation-identity-roles.json.",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "managed-identity",
+            "service-principal"
+          ]
+        },
+        "managed_identity_name": {
+          "type": "string",
+          "pattern": "^id-[a-z0-9-]+$",
+          "description": "User-assigned identity in the security resource group; default identity.deployment_identity_name."
+        },
+        "managed_identity_client_id_secret": {
+          "$ref": "#/$defs/secretRef",
+          "description": "Client ID of the user-assigned identity (Connect-AzAccount -Identity -AccountId); optional when it is the only identity on the jump server."
+        },
+        "service_principal_app_id_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "service_principal_secret_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "service_principal_object_id": {
+          "$ref": "#/$defs/guid",
+          "description": "Enterprise application object ID; needed by the landing zone to grant the roles."
+        },
+        "grant_roles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Landing-zone S3 grants the roles of automation-identity-roles.json."
+        },
+        "simplified_provisioning": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also grant the os-provisioning roles (Contributor and constrained Role Based Access Control Administrator)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "service-principal"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "service_principal_app_id_secret",
+              "service_principal_secret_secret"
+            ]
+          }
+        }
+      ]
     },
     "witness": {
       "type": "object",
@@ -474,6 +849,16 @@
         "$ref": "#/$defs/vlan"
       }
     },
+    "adapter_names": {
+      "description": "Physical port -> network adapter name as the node OS reports it. The name depends on how the OS was installed (simplified provisioning: Port1..Port6; OEM image: 'Embedded NIC 1', 'SLOT 3 Port 1', ...). intents[].adapters reference these values (YAML anchors), so a route change edits this map only.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
     "intents": {
       "type": "array",
       "minItems": 1,
@@ -542,7 +927,7 @@
                   "RoCE",
                   null
                 ],
-                "description": "Only on OEM guidance; null leaves Network ATC's detection."
+                "description": "Storage intent: required (Validate rejects RDMA without a protocol). Must match the adapters' *NetworkDirectTechnology mode."
               },
               "storage_vlans": {
                 "type": "array",
@@ -698,6 +1083,127 @@
             "items": {
               "$ref": "#/$defs/ipv4"
             }
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "nsg": {
+            "type": "string",
+            "pattern": "^nsg-[a-z0-9-]+$"
+          }
+        }
+      }
+    },
+    "sdn": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "SDN enabled by Azure Arc (network-design 4.6, D-048).",
+      "required": [
+        "enabled",
+        "prefix"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?!.*--)[A-Za-z0-9-]{0,6}[A-Za-z0-9]?$"
+        },
+        "nc_fqdn": {
+          "type": "string"
+        },
+        "nc_ip": {
+          "$ref": "#/$defs/ipv4"
+        },
+        "vm_switch_name": {
+          "type": "string"
+        }
+      }
+    },
+    "network_security_groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "rules"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^nsg-[a-z0-9-]+$"
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "priority",
+                "direction",
+                "access",
+                "protocol",
+                "source",
+                "destination",
+                "ports"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^nsgsr-[a-z0-9-]+$"
+                },
+                "priority": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 4096
+                },
+                "direction": {
+                  "enum": [
+                    "Inbound",
+                    "Outbound"
+                  ]
+                },
+                "access": {
+                  "enum": [
+                    "Allow",
+                    "Deny"
+                  ]
+                },
+                "protocol": {
+                  "enum": [
+                    "Tcp",
+                    "Udp",
+                    "Icmp",
+                    "*"
+                  ]
+                },
+                "source": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "destination": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ports": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -767,6 +1273,707 @@
         }
       }
     },
+    "vm_management": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where Azure Local VM resources (images, NICs, disks, VMs) are created: cluster resource group and custom location.",
+      "required": [
+        "resource_group",
+        "custom_location"
+      ],
+      "properties": {
+        "resource_group": {
+          "type": "string",
+          "pattern": "^rg-[a-z0-9-]+$"
+        },
+        "custom_location": {
+          "type": "string",
+          "pattern": "^cl-[a-z0-9-]+$"
+        }
+      }
+    },
+    "vm_images": {
+      "type": "array",
+      "description": "Azure Local VM images (storage-design.md section 6). source marketplace: publisher/offer/sku/version.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "source",
+          "os_type",
+          "storage_path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^img-[a-z0-9-]+$"
+          },
+          "source": {
+            "enum": [
+              "marketplace",
+              "gallery-version",
+              "vhd"
+            ]
+          },
+          "os_type": {
+            "enum": [
+              "Windows",
+              "Linux"
+            ]
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "offer": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "image_path": {
+            "type": "string"
+          },
+          "gallery_image_version_id": {
+            "type": "string",
+            "pattern": "^/subscriptions/.+/versions/[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "temp_disk_resource_group": {
+            "type": "string",
+            "pattern": "^rg-[a-z0-9-]+$"
+          },
+          "temp_disk_name": {
+            "type": "string",
+            "pattern": "^disk-[a-z0-9-]+$"
+          },
+          "security_type": {
+            "enum": [
+              "Standard",
+              "TrustedLaunch"
+            ]
+          },
+          "storage_path": {
+            "type": "string",
+            "pattern": "^sp-[a-z0-9-]+$"
+          },
+          "workload": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "workload_vms": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "IIC workload VMs seeded on the cluster (storage-design.md section 5 VM inventory; T-5.5.2).",
+      "required": [
+        "local_admin_username_secret",
+        "local_admin_password_secret",
+        "vms"
+      ],
+      "properties": {
+        "local_admin_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "local_admin_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "vms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "computer_name",
+              "tier",
+              "vcpu",
+              "memory_mb",
+              "image",
+              "logical_network",
+              "storage_path"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^vm-[a-z0-9-]+$"
+              },
+              "computer_name": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]{1,15}$"
+              },
+              "tier": {
+                "type": "string"
+              },
+              "vcpu": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 1024
+              },
+              "image": {
+                "type": "string",
+                "pattern": "^img-[a-z0-9-]+$"
+              },
+              "logical_network": {
+                "type": "string",
+                "pattern": "^lnet-[a-z0-9-]+$"
+              },
+              "nsg": {
+                "type": "string",
+                "pattern": "^nsg-[a-z0-9-]+$"
+              },
+              "ip_address": {
+                "$ref": "#/$defs/ipv4"
+              },
+              "storage_path": {
+                "type": "string",
+                "pattern": "^sp-[a-z0-9-]+$"
+              },
+              "data_disks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "size_gb"
+                  ],
+                  "properties": {
+                    "size_gb": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "dynamic": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "sofs_cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "SOFS guest cluster for FSLogix (storage-design.md section 4, D-050; T-5.5.4).",
+      "required": [
+        "image",
+        "logical_network",
+        "local_admin_username_secret",
+        "local_admin_password_secret",
+        "vms",
+        "domain",
+        "admin_account",
+        "groups",
+        "guest_cluster",
+        "s2d",
+        "sofs_role_name",
+        "shares"
+      ],
+      "properties": {
+        "image": {
+          "type": "string",
+          "pattern": "^img-[a-z0-9-]+$"
+        },
+        "logical_network": {
+          "type": "string",
+          "pattern": "^lnet-[a-z0-9-]+$"
+        },
+        "security_type": {
+          "enum": [
+            "Standard",
+            "TrustedLaunch"
+          ]
+        },
+        "workload_tag": {
+          "type": "string"
+        },
+        "local_admin_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "local_admin_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "vms": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "computer_name",
+              "preferred_node",
+              "vcpu",
+              "memory_mb",
+              "ip_address",
+              "storage_path",
+              "data_disk_count",
+              "data_disk_size_gb"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^vm-[a-z0-9-]+$"
+              },
+              "computer_name": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]{1,15}$"
+              },
+              "preferred_node": {
+                "type": "string"
+              },
+              "vcpu": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 2048
+              },
+              "ip_address": {
+                "$ref": "#/$defs/ipv4"
+              },
+              "storage_path": {
+                "type": "string",
+                "pattern": "^sp-[a-z0-9-]+$"
+              },
+              "data_disk_count": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 16
+              },
+              "data_disk_size_gb": {
+                "type": "integer",
+                "minimum": 16
+              }
+            }
+          }
+        },
+        "affinity_rule": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fqdn",
+            "netbios",
+            "ou_path",
+            "users_ou_path",
+            "join_username_secret",
+            "join_password_secret",
+            "dc_vm"
+          ],
+          "properties": {
+            "fqdn": {
+              "type": "string"
+            },
+            "netbios": {
+              "type": "string",
+              "maxLength": 15
+            },
+            "ou_path": {
+              "type": "string",
+              "pattern": "^OU=.+,DC=.+$"
+            },
+            "users_ou_path": {
+              "type": "string",
+              "pattern": "^OU=.+,DC=.+$"
+            },
+            "join_username_secret": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "join_password_secret": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "dc_vm": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "subscription_key",
+                "resource_group",
+                "name"
+              ],
+              "properties": {
+                "subscription_key": {
+                  "type": "string"
+                },
+                "resource_group": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "admin_account": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sam_account_name",
+            "username_secret",
+            "password_secret"
+          ],
+          "properties": {
+            "sam_account_name": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "username_secret": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "password_secret": {
+              "$ref": "#/$defs/secretRef"
+            }
+          }
+        },
+        "groups": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "admins",
+            "fslogix_users",
+            "fslogix_ops"
+          ],
+          "properties": {
+            "admins": {
+              "type": "string"
+            },
+            "fslogix_users": {
+              "type": "string"
+            },
+            "fslogix_ops": {
+              "type": "string"
+            }
+          }
+        },
+        "guest_cluster": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "management_point",
+            "witness_storage_account",
+            "witness_resource_group"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,15}$"
+            },
+            "management_point": {
+              "enum": [
+                "Distributed",
+                "Singleton"
+              ]
+            },
+            "witness_storage_account": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{3,24}$"
+            },
+            "witness_resource_group": {
+              "type": "string",
+              "pattern": "^rg-[a-z0-9-]+$"
+            },
+            "witness_key_secret": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "witness_endpoint": {
+              "type": "string"
+            }
+          }
+        },
+        "s2d": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "volume_name",
+            "volume_size_gb",
+            "data_copies"
+          ],
+          "properties": {
+            "pool_name": {
+              "type": "string"
+            },
+            "volume_name": {
+              "type": "string"
+            },
+            "volume_size_gb": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "data_copies": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 3
+            },
+            "hw_timeout_ms": {
+              "type": "integer",
+              "minimum": 6000,
+              "maximum": 120000
+            }
+          }
+        },
+        "sofs_role_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,15}$"
+        },
+        "test_client_vm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subscription_key",
+            "resource_group",
+            "name"
+          ],
+          "properties": {
+            "subscription_key": {
+              "type": "string"
+            },
+            "resource_group": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "shares": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "folder"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "folder": {
+                "type": "string"
+              },
+              "continuously_available": {
+                "type": "boolean"
+              },
+              "encrypt_data": {
+                "type": "boolean"
+              },
+              "caching_mode": {
+                "enum": [
+                  "None",
+                  "Manual",
+                  "Documents",
+                  "Programs",
+                  "BranchCache"
+                ]
+              },
+              "folder_enumeration_mode": {
+                "enum": [
+                  "AccessBased",
+                  "Unrestricted"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "solution_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Solution update with additional content (OEM SBE) imported from a local package (Learn: Update Azure Local via PowerShell). Used by cluster-configure/update-manager/scripts/Invoke-SolutionUpdate.ps1.",
+      "required": [
+        "import_folder",
+        "package_type",
+        "version"
+      ],
+      "properties": {
+        "package_folder": {
+          "type": "string",
+          "description": "Folder on the machine that runs the script with the SBE discovery xml, inventory xml and payload zip (lab-only)."
+        },
+        "import_folder": {
+          "type": "string",
+          "pattern": "^C:\\\\ClusterStorage\\\\"
+        },
+        "package_type": {
+          "enum": [
+            "SBE",
+            "Solution"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "monitor_node": {
+          "type": "string"
+        },
+        "avd_host_pool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subscription_key",
+            "resource_group",
+            "name"
+          ],
+          "properties": {
+            "subscription_key": {
+              "type": "string"
+            },
+            "resource_group": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "GPU on the cluster nodes (design/azure-local/gpu-design.md): DDA host prep, guest driver, GPU VMs. Used by cluster-configure/gpu.",
+      "required": [
+        "assignment",
+        "model",
+        "pci_hardware_id",
+        "mitigation_driver",
+        "hosts"
+      ],
+      "properties": {
+        "assignment": {
+          "enum": [
+            "dda",
+            "gpu-p"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "pci_hardware_id": {
+          "type": "string",
+          "pattern": "^PCI\\\\VEN_[0-9A-F]{4}&DEV_[0-9A-F]{4}$"
+        },
+        "mitigation_driver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "sha256",
+            "inf",
+            "host_folder"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^https://"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9A-F]{64}$"
+            },
+            "inf": {
+              "type": "string",
+              "pattern": "\\.inf$"
+            },
+            "host_folder": {
+              "type": "string"
+            }
+          }
+        },
+        "guest_driver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "url"
+          ],
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https://"
+            }
+          }
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "node",
+              "location_path"
+            ],
+            "properties": {
+              "node": {
+                "type": "string"
+              },
+              "location_path": {
+                "type": "string",
+                "pattern": "^PCIROOT\\("
+              }
+            }
+          }
+        },
+        "vms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "computer_name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^vm-[a-z0-9-]+$"
+              },
+              "computer_name": {
+                "type": "string",
+                "maxLength": 15
+              },
+              "vcpu": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 1024
+              },
+              "storage_path": {
+                "type": "string",
+                "pattern": "^sp-[a-z0-9-]+$"
+              },
+              "preferred_node": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "secret_refs": {
       "type": "object",
       "description": "Named keyvault:// references read at run time (names only; values never enter files).",
@@ -775,6 +1982,186 @@
       },
       "additionalProperties": {
         "$ref": "#/$defs/secretRef"
+      }
+    },
+    "hybrid_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Hybrid identity for the SOFS/FSLogix example (D-050): AD objects and the Entra Connect Sync server (never on a domain controller).",
+      "required": [
+        "dc_vm_name",
+        "dc_resource_group",
+        "ou_root",
+        "server_ous",
+        "join_account",
+        "join_username_secret",
+        "join_password_secret",
+        "sync_server"
+      ],
+      "properties": {
+        "dc_vm_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dc_resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identity_nsg_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ou_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "server_ous": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "upn_suffix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "join_account": {
+          "type": "string",
+          "minLength": 1
+        },
+        "join_username_secret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "join_password_secret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "test_users": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prefix": {
+              "type": "string",
+              "minLength": 1
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "password_secret_format": {
+              "type": "string",
+              "minLength": 1
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "sync_server": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "vm_name",
+            "computer_name",
+            "resource_group",
+            "vm_size",
+            "private_ip",
+            "vnet_resource_group",
+            "vnet_name",
+            "subnet_name",
+            "ou",
+            "admin_username_secret",
+            "admin_password_secret",
+            "entra_connect_msi_url"
+          ],
+          "properties": {
+            "vm_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "computer_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resource_group": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vm_size": {
+              "type": "string",
+              "minLength": 1
+            },
+            "image_sku": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vnet_resource_group": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vnet_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "subnet_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mgmt_nsg_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ou": {
+              "type": "string",
+              "minLength": 1
+            },
+            "admin_username_secret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "admin_password_secret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entra_connect_msi_url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "os_disk_gb": {
+              "type": "integer",
+              "minimum": 64
+            },
+            "private_ip": {
+              "$ref": "#/$defs/ipv4"
+            }
+          }
+        }
       }
     }
   },

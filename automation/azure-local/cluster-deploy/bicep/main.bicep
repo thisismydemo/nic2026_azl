@@ -39,12 +39,14 @@ param witness_key_secret_name string = ''
 
 @description('nodes[]: name, management_ip, storage_ips { smb1, smb2 }.')
 param nodes array
+@description('Node host name -> Arc machine name where they differ (simplified provisioning: <device-id>-1). Missing = host name.')
+param arc_machine_names object = {}
 @description('Network ATC intents: name, traffic_types[], adapters[], overrides { jumbo_packet, rdma_enabled, ... }.')
 param intents array
 param ip_plan object
 param vlans object
 param qos object
-@description('R-03: networkDirectTechnology as a string (RoCEv2 | iWARP | RoCE); empty = leave Network ATC detection.')
+@description('R-03: networkDirectTechnology fallback when the Storage intent has no overrides.rdma_protocol (RoCEv2 | iWARP | RoCE). One of the two is required: Validate rejects RDMA without a protocol.')
 @allowed(['', 'RoCEv2', 'iWARP', 'RoCE'])
 param rdma_protocol string = ''
 @allowed(['switchedMultiServerDeployment', 'switchlessMultiServerDeployment', 'singleServerDeployment'])
@@ -116,7 +118,8 @@ var storageEndpointSuffix = environment().suffixes.storage
 var managementCidr = parseCidr(ip_plan.management_subnet)
 var storageIntents = filter(intents, i => contains(i.traffic_types, 'Storage'))
 var storageIntent = storageIntents[0]
-var storageAdapters = storageIntent.adapters
+// storageNetworkList maps StorageNetwork1/2 to the Storage intent's adapters by position: exactly one Storage intent with two adapters.
+var storageAdapters = (length(storageIntents) == 1 && length(storageIntent.adapters) == 2) ? storageIntent.adapters : fail('Exactly one Storage intent with exactly two adapters is required (StorageNetwork1 -> adapters[0], StorageNetwork2 -> adapters[1]).')
 var storageNets = [
   { key: 'storage_a', ipKey: 'smb1', name: 'StorageNetwork1' }
   { key: 'storage_b', ipKey: 'smb2', name: 'StorageNetwork2' }
@@ -142,12 +145,14 @@ var intentList = [for i in intents: {
     priorityValue8021Action_SMB: ''
     bandwidthPercentage_SMB: ''
   }
-  // Jumbo 9014 on Storage only (network-design §2.8); RDMA enabled only on Storage; the protocol is the rdma_protocol input.
+  // Jumbo 9014 on Storage only (network-design §2.8); RDMA enabled only on Storage. Validate rejects networkDirect=Enabled
+  // without a protocol (HostIntentConfigurationReadiness, 10 Oct 2026), so the Storage intent must name it: its own
+  // overrides.rdma_protocol, else the rdma_protocol input, else the template fails here instead of at hour 0:14.
   overrideAdapterProperty: true
   adapterPropertyOverrides: {
     jumboPacket: string(i.?overrides.?jumbo_packet ?? 1514)
     networkDirect: contains(i.traffic_types, 'Storage') ? 'Enabled' : 'Disabled'
-    networkDirectTechnology: contains(i.traffic_types, 'Storage') ? rdma_protocol : ''
+    networkDirectTechnology: contains(i.traffic_types, 'Storage') ? (empty(i.?overrides.?rdma_protocol ?? rdma_protocol) ? fail('Storage intent: RDMA is enabled, so overrides.rdma_protocol (or rdma_protocol) must be iWARP, RoCE or RoCEv2 to match the adapters.') : (i.?overrides.?rdma_protocol ?? rdma_protocol)) : ''
   }
 }]
 
@@ -203,8 +208,9 @@ var sbePartnerInfo = sbeConfigured ? {
 } : null
 
 // ------------------------------------------------------------------ existing resources (inputs, never created here)
+// Simplified machine provisioning names the Arc machine <device-id>-1, not the host name: arc_machine_names.
 resource arcMachine 'Microsoft.HybridCompute/machines@2024-07-10' existing = [for n in nodes: {
-  name: n.name
+  name: arc_machine_names[?n.name] ?? n.name
 }]
 
 resource witnessStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
@@ -232,6 +238,28 @@ module diagStorage 'br/public:avm/res/storage/storage-account:0.33.1' = {
       kind: 'CanNotDelete'
       name: 'lock-${names.st_diag}'
     }
+    // Key Vault audit-log retention (template logsRetentionInDays): diagnostic-settings retention is retired, so the
+    // append blobs the AuditEvent sink writes are deleted by a lifecycle rule instead. 0 = keep forever.
+    managementPolicyRules: logs_retention_days > 0 ? [
+      {
+        enabled: true
+        name: 'delete-kv-audit-logs'
+        type: 'Lifecycle'
+        definition: {
+          actions: {
+            baseBlob: {
+              delete: {
+                daysAfterModificationGreaterThan: logs_retention_days
+              }
+            }
+          }
+          filters: {
+            blobTypes: ['appendBlob']
+            prefixMatch: ['insights-logs-auditevent']
+          }
+        }
+      }
+    ] : []
   }
 }
 
@@ -274,7 +302,6 @@ module keyVaultAccess 'modules/key-vault-access.bicep' = {
     secrets_officer_role_id: roleIds.keyVaultSecretsOfficer
     certificates_officer_role_id: roleIds.keyVaultCertificatesOfficer
     diagnostic_storage_account_id: diagStorage.outputs.resourceId
-    logs_retention_days: logs_retention_days
   }
 }
 
@@ -310,14 +337,11 @@ resource cluster 'Microsoft.AzureStackHCI/clusters@2025-09-15-preview' = if (dep
   ]
 }
 
-resource clusterRef 'Microsoft.AzureStackHCI/clusters@2025-09-15-preview' existing = {
-  name: cluster_name
-}
-
 // ------------------------------------------------------------------ both passes: deployment settings
+// Use the full child-resource name so the Validate-only cluster declaration and the
+// Deploy-pass existing parent do not create duplicate cluster declarations.
 resource deploymentSettings 'Microsoft.AzureStackHCI/clusters/deploymentSettings@2025-09-15-preview' = {
-  parent: clusterRef
-  name: 'default'
+  name: '${cluster_name}/default'
   properties: {
     arcNodeResourceIds: [for i in range(0, length(nodes)): arcMachine[i].id]
     deploymentMode: guardsOk ? deployment_mode : fail(guardMessage)
@@ -392,7 +416,7 @@ resource deploymentSettings 'Microsoft.AzureStackHCI/clusters/deploymentSettings
 }
 
 // ------------------------------------------------------------------ outputs (= solution.yml outputs = terraform/outputs.tf)
-output cluster_id string = clusterRef.id
+output cluster_id string = resourceId('Microsoft.AzureStackHCI/clusters', cluster_name)
 output cluster_name string = cluster_name
 output deployment_settings_id string = deploymentSettings.id
 output custom_location_name string = names.cl_azl

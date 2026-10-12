@@ -22,25 +22,29 @@ param identity = {
   model: 'local-identity-keyvault'
   dns_zone: 'nic26.iic.local'
   deployment_identity_name: 'id-iic-nic26-deploy-eus-01'
-  local_admin_username_secret: 'keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-local-admin-username'
-  local_admin_password_secret: 'keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-local-admin-password'
+  local_admin_username_secret: 'keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-cluster-admin-username'
+  local_admin_password_secret: 'keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-nic26-clus01-cluster-admin-password'
 }
 param kv_azl_name = 'kv-iic-nic26-azl-eus-01'
 param witness = {
   type: 'cloud'
   storage_account_name: 'stiicnic26witeus01'
-  storage_key_secret: 'keyvault://kv-iic-nic26-azl-eus-01/WitnessStorageKey'
+  storage_key_secret: 'keyvault://kv-iic-nic26-azl-eus-01/nic26-clus01-WitnessStorageKey'
 }
 param azl_rp_app_object_id = '00000000-0000-0000-0000-000000000000'
 
+// Optional: param arc_machine_names = { '<node>': '<device-id>-1' } (simplified machine provisioning; missing node = host name).
 param nodes = [
   { name: 'nic26-01-n01', management_ip: '192.168.100.11', storage_ips: { smb1: '172.30.71.11', smb2: '172.30.72.11' } }
   { name: 'nic26-01-n02', management_ip: '192.168.100.12', storage_ips: { smb1: '172.30.71.12', smb2: '172.30.72.12' } }
 ]
+// Three intents, one port per card and per switch (network-design §2.3.2). Port1..Port6 are the names simplified machine
+// provisioning reports (Port1/2 = LOM1/2, Port3/4 = Slot 3 P1/P2, Port5/6 = Slot 6 P1/P2); on other install paths check
+// Get-NetAdapter. Storage adapters are in storage VLAN order: Port4 -> 711 (smb1), Port6 -> 712 (smb2).
 param intents = [
-  { name: 'Management', traffic_types: ['Management'], adapters: ['NIC1', 'NIC2'], overrides: { jumbo_packet: 1514 } }
-  { name: 'Compute', traffic_types: ['Compute'], adapters: ['SLOT 3 Port 1', 'SLOT 6 Port 2'], overrides: { jumbo_packet: 1514, rdma_enabled: false } }
-  { name: 'Storage', traffic_types: ['Storage'], adapters: ['SLOT 3 Port 2', 'SLOT 6 Port 1'], overrides: { jumbo_packet: 9014, storage_vlans: [711, 712], enable_storage_auto_ip: false } }
+  { name: 'Management', traffic_types: ['Management'], adapters: ['Port1', 'Port2'], overrides: { jumbo_packet: 1514 } }
+  { name: 'Compute', traffic_types: ['Compute'], adapters: ['Port3', 'Port5'], overrides: { jumbo_packet: 1514, rdma_enabled: false } }
+  { name: 'Storage', traffic_types: ['Storage'], adapters: ['Port4', 'Port6'], overrides: { jumbo_packet: 9014, storage_vlans: [711, 712], enable_storage_auto_ip: false } }
 ]
 param ip_plan = {
   management_subnet: '192.168.100.0/24'
@@ -63,7 +67,7 @@ param vlans = {
 }
 param qos = {
   storage_priority: 3
-  cluster_priority: 7
+  cluster_priority: 7              // must equal the ToR heartbeat class (the lab as built uses 5)
   storage_bandwidth_percent: 50
   cluster_bandwidth_percent: 2
   jumbo_frame_size: 9014

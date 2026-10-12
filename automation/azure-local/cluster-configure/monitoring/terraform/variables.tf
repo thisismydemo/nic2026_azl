@@ -42,10 +42,43 @@ variable "manage_insights_dcr_in_iac" {
   type    = bool
   default = false
 }
+variable "create_workspace" {
+  type    = bool
+  default = false
+}
+variable "law_retention_days" {
+  type    = number
+  default = 30
+}
+variable "law_daily_cap_gb" {
+  type    = number
+  default = 2
+}
+variable "insights_extra_event_channels" {
+  type    = list(string)
+  default = []
+}
+variable "insights_sampling_seconds" {
+  type    = number
+  default = 10
+}
+variable "enable_recommended_metric_alerts" {
+  type    = bool
+  default = true
+}
+variable "enable_health_alert_routing" {
+  type    = bool
+  default = true
+}
+variable "vm_insights_scope_tags" {
+  description = "VM Insights selection (scripts/Enable-VmInsights.ps1); not used by the Terraform resources."
+  type        = map(list(string))
+  default     = {}
+}
 variable "names" {
   type = map(string)
   validation {
-    condition     = alltrue([for k in ["rg_azl", "rg_mon", "law", "ag_ops", "dcr_insights", "dcr_vminsights", "alert_node_down", "alert_storage_health", "alert_intent_drift", "alert_capacity", "alert_kv_backup"] : contains(keys(var.names), k)])
+    condition     = alltrue([for k in ["rg_azl", "rg_mon", "law", "ag_ops", "dcr_insights", "dcr_vminsights", "alert_node_down", "alert_storage_health", "alert_intent_drift", "alert_capacity", "alert_kv_backup", "alert_cpu", "alert_memory", "alert_vol_read_latency", "alert_vol_write_latency", "alert_net_in", "alert_net_out", "alert_health_routing"] : contains(keys(var.names), k)])
     error_message = "names is missing a monitoring catalog key (contract §10)."
   }
 }

@@ -18,7 +18,7 @@ controls:
     remove_script: scripts/Enable-ClusterInsights.ps1
     remove_args: { Action: Disable }
     apply_script: scripts/Enable-ClusterInsights.ps1
-    apply_args: { Action: Enable, ExtraEventChannels: "Microsoft-Windows-Networking-NetworkATC/Operational!*" }
+    apply_args: { Action: Enable }          # the Network ATC channel is in the IaC Insights DCR since 12 Oct (D-054)
     reversible: true
   - key: monitoring-config
     outline: "3.1"

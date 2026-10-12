@@ -68,6 +68,19 @@ $iacStages = @('S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7')
 $mode = $Execute ? 'EXECUTE' : 'WHAT-IF'
 Write-Information "Azure Local landing zone - tool=$Tool mode=$mode stages=$($Stage -join ',')" -InformationAction Continue
 
+if (-not (Get-Module -Name 'NIC26.Automation')) {
+    $modulePath = Join-Path $solutionRoot '..\..\shared\powershell\NIC26.Automation\NIC26.Automation.psd1'
+    if (Test-Path -LiteralPath $modulePath) {
+        Import-Module -Name $modulePath -Force
+    }
+    elseif (Get-Module -ListAvailable -Name 'NIC26.Automation') {
+        Import-Module -Name 'NIC26.Automation' -Force
+    }
+    else {
+        throw "NIC26.Automation was not found at '$modulePath'."
+    }
+}
+
 if (-not $Config) { $Config = Get-NIC26Config -Scope 'azure-local' }
 # Get-NIC26Config returns { scope, sources, shared, azure_local, values }; the stages read the flat values. Tests pass a flat config.
 $fullConfig = $Config
@@ -96,12 +109,23 @@ $names = if ($hasNames) { $Config.names } else {
 }
 if (-not $hasNames -and $Config -is [System.Collections.IDictionary]) { $Config['names'] = $names }   # child scripts (Initialize-LzPim.ps1) read Config.names
 $sub = [string] $Config.subscription_id
+$configuredTenant = [string]$Config.tenant_id
+$subscriptionTenant = [string](Get-AzSubscription -SubscriptionId $sub -ErrorAction Stop | Select-Object -First 1 -ExpandProperty TenantId)
+$armTenant = if ($subscriptionTenant) { $subscriptionTenant } else { $configuredTenant }
+$vaultTenant = $configuredTenant
+$vaultSubscription = if ($Config.subscriptions -and $Config.subscriptions.management) { [string]$Config.subscriptions.management } else { $sub }
 
 function Assert-LzContext {
     $ctx = Get-AzContext
-    if (-not $ctx) { throw 'No Az context. Run Connect-AzAccount first.' }
-    if ($ctx.Subscription.Id -ne $sub) { $null = Set-AzContext -WhatIf:$false -Tenant ([string]$Config.tenant_id) -SubscriptionId $sub }
-    if ($ctx.Tenant.Id -ne [string]$Config.tenant_id) { throw 'Az context tenant does not match Config.tenant_id.' }
+    if (-not $ctx -or $ctx.Subscription.Id -ne $sub -or $ctx.Tenant.Id -ne $armTenant) {
+        # Cached Az profiles can contain the same subscription under more than one tenant.
+        # Select the subscription's live tenant explicitly, then verify both values after selection.
+        $null = Set-AzContext -WhatIf:$false -Tenant $armTenant -SubscriptionId $sub -ErrorAction Stop
+        $ctx = Get-AzContext
+    }
+    if (-not $ctx -or $ctx.Subscription.Id -ne $sub -or $ctx.Tenant.Id -ne $armTenant) {
+        throw "Az context does not match live subscription tenant/subscription (tenant=$armTenant, subscription=$sub)."
+    }
 }
 
 function Get-LzParameterFile {
@@ -114,36 +138,51 @@ function Get-LzJumpCredential {
     <# Returns @{ Username = SecureString; Password = SecureString } without ever materialising the values in logs.
        Reads the ops vault secrets by reference; generates and stores the password on first -Execute of S7. #>
     if (-not $IsWindows) { throw 'S7 handles the jump-server credential and must run on Windows (the jump server or a Windows operator host), K-8.' }
-    $userRef = [string] $Config.jump_admin_username_secret
-    $pwdRef = [string] $Config.jump_admin_password_secret
-    $user = try { Resolve-NIC26KeyVaultRef -Ref $userRef } catch { $null }
-    $pwd = try { Resolve-NIC26KeyVaultRef -Ref $pwdRef } catch { $null }
-    if (-not $user -or -not $pwd) {
-        if (-not $Execute) { Write-Information 'S7: jump credential not yet in the ops vault; it would be generated and stored on -Execute.' -InformationAction Continue; return $null }
-        $vaultName = ($pwdRef -replace '^keyvault://', '') -split '/' | Select-Object -First 1
-        $secretName = ($pwdRef -replace '^keyvault://', '') -split '/' | Select-Object -Last 1
-        $userSecretName = ($userRef -replace '^keyvault://', '') -split '/' | Select-Object -Last 1
-        # 24 characters from a CSPRNG, four character classes guaranteed; appended straight into a SecureString so no
-        # plaintext string object is ever created (PSAvoidUsingConvertToSecureStringWithPlainText).
-        $alphabet = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%+-=?'
-        $pwd = [securestring]::new()
-        foreach ($seed in [char[]]'aZ7!') { $pwd.AppendChar($seed) }
-        for ($i = 0; $i -lt 20; $i++) { $pwd.AppendChar($alphabet[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($alphabet.Length)]) }
-        $pwd.MakeReadOnly()
-        $user = [securestring]::new()   # deliberately not 'Administrator' (management-plane §1.5); a username, not a secret
-        $jumpUser = $JumpAdminUsername
-        foreach ($c in [char[]]$jumpUser) { $user.AppendChar($c) }
-        $user.MakeReadOnly()
-        $expires = (Get-Date).ToUniversalTime().AddDays(90)
-        $tags = @{ owner = [string]$Config.tags.owner; project = [string]$Config.tags.project; 'rotation-days' = '90'; 'managed-by' = 'script'; lifecycle = 'temporary' }
-        if ($PSCmdlet.ShouldProcess("$vaultName/$secretName", 'Generate and store jump local-admin credential (values never shown)')) {
-            Invoke-NIC26WithRetry -ScriptBlock {
-                $null = Set-AzKeyVaultSecret -VaultName $vaultName -Name $userSecretName -SecretValue $user -Expires $expires -Tag $tags -ContentType 'username'
-                $null = Set-AzKeyVaultSecret -VaultName $vaultName -Name $secretName -SecretValue $pwd -Expires $expires -Tag $tags -ContentType 'password'
-            } -MaxMinutes 5 -Activity 'write jump credential to the ops vault'
+    $originalContext = Get-AzContext
+    $switchedVaultContext = $false
+    try {
+        # ARM deployments use the tenant currently bound to the target subscription, while the
+        # existing ops vault may still issue tokens from the configured tenant after a transfer.
+        if ($originalContext -and $vaultTenant -and $originalContext.Tenant.Id -ne $vaultTenant) {
+            $null = Set-AzContext -WhatIf:$false -Tenant $vaultTenant -SubscriptionId $vaultSubscription -ErrorAction Stop
+            $switchedVaultContext = $true
+        }
+        $userRef = [string] $Config.jump_admin_username_secret
+        $pwdRef = [string] $Config.jump_admin_password_secret
+        $user = try { Resolve-NIC26KeyVaultRef -Ref $userRef } catch { $null }
+        $pwd = try { Resolve-NIC26KeyVaultRef -Ref $pwdRef } catch { $null }
+        if (-not $user -or -not $pwd) {
+            if (-not $Execute) { Write-Information 'S7: jump credential not yet in the ops vault; it would be generated and stored on -Execute.' -InformationAction Continue; return $null }
+            $vaultName = ($pwdRef -replace '^keyvault://', '') -split '/' | Select-Object -First 1
+            $secretName = ($pwdRef -replace '^keyvault://', '') -split '/' | Select-Object -Last 1
+            $userSecretName = ($userRef -replace '^keyvault://', '') -split '/' | Select-Object -Last 1
+            # 24 characters from a CSPRNG, four character classes guaranteed; appended straight into a SecureString so no
+            # plaintext string object is ever created (PSAvoidUsingConvertToSecureStringWithPlainText).
+            $alphabet = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%+-=?'
+            $pwd = [securestring]::new()
+            foreach ($seed in [char[]]'aZ7!') { $pwd.AppendChar($seed) }
+            for ($i = 0; $i -lt 20; $i++) { $pwd.AppendChar($alphabet[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($alphabet.Length)]) }
+            $pwd.MakeReadOnly()
+            $user = [securestring]::new()   # deliberately not 'Administrator' (management-plane §1.5); a username, not a secret
+            $jumpUser = $JumpAdminUsername
+            foreach ($c in [char[]]$jumpUser) { $user.AppendChar($c) }
+            $user.MakeReadOnly()
+            $expires = (Get-Date).ToUniversalTime().AddDays(90)
+            $tags = @{ owner = [string]$Config.tags.owner; project = [string]$Config.tags.project; 'rotation-days' = '90'; 'managed-by' = 'script'; lifecycle = 'temporary' }
+            if ($PSCmdlet.ShouldProcess("$vaultName/$secretName", 'Generate and store jump local-admin credential (values never shown)')) {
+                Invoke-NIC26WithRetry -ScriptBlock {
+                    $null = Set-AzKeyVaultSecret -VaultName $vaultName -Name $userSecretName -SecretValue $user -Expires $expires -Tag $tags -ContentType 'username'
+                    $null = Set-AzKeyVaultSecret -VaultName $vaultName -Name $secretName -SecretValue $pwd -Expires $expires -Tag $tags -ContentType 'password'
+                } -MaxMinutes 5 -Activity 'write jump credential to the ops vault'
+            }
+        }
+        return @{ Username = $user; Password = $pwd }
+    }
+    finally {
+        if ($switchedVaultContext -and $originalContext) {
+            $null = Set-AzContext -WhatIf:$false -Tenant ([string]$originalContext.Tenant.Id) -SubscriptionId ([string]$originalContext.Subscription.Id) -ErrorAction Stop
         }
     }
-    return @{ Username = $user; Password = $pwd }
 }
 
 function Invoke-LzBicep {
@@ -154,7 +193,7 @@ function Invoke-LzBicep {
         $null = az bicep build-params --file $paramFile --outfile $jsonParams
         if ($LASTEXITCODE -ne 0) { throw 'az bicep build-params failed' }
         # The compiled template is about 2 MB compact (inlined AVM modules); New-AzSubscriptionDeployment refuses it with RequestContentTooLarge, so the shared REST helper sends it.
-        $armParameters = @{ enabled_stages = $EnabledStages }
+        $armParameters = @{ enabled_stages = $EnabledStages; tenant_id = $armTenant }
         foreach ($k in $Overrides.Keys) { $armParameters[$k] = $Overrides[$k] }
         if ('S7' -in $EnabledStages -and [bool]$Config.enable_jump_server) {
             $cred = Get-LzJumpCredential

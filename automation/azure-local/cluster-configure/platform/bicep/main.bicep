@@ -57,7 +57,7 @@ module logicalNetwork 'br/public:avm/res/azure-stack-hci/logical-network:0.3.1' 
 }]
 
 // Storage paths (storage containers) on the workload volumes created by New-ClusterWorkloadVolume.ps1.
-resource storagePath 'Microsoft.AzureStackHCI/storageContainers@2025-02-01-preview' = [for sp in storage.storage_paths: {
+resource storagePath 'Microsoft.AzureStackHCI/storageContainers@2026-04-01-preview' = [for sp in storage.storage_paths: {
   name: sp.name
   location: location
   tags: allTags
@@ -91,7 +91,7 @@ module image 'br/public:avm/res/azure-stack-hci/marketplace-gallery-image:0.1.0'
   }
 }]
 
-resource nsg 'Microsoft.AzureStackHCI/networkSecurityGroups@2025-02-01-preview' = if (enable_network_security_group) {
+resource nsg 'Microsoft.AzureStackHCI/networkSecurityGroups@2026-04-01-preview' = if (enable_network_security_group) {
   name: names.nsg_azl_compute
   location: location
   tags: allTags

@@ -19,6 +19,8 @@ inputs:
   - { name: reboot_setting,  type: string, description: "added: IfRequired | Never | Always", required: false, default: IfRequired, source: environment }
   - { name: dynamic_scope_tags, type: map, description: "added: tag name -> list of values that selects the Arc machines (All operator)", required: false, default: { workload: [azure-local] }, source: environment }
   - { name: dynamic_scope_os_types, type: list, description: "added: OS types in the dynamic scope", required: false, default: [Windows, Linux], source: environment }
+  - { name: dynamic_scope_resource_types, type: list, description: "added: resource types in the dynamic scope (Arc machines; add microsoft.compute/virtualmachines for Azure VMs)", required: false, default: [microsoft.hybridcompute/machines], source: environment }
+  - { name: assessment_scope_tags, type: map, description: "added: tag name -> values of the machines that get periodic assessment (Set-PeriodicAssessment.ps1); empty = dynamic_scope_tags", required: false, default: {}, source: environment }
   - { name: names,           type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
 
 outputs:

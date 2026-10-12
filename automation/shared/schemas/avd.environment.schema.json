@@ -212,6 +212,23 @@
         "vcpu": { "type": "integer", "minimum": 1, "maximum": 64 },
         "memory_gb": { "type": "integer", "minimum": 2, "maximum": 1024 },
         "disk_gb": { "type": "integer", "minimum": 32, "maximum": 4096 },
+        "master_vhdx": { "type": "string", "minLength": 1 },
+        "time_zone": { "type": "string", "minLength": 1 },
+        "anti_affinity_class": { "type": "string", "minLength": 1 },
+        "join_type": { "type": "string", "enum": ["AD", "Entra"] },
+        "domain_fqdn": { "type": "string" },
+        "domain_ou_path": { "type": "string" },
+        "domain_join_username_secret": { "$ref": "#/$defs/secretRef" },
+        "domain_join_password_secret": { "$ref": "#/$defs/secretRef" },
+        "node_admin_username_secret": { "$ref": "#/$defs/secretRef" },
+        "node_admin_password_secret": { "$ref": "#/$defs/secretRef" },
+        "arc_resource_group": { "type": "string", "minLength": 1 },
+        "location": { "type": "string", "minLength": 1 },
+        "host_pool_name": { "type": "string", "minLength": 3 },
+        "host_pool_resource_group": { "type": "string", "minLength": 1 },
+        "dcr_resource_group": { "type": "string", "minLength": 1 },
+        "dcr_name": { "type": "string", "minLength": 1 },
+        "dcr_association_name": { "type": "string", "minLength": 1 },
         "vms": {
           "type": "array",
           "minItems": 1,
@@ -222,6 +239,7 @@
             "properties": {
               "name": { "$ref": "#/$defs/netbios" },
               "owner_node": { "$ref": "#/$defs/netbios" },
+              "owner_node_address": { "$ref": "#/$defs/ipv4" },
               "mac_address": { "$ref": "#/$defs/mac" },
               "ip_address": { "$ref": "#/$defs/ipv4" }
             }
@@ -232,6 +250,64 @@
           "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,127}$" },
           "additionalProperties": { "type": "string", "maxLength": 256 }
         }
+      }
+    },
+    "fslogix_realms": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "FSLogix share paths, mode and hosts per realm (Invoke-FslogixHostConfigRemote.ps1); Cloud Cache providers nearest first (D-053).",
+      "properties": {
+        "azure": { "$ref": "#/$defs/fslogixRealm" },
+        "azl": { "$ref": "#/$defs/fslogixRealm" },
+        "hybrid": { "$ref": "#/$defs/fslogixRealm" }
+      }
+    },
+    "azl_session_hosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Azure Local realm session hosts as Azure Local VMs (T-6.1.7): logical network, image, explicit storage path per host (D-049), AD join into the AVD OU (D-050), DCR association.",
+      "required": ["resource_group", "custom_location", "logical_network", "image", "vcpu", "memory_mb", "join_type", "hosts", "dcr_resource_group", "dcr_name", "dcr_association_name", "deployment_name", "host_pool_name", "host_pool_resource_group"],
+      "properties": {
+        "resource_group": { "type": "string", "minLength": 1, "maxLength": 90 },
+        "custom_location": { "type": "string", "minLength": 1 },
+        "logical_network": { "type": "string", "minLength": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "vcpu": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "memory_mb": { "type": "integer", "minimum": 2048 },
+        "join_type": { "type": "string", "enum": ["AD", "Entra", "None"] },
+        "domain_fqdn": { "type": "string" },
+        "domain_ou_path": { "type": "string" },
+        "domain_join_username_secret": { "$ref": "#/$defs/secretRef" },
+        "domain_join_password_secret": { "$ref": "#/$defs/secretRef" },
+        "dcr_resource_group": { "type": "string", "minLength": 1 },
+        "dcr_name": { "type": "string", "minLength": 1 },
+        "dcr_association_name": { "type": "string", "minLength": 1 },
+        "deployment_name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "host_pool_name": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "host_pool_resource_group": { "type": "string", "minLength": 1, "maxLength": 90 },
+        "node_addresses": { "type": "array", "items": { "$ref": "#/$defs/ipv4" } },
+        "node_admin_username_secret": { "$ref": "#/$defs/secretRef" },
+        "node_admin_password_secret": { "$ref": "#/$defs/secretRef" },
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "computer_name", "nic_name", "storage_path"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "computer_name": { "$ref": "#/$defs/netbios" },
+              "nic_name": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "storage_path": { "type": "string", "minLength": 1 },
+              "gpu_dda_count": { "type": "integer", "minimum": 0, "maximum": 4 },
+              "vcpu": { "type": "integer", "minimum": 1, "maximum": 64 },
+              "memory_mb": { "type": "integer", "minimum": 2048 }
+            }
+          }
+        },
+        "tags": { "type": "object", "additionalProperties": { "type": "string" } }
       }
     },
     "dhcp_reservations": {
@@ -273,6 +349,31 @@
     }
   },
   "$defs": {
+    "fslogixRealm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_unc", "odfc_unc", "mode", "hosts"],
+      "properties": {
+        "profile_unc": { "type": "string", "pattern": "^\\\\\\\\[^\\\\]+\\\\[^\\\\]+$" },
+        "odfc_unc": { "type": "string", "pattern": "^\\\\\\\\[^\\\\]+\\\\[^\\\\]+$" },
+        "mode": { "type": "string", "enum": ["Production", "Rehearsal"] },
+        "cloud_cache_providers": { "type": "array", "maxItems": 4, "items": { "type": "string" } },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "kind", "subscription", "resource_group"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "kind": { "type": "string", "enum": ["azure-vm", "arc"] },
+              "subscription": { "type": "string", "enum": ["avd", "azl"] },
+              "resource_group": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
     "guid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
     "guidOrEmpty": { "type": "string", "pattern": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
     "ipv4": { "type": "string", "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$" },

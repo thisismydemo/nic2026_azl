@@ -10,6 +10,11 @@ variable "tags" {
   type = map(string)
 }
 
+variable "backup_azure_vms" {
+  description = "Azure VMs protected by scripts/Enable-AzureVmBackup.ps1; not used by the Terraform resources."
+  type        = list(object({ resource_group = string, name = string }))
+  default     = []
+}
 variable "names" {
   type = map(string)
 }

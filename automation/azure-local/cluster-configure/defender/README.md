@@ -1,5 +1,7 @@
 # cluster-configure/defender — Defender for Servers toggle (outline §3.5)
 
+> **12 Oct 2026, D-055:** Defender for Cloud now runs as production on both landing-zone subscriptions, deployed by [`automation/shared/security`](../../../shared/security/README.md) (Defender CSPM, Servers Plan 2, Storage, Key Vault, Resource Manager). This control writes the same plan set for the Azure Local subscription; `-Action Remove` is refused unless `-AllowRemove` is passed on an owner decision. The 3.5 beat shows Defender already on, not a toggle.
+
 Design §7.3 option A: foundational CSPM is set by the landing zone; **Defender for Servers Plan 2** is switched on in Day-2 Ready and is the reversible control for the live replay. Apply sets `Microsoft.Security/pricings/VirtualMachines` to Standard/`defender_servers_plan`; Remove sets it to Free (the only way to "remove" a pricing). Key Vault and Storage plans are flags (default off). Preview note: Defender for Cloud on Azure Local is documented as preview (Learn: Manage system security with Defender for Cloud); MDE is auto-provisioned through the Defender for Endpoint integration on the Arc nodes and Arc VMs.
 
 | Track | Resource |

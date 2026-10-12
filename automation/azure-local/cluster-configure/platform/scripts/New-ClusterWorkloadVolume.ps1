@@ -8,7 +8,7 @@
     Credential: identity.local_admin_*_secret references resolved in memory (ops vault, operator sign-in, Windows jump
     server). Idempotent: an existing volume with the same friendly name is reported and skipped. Resiliency map:
     two-way-mirror -> Mirror / 2 copies; three-way-mirror -> Mirror / 3; nested-two-way-mirror -> Mirror with the
-    NestedMirror template (2-node only). ReFS, CSVFS, thin provisioning (ProvisioningType Thin, 2306+).
+    NestedMirror template (2-node only). ReFS, CSVFS, FIXED provisioning (storage-design.md rule 3: no thin host volumes - an over-committed pool takes every volume read-only).
 .PARAMETER InputFile
     terraform.generated.tfvars.json of this solution (or the example for a dry run).
 .EXAMPLE
@@ -52,7 +52,7 @@ try {
         if ($PSCmdlet.ShouldProcess("$($p.Volume) ($($p.Resiliency), $($p.SizeGB) GB) on pool $($p.Pool)", 'New-Volume')) {
             Invoke-Command -Session $session -ArgumentList $p.Volume, $p.Resiliency, $p.SizeGB, $p.Pool -ScriptBlock {
                 param($name, $resiliency, $sizeGb, $poolName)
-                $common = @{ FriendlyName = $name; StoragePoolFriendlyName = $poolName; FileSystem = 'CSVFS_ReFS'; Size = ([int64]$sizeGb * 1GB); ProvisioningType = 'Thin' }
+                $common = @{ FriendlyName = $name; StoragePoolFriendlyName = $poolName; FileSystem = 'CSVFS_ReFS'; Size = ([int64]$sizeGb * 1GB); ProvisioningType = 'Fixed' }
                 switch ($resiliency) {
                     'two-way-mirror' { New-Volume @common -ResiliencySettingName Mirror -NumberOfDataCopies 2 }
                     'three-way-mirror' { New-Volume @common -ResiliencySettingName Mirror -NumberOfDataCopies 3 }

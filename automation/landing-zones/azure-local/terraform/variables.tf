@@ -146,6 +146,11 @@ variable "azl_rp_app_object_id" {
   type        = string
   description = "Object ID of the Azure Local resource provider first-party application (design §6.2, O6)."
 }
+variable "automation_identity" {
+  type        = any
+  description = "automation_identity block: type (managed-identity | service-principal), managed_identity_name (default names.id_deploy, in rg_sec), service_principal_object_id, grant_roles, simplified_provisioning. The *_secret references are read by the scripts only. {} grants nothing."
+  default     = {}
+}
 
 # --- monitoring -----------------------------------------------------------------------------------
 variable "law_retention_days" {

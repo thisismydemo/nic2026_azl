@@ -20,14 +20,17 @@ locals {
   ece_secrets        = { local_admin = "LocalAdminCredential", witness_key = "WitnessStorageKey" }
   local_admin_secret = var.local_admin_secret_name != "" ? var.local_admin_secret_name : "${var.cluster_name}-${local.ece_secrets.local_admin}"
   witness_key_secret = var.witness_key_secret_name != "" ? var.witness_key_secret_name : "${var.cluster_name}-${local.ece_secrets.witness_key}"
-  arc_node_ids       = { for n in var.nodes : n.name => "${local.rg_id}/providers/Microsoft.HybridCompute/machines/${n.name}" }
+  # Simplified machine provisioning names the Arc machine <device-id>-1, not the host name (arc_machine_names).
+  arc_node_ids       = { for n in var.nodes : n.name => "${local.rg_id}/providers/Microsoft.HybridCompute/machines/${lookup(var.arc_machine_names, n.name, n.name)}" }
   arc_node_id_list   = [for n in var.nodes : local.arc_node_ids[n.name]]
   node_principal_ids = { for n in var.nodes : n.name => data.azapi_resource.arc_machine[n.name].output.identity.principalId }
   storage_intent     = one([for i in var.intents : i if contains(i.traffic_types, "Storage")])
   storage_nets       = [{ key = "storage_a", ip_key = "smb1", name = "StorageNetwork1" }, { key = "storage_b", ip_key = "smb2", name = "StorageNetwork2" }]
   mgmt_netmask       = cidrnetmask(var.ip_plan.management_subnet)
   guards_ok          = var.kv_azl_name == var.names["kv_azl"] && var.witness.storage_account_name == var.names["st_witness"]
-  tags               = merge(var.tags, { "managed-by" = "terraform" })
+  # Validate rejects networkDirect=Enabled without a protocol: the Storage intent must name iWARP / RoCE / RoCEv2.
+  storage_rdma_ok = contains(["iWARP", "RoCE", "RoCEv2"], coalesce(try(local.storage_intent.overrides.rdma_protocol, null), var.rdma_protocol, "none"))
+  tags            = merge(var.tags, { "managed-by" = "terraform" })
 
   intent_list = [for i in var.intents : {
     name                                = i.name
@@ -49,7 +52,7 @@ locals {
     adapterPropertyOverrides = {
       jumboPacket             = tostring(try(i.overrides.jumbo_packet, null) != null ? i.overrides.jumbo_packet : 1514)
       networkDirect           = contains(i.traffic_types, "Storage") ? "Enabled" : "Disabled"
-      networkDirectTechnology = contains(i.traffic_types, "Storage") ? var.rdma_protocol : ""
+      networkDirectTechnology = contains(i.traffic_types, "Storage") ? coalesce(try(i.overrides.rdma_protocol, null), var.rdma_protocol, "") : ""
     }
   }]
 
@@ -169,6 +172,10 @@ resource "azurerm_storage_account" "diag" {
       condition     = local.guards_ok
       error_message = "cluster-deploy guard failed: kv_azl_name and witness.storage_account_name must equal names.kv_azl / names.st_witness."
     }
+    precondition {
+      condition     = local.storage_rdma_ok
+      error_message = "Storage intent: RDMA is enabled, so overrides.rdma_protocol (or rdma_protocol) must be iWARP, RoCE or RoCEv2 to match the adapters."
+    }
   }
 }
 
@@ -177,6 +184,25 @@ resource "azurerm_management_lock" "diag" {
   scope      = azurerm_storage_account.diag.id
   lock_level = "CanNotDelete"
   notes      = "Key Vault audit logs for the Azure Local deployment (design §9.2)."
+}
+
+# Key Vault audit-log retention (template logsRetentionInDays): lifecycle rule, same as the Bicep track.
+resource "azurerm_storage_management_policy" "diag" {
+  count              = var.logs_retention_days > 0 ? 1 : 0
+  storage_account_id = azurerm_storage_account.diag.id
+  rule {
+    name    = "delete-kv-audit-logs"
+    enabled = true
+    filters {
+      blob_types   = ["appendBlob"]
+      prefix_match = ["insights-logs-auditevent"]
+    }
+    actions {
+      base_blob {
+        delete_after_days_since_modification_greater_than = var.logs_retention_days
+      }
+    }
+  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "kv_audit_to_storage" {

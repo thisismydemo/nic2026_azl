@@ -44,11 +44,11 @@ Nothing environment-specific is hard-coded. Every value comes from one of these 
 | Template field | Input | Value in this design |
 |---|---|---|
 | `networkingType` / `networkingPattern` | `networking_type`, `networking_pattern` | `switchedMultiServerDeployment`, **`custom`** (three intents; `hyperConverged` = one converged intent, R-03) |
-| `intentList` | `intents[]` | Management (`NIC1`,`NIC2`), Compute (`SLOT 3 Port 1`,`SLOT 6 Port 2`), Storage (`SLOT 3 Port 2`,`SLOT 6 Port 1`); jumbo 9014 and RDMA on Storage only; QoS 3/7/50 % from `qos`; `networkDirectTechnology` = **`rdma_protocol` (string, empty = Network ATC detection)** |
+| `intentList` | `intents[]` | Three intents with the adapter names the OS reports after simplified machine provisioning (`Port0` = the BMC USB NIC, never used): Management (`Port1`,`Port2` = LOM1/LOM2), Compute (`Port3`,`Port5` = Slot 3 Port 1 / Slot 6 Port 1), Storage (`Port4` VLAN 711, `Port6` VLAN 712 = Slot 3 Port 2 / Slot 6 Port 2) — one port per card and per switch in every intent; jumbo 9014 and RDMA on Storage only; QoS 3/5/50 % from `qos` (cluster priority matches the existing switch class); `networkDirectTechnology` = **`rdma_protocol` (string, empty = Network ATC detection)** |
 | `storageNetworkList` | `vlans.storage_a/.storage_b`, `nodes[].storage_ips` | VLAN 711 → 172.30.71.x, VLAN 712 → 172.30.72.x, `enableStorageAutoIp=false` |
 | management VLAN | — | **untagged**: no VLAN ID is declared on the Management intent (network-design §2.6, LOM ports are access VLAN 100) |
 | `infrastructureNetwork` | `ip_plan` | pool .20–.29, gateway .1, DNS = existing DCs, zone `nic26.iic.local`, `UseDnsServer` |
-| `physicalNodesSettings` / `arcNodeResourceIds` | `nodes[]` | derived: `Microsoft.HybridCompute/machines/<node>` in the same resource group |
+| `physicalNodesSettings` / `arcNodeResourceIds` | `nodes[]` | derived: `Microsoft.HybridCompute/machines/<arc_machine_names[node]>` in the same resource group. Simplified machine provisioning names the Arc machine `<device-id>-1` (read it from `edgeMachines/<node>` `properties.arcMachineResourceId`); a node missing from `arc_machine_names` uses its host name. The map is kept out of `nodes[]` so the device automation never carries Azure IDs. `physicalNodes` keeps the host name |
 | `keyVaultName` | `kv_azl_name` (= `names.kv_azl`) | cluster vault in `rg-iic-nic26-azl-sec-eus-01` (design §5.2 option A; **(verify)** that Validate accepts a vault outside the deployment RG — fallback B = same name in `rg_azl`) |
 | `clusterWitnessStorageAccountName` | `witness.storage_account_name` | `stiicnic26witeus01` (landing-zone S5) |
 | `diagnosticStorageAccountName` / `logsRetentionInDays` | `names.st_diag`, `logs_retention_days` | created here, `CanNotDelete` lock |
@@ -72,13 +72,16 @@ cd .\automation\azure-local\cluster-deploy\scripts
 .\Invoke-ClusterDeploy.ps1 -Pass Validate                        # Generate + build + what-if, changes nothing
 .\Set-ClusterDeploymentSecrets.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json -Execute   # jump server
 .\Invoke-ClusterDeploy.ps1 -Pass Validate -Execute               # ~10 min, polls deploymentSettings.reportedProperties
+.\Test-ClusterDeployArcNameGate.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json   # pre-Deploy gate, read-only on the seed node
 .\Invoke-ClusterDeploy.ps1 -Pass Deploy -Execute                 # 2.5–3 h, same polling (bounded, retried)
 .\Test-ClusterPostDeployment.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json -OutputJson .\post-deployment.json
-.\Set-ClusterVaultPublicAccess.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json -CheckFromNode -Execute   # §5.3 phase flag; refuses to disable public access unless enable_private_endpoints is true (D-029)
+.\Set-ClusterVaultPublicAccess.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json -CheckFromNode            # read-only check that the nodes reach the vault; public access stays on (no private endpoints, D-029)
 # Terraform parity: add -Tool Terraform -BackendConfig <environment\azure-local\backend.cluster-deploy.hcl>
 ```
 
 `Test-ClusterPostDeployment.ps1` is read-only: cluster resource Succeeded/Connected, Deploy status Success, `identityProvider = LocalIdentity`, Arc machines Connected with the required extensions (incl. `AzureEdgeAKVBackupForWindows`), custom location, Arc Resource Bridge `Running`, witness account, cluster vault secrets by **name** (ECE + backed-up BitLocker/RecoveryAdmin), node identities' vault roles; over WinRM from the jump server: nodes Up, cloud witness Online, S2D Healthy, `Get-NetIntentStatus` Success, RDMA/jumbo on storage only, **WORKGROUP + `ADAware = 2`**, live-migration network selection (R-03).
+
+**Pre-Deploy gate.** When the machines were provisioned with simplified machine provisioning, each Arc machine is named `<device-id>-1` (`arc_machine_names`), not after its host. `Test-ClusterDeployArcNameGate.ps1` lists the MocArb package files on the seed node that mention `DeployVmoArcExtension` (default folders `C:\NugetStore` and `C:\CloudDeployment`, `-SearchRoot` for others; list, search and read only, over SSH by default or WinRM), parses them on the jump server and refuses the Deploy pass when the Arc names are device IDs and that function resolves the Arc machine from `$env:COMPUTERNAME`; the message names the file, the line and the node mapping. It passes when every Arc machine carries its host name or when the function has no such lookup. When the function cannot be found it also refuses, unless `-AcceptUnverified` records an explicit owner decision. `-PackageFile` analyses package files copied from the node without connecting. The decision is `Get-ClusterDeployArcNameGateResult` in `ClusterDeploy.Common.ps1`.
 
 Input validation runs before Azure context checks: `nodes` must be a nonempty array of objects with nonblank, case-insensitively unique string names and no surrounding whitespace. Empty or malformed lists cannot skip node checks and produce a passing report. The helper accepts a generic node count; the lab's configured two-node requirement must still be verified against both actual machines.
 
@@ -94,18 +97,18 @@ The template path is the same deployment; it exists for repeatability and the se
 
 ## Design inconsistencies found (not edited; for the design owners)
 
-- Landing-zone §5.5, keyvault-and-secrets.md §3 and the environment example (`secret_refs.arb_application_secret: keyvault://…/DefaultARBApplication`) list **`DefaultARBApplication`** as a deployment-time secret. The Local Identity external-DNS template at 2609 writes only `LocalAdminCredential` and `WitnessStorageKey`; `DefaultARBApplication` belongs to the service-principal path. The environment example's `witness.storage_key_secret: keyvault://kv-iic-nic26-azl-eus-01/WitnessStorageKey` also uses the bare ECE name while the quickstart stores it as `<cluster>-WitnessStorageKey`; this solution exposes `witness_key_secret_name` / `local_admin_secret_name` to pin whichever the owner decides.
+- Landing-zone §5.5, keyvault-and-secrets.md §3 and the environment example (`secret_refs.arb_application_secret: keyvault://…/DefaultARBApplication`) list **`DefaultARBApplication`** as a deployment-time secret. The Local Identity external-DNS template at 2609 writes only `LocalAdminCredential` and `WitnessStorageKey`; `DefaultARBApplication` belongs to the service-principal path. The witness secret follows the quickstart name `<cluster>-WitnessStorageKey` in the environment files and the examples (fixed 10 Oct 2026); `witness_key_secret_name` / `local_admin_secret_name` still override both names.
 - Landing-zone §9.2 says the diagnostics storage account is "created by the cluster deployment": with a custom template (vault pre-exists) **this solution** creates it; the name `stiicnic26diageus01` is reserved in the lz catalog as `st_diag`.
 - The landing-zone `solution.yml` does not pass `Get-NIC26SolutionManifest` (flow-YAML descriptions containing `: `, catalog keys `fixed/exempt/reserved/from/to/parent`, `law` purpose `""`, types `tfstate`/`container` not in the registry). This solution's manifest validates; the lz owner should align theirs or the schema.
-- Build runbook 3.7 names a management logical network `lnet-iic-nic26-mgmt-eus` (VLAN 100) while network-design §4.4 defines logical networks for 110/120 only; the platform creates its own infrastructure logical network (`<cluster>-InfraLNET`).
+- No management logical network is created: the deployment creates its own infrastructure logical network (`<cluster>-InfraLNET`); the workload logical networks carry their VLAN in the name (`lnet-<org>-<token>-<purpose>-vlan<id>-<region>`).
 
 ## (verify) list
 
-Validate accepts a vault in another resource group (design §5.2) · `rdma_protocol` empty is accepted by Validate for some adapters (otherwise set `RoCEv2` or `iWARP` from your NIC model) · role ID `c99c945f-8bd1-4fb1-a903-01460aae6068` is the hyphenated "Azure Stack HCI Connected InfraVMs" built-in role (the quickstart quotes it unhyphenated) · the `edgeDevices` PUT with `properties: {}` validates both nodes (quickstart behaviour) · `Get-NetAdapterAdvancedProperty -DisplayName 'Jumbo Packet'` naming on your drivers.
+Validate accepts a vault in another resource group (design §5.2) · `rdma_protocol` is required when the Storage intent has RDMA on: an empty value fails Validate (HostIntentConfigurationReadiness), so the template stops early; set `iWARP`, `RoCE` or `RoCEv2` to match the adapters' `*NetworkDirectTechnology` · role ID `c99c945f-8bd1-4fb1-a903-01460aae6068` is the hyphenated "Azure Stack HCI Connected InfraVMs" built-in role (the quickstart quotes it unhyphenated) · the `edgeDevices` PUT with `properties: {}` validates both nodes (quickstart behaviour) · `Get-NetAdapterAdvancedProperty -DisplayName 'Jumbo Packet'` naming on your drivers.
 
 ## Tests and gates
 
-`Invoke-Pester .\tests` (manifest/converters, outputs parity, script hygiene incl. "refuses Deploy without -Execute", `-Tag Gate` runs `az bicep build` and `terraform validate`, identifier sweep). PSScriptAnalyzer: `Invoke-ScriptAnalyzer -Path .\scripts -Recurse -Settings ..\..\shared\powershell\PSScriptAnalyzerSettings.psd1`.
+`Invoke-Pester .\tests` (manifest/converters, outputs parity, script hygiene incl. "refuses Deploy without -Execute", the pre-Deploy gate on synthetic MocArb texts (`ArcNameGate.Tests.ps1`), `-Tag Gate` runs `az bicep build` and `terraform validate`, identifier sweep). PSScriptAnalyzer: `Invoke-ScriptAnalyzer -Path .\scripts -Recurse -Settings ..\..\shared\powershell\PSScriptAnalyzerSettings.psd1`.
 
 Destroy: **none** — decommissioning a cluster is the owner-approved runbook (P-10).
 

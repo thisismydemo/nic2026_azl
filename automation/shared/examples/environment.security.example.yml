@@ -1,0 +1,97 @@
+# NIC 2026 - security baseline EXAMPLE (IIC values, all-zero GUIDs): Azure Policy, Microsoft Defender for Cloud, Microsoft Sentinel.
+# Copy to environment/shared/security/security.yml and replace the values with your own. Read by automation/shared/security/scripts/Invoke-SecurityBaseline.ps1 together with environment/shared/environment.yml
+# (subscriptions, location, tags). Schema: automation/shared/schemas/security.environment.schema.json
+# Design: design/shared/security-operations.md (D-055).
+
+# Keys into environment/shared/environment.yml -> subscriptions: every subscription that gets Defender plans and the policy set.
+subscription_keys: [azure_local, avd]
+
+workspace:
+  subscription_key: azure_local
+  resource_group_name: rg-iic-nic26-azl-sec-eus-01
+  name: law-iic-nic26-sec-eus-01
+  retention_days: 90
+  daily_cap_gb: 5                     # safeguard only (Learn: daily cap is not a cost tool); expected volume < 0.5 GB/day
+  alert_name_prefix: alert-iic-nic26-sec
+  action_group_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-mon-eus-01/providers/Microsoft.Insights/actionGroups/ag-iic-nic26-ops-eus-01
+
+dcr:
+  name: dcr-iic-nic26-sec-winevents-eus-01
+  association_name: dcra-iic-nic26-sec-01
+  # Associated directly by workspace.bicep; anything created later is associated by the DCR-association policy.
+  machine_resource_ids:
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-eus-01/providers/Microsoft.HybridCompute/machines/azl-node-01
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-eus-01/providers/Microsoft.HybridCompute/machines/azl-node-02
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-mgmt-eus-01/providers/Microsoft.Compute/virtualMachines/vm-iic-nic26-sync-eus-01
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-avd-hosts-eus-01/providers/Microsoft.Compute/virtualMachines/vm-iic-nic26-avd-az-eus-01
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-avd-hosts-eus-01/providers/Microsoft.Compute/virtualMachines/vm-iic-nic26-avd-az-eus-02
+
+defender:
+  cspm: true
+  servers_plan: P2
+  storage: true
+  storage_malware_scan_cap_gb: 100
+  keyvault: true
+  arm: true
+  agentless_vm_scanning: true
+  file_integrity_monitoring: false   # FIM needs a rule set; configured separately (open item)
+
+policy:
+  assignment_prefix: asg-iic-nic26-sec
+  exemption_prefix: exm-iic-nic26-sec
+  allowed_locations: [eastus, global]
+  allowed_locations_effect: Audit
+  required_resource_group_tag: project
+  inherit_tags: [project, environment, workload, managed-by]
+  # Azure Local machines: AMA comes from the cluster extension (Insights), never per machine.
+  ama_exempt_machine_ids:
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-eus-01/providers/Microsoft.HybridCompute/machines/azl-node-01
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-eus-01/providers/Microsoft.HybridCompute/machines/azl-node-02
+  # Remediation tasks are created per resource group (never on these): the cluster resource group is tagged by the
+  # Day-2 tag task with az tag update; Modify still adds missing tags on every new request there.
+  remediation_excluded_resource_groups: [rg-iic-nic26-azl-eus-01]
+  # VMs whose AMA remediation is held (another track owns the VM and is changing it); policy still reports them.
+  ama_remediation_hold_vm_ids:
+    - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-mgmt-eus-01/providers/Microsoft.Compute/virtualMachines/vm-iic-nic26-sync-eus-01
+
+sentinel:
+  entra_diagnostic_setting_name: diag-iic-nic26-entra-sec
+  # NonInteractiveUserSignInLogs left out on purpose (highest volume; add when a use case needs it).
+  entra_log_categories: [AuditLogs, SignInLogs, ServicePrincipalSignInLogs, ManagedIdentitySignInLogs, ProvisioningLogs, RiskyUsers, UserRiskEvents, RiskyServicePrincipals, ServicePrincipalRiskEvents]
+  content_hub_solutions:
+    - Windows Security Events
+    - Azure Activity
+    - Microsoft Entra ID
+    - Microsoft Defender for Cloud
+  # Starter analytics rules, created from the installed solutions' templates by display name (missing names are reported).
+  analytics_rules:
+    # Windows Security Events (SecurityEvent via the security DCR)
+    - Potential Fodhelper UAC Bypass
+    - Non Domain Controller Active Directory Replication
+    - Process Execution Frequency Anomaly
+    - Excessive Windows Logon Failures
+    - SecurityEvent - Multiple authentication failures followed by a success
+    - AD user enabled and password not set within 48 hours
+    - Scheduled Task Hide
+    - Starting or Stopping HealthService to Avoid Detection
+    # Azure Activity (AzureActivity via the activity-log policy)
+    - Suspicious granting of permissions to an account
+    - Rare subscription-level operations in Azure
+    - Mass Cloud resource deletions Time Series Anomaly
+    - Creation of expensive computes in Azure
+    - Subscription moved to another tenant
+    - Suspicious Resource deployment
+    # Microsoft Entra ID (SigninLogs / AuditLogs via the Entra diagnostic setting)
+    - Attempts to sign in to disabled accounts
+    - Brute force attack against Azure Portal
+    - Password spray attack against Microsoft Entra ID application
+    - User added to Microsoft Entra ID Privileged Groups
+    - Successful logon from IP and failure from a different IP
+    - Privileged Role Assigned Outside PIM
+    - Azure RBAC (Elevate Access)
+    - Conditional Access - A Conditional Access policy was deleted
+    - MFA Spamming followed by Successful login
+
+tags:
+  workload: security
+  managed-by: script

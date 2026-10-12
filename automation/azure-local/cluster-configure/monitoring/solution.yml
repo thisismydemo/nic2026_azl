@@ -24,7 +24,15 @@ inputs:
   - { name: alert_window_size, type: string, description: "added: ISO 8601 look-back window of the log alerts", required: false, default: PT15M, source: environment }
   - { name: node_heartbeat_minutes, type: int, description: "added: minutes (5 to 45) without AMA heartbeat before 'node down' fires; the rule looks back one hour", required: false, default: 10, source: environment }
   - { name: enable_vm_insights_dcr, type: bool, description: "added: author the VM Insights DCR for the workload VMs (Microsoft-InsightsMetrics + ServiceMap)", required: false, default: true, source: environment }
-  - { name: manage_insights_dcr_in_iac, type: bool, description: "added: ALSO author the Azure Local Insights DCR in IaC (Microsoft recommends letting Insights create it; default false = the dialog creates dcr_insights once, the script then associates it)", required: false, default: false, source: environment }
+  - { name: manage_insights_dcr_in_iac, type: bool, description: "added: ALSO author the Azure Local Insights DCR in IaC (Microsoft recommends letting Insights create it; default false = the dialog creates dcr_insights once, the script then associates it). The lab sets true (D-054): the IaC shape equals the dialog's DCR", required: false, default: false, source: environment }
+  - { name: create_workspace, type: bool, description: "added (D-054): create the lab workspace names.law in rg_mon; the lab sets true so no platform workspace name appears on screen", required: false, default: false, source: environment }
+  - { name: law_retention_days, type: int, description: "Workspace retention in days (only with create_workspace)", required: false, default: 30, source: environment }
+  - { name: law_daily_cap_gb, type: int, description: "Workspace daily cap in GB (only with create_workspace)", required: false, default: 2, source: environment }
+  - { name: insights_extra_event_channels, type: list, description: "added: extra XPath event channels in the Insights DCR (Network ATC for the intent-drift alert; failover clustering for node incidents)", required: false, default: [], source: environment }
+  - { name: insights_sampling_seconds, type: int, description: "added: sampling interval of the five Insights counters (the Insights dialog uses 10)", required: false, default: 10, source: environment }
+  - { name: enable_recommended_metric_alerts, type: bool, description: "added: the Learn recommended metric alert rules on the cluster resource", required: false, default: true, source: environment }
+  - { name: enable_health_alert_routing, type: bool, description: "added: alert processing rule that sends the cluster's OS health alerts (AzureEdgeAlerts) to the action group", required: false, default: true, source: environment }
+  - { name: vm_insights_scope_tags, type: map, description: "added: tag -> values of the Azure Local VMs that get VM Insights (scripts/Enable-VmInsights.ps1)", required: false, default: {}, source: environment }
   - { name: names,           type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }
 
 outputs:
@@ -33,6 +41,9 @@ outputs:
   - { name: alert_rule_ids,      type: list,   description: "Resource IDs of the scheduled query rules" }
   - { name: kv_backup_processing_rule_id, type: string, description: "Alert processing rule that routes KeyVaultAccess / KeyVaultDoesNotExist to the action group" }
   - { name: action_group_id,     type: string, description: "Action group used by every rule" }
+  - { name: log_analytics_workspace_id, type: string, description: "Workspace every DCR and log alert uses (created here when create_workspace)" }
+  - { name: metric_alert_rule_ids, type: list, description: "Resource IDs of the recommended metric alert rules (empty strings when disabled)" }
+  - { name: health_processing_rule_id, type: string, description: "Alert processing rule that routes the cluster health alerts (empty when disabled)" }
 
 secrets: []
 destroy: supported
@@ -49,4 +60,11 @@ names:
   alert_intent_drift:  { type: alert, purpose: intent-drift }
   alert_capacity:      { type: alert, purpose: capacity }
   alert_kv_backup:     { type: alert, purpose: kv-backup }
+  alert_cpu:           { type: alert, purpose: azl-cpu }
+  alert_memory:        { type: alert, purpose: azl-memory }
+  alert_vol_read_latency: { type: alert, purpose: azl-vol-read-latency }
+  alert_vol_write_latency: { type: alert, purpose: azl-vol-write-latency }
+  alert_net_in:        { type: alert, purpose: azl-net-in }
+  alert_net_out:       { type: alert, purpose: azl-net-out }
+  alert_health_routing: { type: alert, purpose: azl-health }
   deployment_name:     { type: dep,   purpose: azl-monitoring }

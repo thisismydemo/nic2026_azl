@@ -2,8 +2,9 @@
 // rg_sec (design §5.2 option A) and is therefore outside the deployment resource group:
 //   - node Arc identities: Key Vault Secrets Officer + Key Vault Certificates Officer on the vault only
 //     (keyvault-and-secrets.md §4; Learn "Alerts for Key Vault extension": KeyVaultAccess);
-//   - vault audit log to the diagnostics storage account (template parameters diagnosticStorageAccountName /
-//     logsRetentionInDays). The landing zone already sends AuditEvent to the workspace; this adds the storage sink.
+//   - vault audit log to the diagnostics storage account (template parameter diagnosticStorageAccountName; the
+//     logsRetentionInDays equivalent is a lifecycle rule on that account). The landing zone already sends AuditEvent
+//     to the workspace; this adds the storage sink.
 // No secret is created, read or output here (contract §3).
 targetScope = 'resourceGroup'
 
@@ -14,10 +15,6 @@ param node_principal_ids array
 param secrets_officer_role_id string
 param certificates_officer_role_id string
 param diagnostic_storage_account_id string
-@minValue(0)
-@maxValue(365)
-param logs_retention_days int = 30
-
 resource vault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: key_vault_name
 }
@@ -51,10 +48,8 @@ resource auditToStorage 'Microsoft.Insights/diagnosticSettings@2021-05-01-previe
       {
         category: 'AuditEvent'
         enabled: true
-        retentionPolicy: {
-          enabled: logs_retention_days > 0
-          days: logs_retention_days
-        }
+        // No retentionPolicy: diagnostic-settings storage retention is retired for new settings. Retention is a
+        // lifecycle rule on the diagnostics storage account (main.bicep diagStorage, logs_retention_days).
       }
     ]
   }

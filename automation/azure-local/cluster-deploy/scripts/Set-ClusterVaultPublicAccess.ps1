@@ -109,7 +109,7 @@ if ($PSCmdlet.ShouldProcess("Key Vault $vaultName", "Set PublicNetworkAccess = $
     $deadline = (Get-Date).AddMinutes($ExtensionWaitMinutes)
     do {
         $states = foreach ($n in $inputs.nodes) {
-            $r = Invoke-AzRestMethod -Path "/subscriptions/$($inputs.subscription_id)/resourceGroups/$($inputs.names.rg_azl)/providers/Microsoft.HybridCompute/machines/$($n.name)/extensions/AzureEdgeAKVBackupForWindows?api-version=2024-07-10" -Method GET
+            $r = Invoke-AzRestMethod -Path "/subscriptions/$($inputs.subscription_id)/resourceGroups/$($inputs.names.rg_azl)/providers/Microsoft.HybridCompute/machines/$(Get-ClusterDeployArcMachineName -Node $n -Inputs $inputs)/extensions/AzureEdgeAKVBackupForWindows?api-version=2024-07-10" -Method GET
             $st = if ($r.StatusCode -eq 200) { ($r.Content | ConvertFrom-Json).properties.provisioningState } else { "HTTP $($r.StatusCode)" }
             [pscustomobject]@{ Node = $n.name; Extension = 'AzureEdgeAKVBackupForWindows'; State = $st }
         }

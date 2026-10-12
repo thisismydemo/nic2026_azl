@@ -6,7 +6,7 @@ BeforeAll {
     . (Join-Path $PSScriptRoot '../scripts/Install-JumpTools.ps1')
     function Get-WinGetPackage { [CmdletBinding()] param($Id, $Source, $MatchOption) }
     function Install-WinGetPackage { [CmdletBinding(SupportsShouldProcess)] param($Id, $Source, $Version, $Scope, $Mode, $MatchOption, $Override) }
-    function New-TestCatalogPackage {
+    function Get-TestCatalogPackage {
         $package = [pscustomobject]@{ Id = 'Test.Package'; Source = 'winget'; InstalledVersion = '1.2.3'; Metadata = [pscustomobject]@{ ProductCodes = @('Test.Product'); PackageFamilyNames = @() } }
         $package | Add-Member -MemberType ScriptMethod -Name GetPackageVersionInfo -Value { param($Version) if ($Version -cne $this.InstalledVersion) { throw 'Wrong metadata version' }; return $this.Metadata }
         return $package
@@ -14,7 +14,7 @@ BeforeAll {
 }
 Describe 'SYSTEM machine inventory uses supported client and separate registration evidence' {
     BeforeEach {
-        $script:package = New-TestCatalogPackage
+        $script:package = Get-TestCatalogPackage
         Mock Test-JumpSystemContext { $true }
         Mock Import-JumpPackageClient {}
         Mock Get-WinGetPackage { $script:package }

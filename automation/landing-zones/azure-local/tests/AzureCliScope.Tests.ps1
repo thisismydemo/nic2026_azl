@@ -62,7 +62,7 @@ Describe 'Azure CLI extension scope' {
     }
     It 'accepts only the machine path in a successful inventory' {
         Mock Get-JumpAzSystemExtensionDirectory { $script:SystemRoot }
-        Mock Invoke-JumpAzCommand { @(@{name='ssh';version='1.2.3';path=(Join-Path $script:SystemRoot 'ssh')}) | ConvertTo-Json -Compress }
+        Mock Invoke-JumpAzCommand { @(@{name='ssh'; version='1.2.3'; path=(Join-Path $script:SystemRoot 'ssh') }) | ConvertTo-Json -Compress }
         Get-InstalledAzExtensionVersion -Name ssh | Should -Be '1.2.3'
     }
     It 'finds a newly installed machine CLI when the process PATH is stale' {

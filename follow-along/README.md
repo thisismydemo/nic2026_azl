@@ -236,11 +236,11 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `automation/azure-local/cluster-configure/access-pim`
 
-### Security and governance baseline
+### Security baseline as production: Policy, Defender for Cloud and Sentinel
 
 **Goal:** Read the policy initiative.
 
-**In the repo:** `automation/azure-local/cluster-configure/policy`
+**In the repo:** `automation/shared/security`, `automation/azure-local/cluster-configure/policy`
 
 ### Workload platform: SDN enabled by Arc, six logical networks and their NSGs
 

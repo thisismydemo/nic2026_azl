@@ -35,6 +35,15 @@ variable "dynamic_scope_os_types" {
   type    = list(string)
   default = ["Windows", "Linux"]
 }
+variable "dynamic_scope_resource_types" {
+  type    = list(string)
+  default = ["microsoft.hybridcompute/machines"]
+}
+variable "assessment_scope_tags" {
+  description = "Periodic-assessment selection (scripts/Set-PeriodicAssessment.ps1); not used by the Terraform resources."
+  type        = map(list(string))
+  default     = {}
+}
 variable "names" {
   type = map(string)
   validation {

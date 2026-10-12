@@ -29,12 +29,13 @@ inputs:
   - { name: local_admin_secret_name, type: string, description: "added: Key Vault secret NAME that carries base64(user:password) for ECE secret LocalAdminCredential; quickstart convention <cluster_name>-LocalAdminCredential. Empty = that convention", required: false, default: "", source: environment }
   - { name: witness_key_secret_name, type: string, description: "added: Key Vault secret NAME that carries base64(storage key) for ECE secret WitnessStorageKey; quickstart convention <cluster_name>-WitnessStorageKey. Empty = that convention", required: false, default: "", source: environment }
   # --- nodes and network (network-design §4, §6) ------------------------------------------------
-  - { name: nodes,            type: list,   description: "nodes[]: name, management_ip, storage_ips {smb1, smb2}; the Arc machine resource IDs are derived (same resource group)", required: true, default: null, source: environment }
-  - { name: intents,          type: list,   description: "Network ATC intents (Management / Compute / Storage) with adapters and overrides; three intents = networkingPattern custom (R-03)", required: true, default: null, source: environment }
+  - { name: nodes,            type: list,   description: "nodes[]: name, management_ip, storage_ips {smb1, smb2}; the Arc machine resource IDs are derived (same resource group) from arc_machine_names", required: true, default: null, source: environment }
+  - { name: arc_machine_names, type: map, description: "added: node host name -> Arc machine name where they differ (simplified machine provisioning names the Arc machine <device-id>-1, from edgeMachines/<node> properties.arcMachineResourceId); missing node = host name", required: false, default: {}, source: environment }
+  - { name: intents,         type: list,   description: "Network ATC intents (Management / Compute / Storage) with adapters and overrides; three intents = networkingPattern custom (R-03)", required: true, default: null, source: environment }
   - { name: ip_plan,          type: map,    description: "management_subnet, default_gateway, infrastructure_pool {start,end}, dns_servers, dns_zone, storage_auto_ip", required: true, default: null, source: environment }
   - { name: vlans,            type: map,    description: "VLAN plan; storage_a / storage_b ids and subnets feed storageNetworkList; management is delivered UNTAGGED (no VLAN ID on the intent, network-design §2.6)", required: true, default: null, source: environment }
   - { name: qos,              type: map,    description: "storage_priority, cluster_priority, storage_bandwidth_percent, jumbo_frame_size (network-design §6.2)", required: true, default: null, source: environment }
-  - { name: rdma_protocol,    type: string, description: "added (R-03): networkDirectTechnology for the Storage intent as a STRING ('RoCEv2' | 'iWARP' | 'RoCE'); empty leaves Network ATC's adapter detection. Set only from the confirmed NIC model / OEM guidance", required: false, default: "", source: environment }
+  - { name: rdma_protocol,    type: string, description: "added (R-03): fallback networkDirectTechnology when the Storage intent has no overrides.rdma_protocol ('RoCEv2' | 'iWARP' | 'RoCE'). One of the two is required: Validate rejects RDMA without a protocol", required: false, default: "", source: environment }
   - { name: networking_type,  type: string, description: "added: switchedMultiServerDeployment | switchlessMultiServerDeployment | singleServerDeployment", required: false, default: switchedMultiServerDeployment, source: environment }
   - { name: networking_pattern, type: string, description: "added: custom (three intents) | hyperConverged | convergedManagementCompute | convergedComputeStorage (R-03: custom for this design)", required: false, default: custom, source: environment }
   # --- platform settings ----------------------------------------------------------------------
@@ -66,8 +67,8 @@ secrets:
   # complete keyvault:// references from the PRIVATE environment file (identity.local_admin_*_secret) and never build
   # names. Read by Set-ClusterDeploymentSecrets.ps1 from the OPS vault; written to the CLUSTER vault under the
   # platform-mandated, unprefixed names <cluster_name>-LocalAdminCredential / -WitnessStorageKey (Microsoft quickstart).
-  - azl-local-admin-username
-  - azl-local-admin-password
+  - azl-nic26-clus01-cluster-admin-username   # deployment local admin (not the built-in account; *-local-admin-* holds that)
+  - azl-nic26-clus01-cluster-admin-password
   - LocalAdminCredential
   - WitnessStorageKey
 

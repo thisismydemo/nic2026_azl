@@ -15,6 +15,7 @@ inputs:
   - { name: subscription_id, type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
   - { name: location,        type: string, description: "Region (D-010)", required: true, default: null, source: environment }
   - { name: tags,            type: map,    description: "The seven required tags", required: true, default: null, source: environment }
+  - { name: backup_azure_vms, type: list, description: "added: Azure VMs [{resource_group, name}] protected with bkp_tier1 by Enable-AzureVmBackup.ps1", required: false, default: [], source: environment }
   - { name: names,           type: map,    description: "Resolved name catalog, including the landing-zone names rg_bcdr, rsv_azl, asrpol_tier1, bkp_tier1", required: true, default: null, source: generated }
   - { name: asr_policy,      type: map,    description: "added: {replication_frequency_seconds, recovery_point_retention_hours, app_consistent_snapshot_frequency_hours} (design 8.3: 300, 24, 1)", required: false, default: { replication_frequency_seconds: 300, recovery_point_retention_hours: 24, app_consistent_snapshot_frequency_hours: 1 }, source: environment }
   - { name: backup_policy,   type: map,    description: "added: {schedule_run_time_utc 'HH:mm', retention_days, instant_restore_days} (design 8.4: daily, 30 days)", required: false, default: { schedule_run_time_utc: "02:00", retention_days: 30, instant_restore_days: 2 }, source: environment }
@@ -28,3 +29,8 @@ destroy: supported
 
 names:
   deployment_name: { type: dep, purpose: azl-backup-asr }
+  # landing-zone names this solution works in (same catalog keys as lz-azure-local; added 12 Oct, the converter emits only listed names)
+  rg_bcdr:         { type: rg,     purpose: azl-bcdr }
+  rsv_azl:         { type: rsv,    purpose: azl }
+  asrpol_tier1:    { type: asrpol, purpose: tier1 }
+  bkp_tier1:       { type: bkp,    purpose: tier1 }

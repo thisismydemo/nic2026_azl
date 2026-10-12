@@ -126,7 +126,7 @@ Describe 'Naming standard - registry types' {
         New-NIC26ResourceName -Type init -Purpose hybrid-baseline | Should -Be 'init-iic-nic26-hybrid-baseline'
         New-NIC26ResourceName -Type imgdef -Purpose win11-avd | Should -Be 'imgdef-iic-nic26-win11-avd'
         New-NIC26ResourceName -Type img -Purpose win11-avd-25h2 | Should -Be 'img-iic-nic26-win11-avd-25h2'
-        New-NIC26ResourceName -Type lnet -Purpose compute | Should -Be 'lnet-iic-nic26-compute-eus'
+        New-NIC26ResourceName -Type lnet -Purpose compute-vlan110 | Should -Be 'lnet-iic-nic26-compute-vlan110-eus'
         New-NIC26ResourceName -Type sp -Purpose m2-vmstore | Should -Be 'sp-nic26-m2-vmstore-01'
         New-NIC26ResourceName -Type csv -Purpose m2-vmstore | Should -Be 'csv-nic26-m2-vmstore-01'
         New-NIC26ResourceName -Type clus | Should -Be 'nic26-clus01'

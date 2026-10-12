@@ -94,7 +94,7 @@ Describe 'script hygiene (contract §7)' {
         $code | Should -Not -Match '(?m)(^|[;{(|]\s*)Start-Transcript\b'
     }
     It 'state-changing scripts support ShouldProcess, default to WhatIf and require -Execute' {
-        foreach ($name in 'Invoke-ClusterDeploy.ps1', 'Set-ClusterDeploymentSecrets.ps1', 'Set-ClusterVaultPublicAccess.ps1') {
+        foreach ($name in 'Invoke-ClusterDeploy.ps1', 'Set-ClusterDeploymentSecrets.ps1', 'Set-ClusterVaultPublicAccess.ps1', 'Set-ClusterResourceTags.ps1') {
             $t = Get-Content (Join-Path $script:solutionRoot "scripts\$name") -Raw
             $t | Should -Match 'SupportsShouldProcess'
             $t | Should -Match '\[switch\]\$Execute'
@@ -148,6 +148,19 @@ Describe 'script hygiene (contract §7)' {
         $t = Get-Content (Join-Path $script:solutionRoot 'scripts\Test-ClusterPostDeployment.ps1') -Raw
         $t | Should -Not -Match '\b(Set|New|Remove|Update)-Az(?!Context)\w+'
         $t | Should -Not -Match 'Invoke-AzRestMethod[^\n]*-Method (PUT|POST|PATCH|DELETE)'
+    }
+    It 'Set-ClusterResourceTags merges only (never replaces) and compares tag names without case (T-5.3.13)' {
+        $t = Get-Content (Join-Path $script:solutionRoot 'scripts\Set-ClusterResourceTags.ps1') -Raw
+        $t | Should -Match '-Operation Merge'
+        $t | Should -Not -Match '-Operation (Replace|Delete)'
+        $t | Should -Match 'OrdinalIgnoreCase'
+    }
+    It 'Test-ClusterPostDeployment converts cluster enums on the node and reads the version from reportedProperties (T-5.3.13)' {
+        $t = Get-Content (Join-Path $script:solutionRoot 'scripts\Test-ClusterPostDeployment.ps1') -Raw
+        $t | Should -Match 'State = \$_\.State\.ToString\(\)'
+        $t | Should -Match 'State = \$w\.State\.ToString\(\)'
+        $t | Should -Match 'reportedProperties\.clusterVersion'
+        $t | Should -Match 'Cluster\.UpdateAvailable'
     }
     It 'common helpers parse inputs from the example tfvars' {
         $i = Get-ClusterDeployInputs -InputFile (Join-Path $script:solutionRoot 'terraform\terraform.example.tfvars.json')
@@ -261,6 +274,23 @@ Describe 'pass outcome and secret usability (review R-33)' {
         $text = Get-Content -LiteralPath (Join-Path $script:solutionRoot 'scripts\Invoke-ClusterDeploy.ps1') -Raw
         $text | Should -Match "'--mode', 'Incremental'"
         $text | Should -Not -Match '(?i)--mode.{0,12}complete'
+    }
+    It 'reads a starting pass whose deploymentStatus is still empty and whose steps lack fields (StrictMode, 10 Oct 2026 crash)' {
+        Mock Invoke-AzRestMethod {
+            [pscustomobject]@{ StatusCode = 200; Content = '{"properties":{"provisioningState":"Provisioning","deploymentMode":"Validate","reportedProperties":{"validationStatus":{"status":"InProgress","steps":[{"name":"Download content for deployment","status":"InProgress"},{}]},"deploymentStatus":{}}}}' }
+        }
+        $s = Get-ClusterDeploymentSettingsState -SubscriptionId 'sub' -ResourceGroupName 'rg' -ClusterName 'c'
+        $s.ValidationStatus | Should -Be 'InProgress'
+        $s.DeploymentStatus | Should -BeNullOrEmpty
+        @($s.Steps).Count | Should -Be 1
+        $s.Steps[0].Name | Should -Be 'Download content for deployment'
+    }
+    It 'Arc machine and ECE secret names follow the overrides, else the host name / quickstart convention' {
+        $in = [pscustomobject]@{ cluster_name = 'c1'; arc_machine_names = [pscustomobject]@{ n1 = 'dev-1' }; local_admin_secret_name = ''; witness_key_secret_name = 'w' }
+        Get-ClusterDeployArcMachineName -Node ([pscustomobject]@{ name = 'n1' }) -Inputs $in | Should -Be 'dev-1'
+        Get-ClusterDeployArcMachineName -Node ([pscustomobject]@{ name = 'n2' }) -Inputs $in | Should -Be 'n2'
+        (Get-ClusterDeploySecretName -Inputs $in).LocalAdmin | Should -Be 'c1-LocalAdminCredential'
+        (Get-ClusterDeploySecretName -Inputs $in).WitnessKey | Should -Be 'w'
     }
     It 'the wrapper checks the secrets and the stamped ARM record before and while a pass runs' {
         $text = Get-Content -LiteralPath (Join-Path $script:solutionRoot 'scripts\Invoke-ClusterDeploy.ps1') -Raw

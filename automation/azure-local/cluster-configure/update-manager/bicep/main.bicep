@@ -20,6 +20,11 @@ param patch_classifications array = ['Critical', 'Security', 'UpdateRollup', 'De
 param reboot_setting string = 'IfRequired'
 param dynamic_scope_tags object = { workload: ['azure-local'] }
 param dynamic_scope_os_types array = ['Windows', 'Linux']
+@description('Resource types the dynamic scope selects: Arc-enabled servers (Azure Local VMs) and, when listed, Azure VMs.')
+param dynamic_scope_resource_types array = ['microsoft.hybridcompute/machines']
+@description('Periodic-assessment selection, used by scripts/Set-PeriodicAssessment.ps1 (declared here because the converters render every input).')
+#disable-next-line no-unused-params
+param assessment_scope_tags object = {}
 param names object
 
 var allTags = union(tags, { 'managed-by': 'bicep' })
@@ -62,12 +67,13 @@ module maintenanceConfiguration 'br/public:avm/res/maintenance/maintenance-confi
 // Dynamic scope: Arc machines in this subscription carrying the selected tags (outline §3.2 "dynamic scope by tag").
 resource dynamicScope 'Microsoft.Maintenance/configurationAssignments@2023-04-01' = {
   name: names.mc_azl_dynscope
-  location: location
+  // A subscription-level dynamic scope is a global resource ("Region not supported eastus" on the 12 Oct apply).
+  location: 'global'
   properties: {
     maintenanceConfigurationId: maintenanceConfiguration.outputs.resourceId
     resourceId: subscription().id
     filter: {
-      resourceTypes: ['microsoft.hybridcompute/machines'] // (verify) accepted spelling; the portal's "Arc-enabled servers"
+      resourceTypes: dynamic_scope_resource_types // microsoft.hybridcompute/machines accepted on the 12 Oct apply
       osTypes: dynamic_scope_os_types
       locations: []
       resourceGroups: []

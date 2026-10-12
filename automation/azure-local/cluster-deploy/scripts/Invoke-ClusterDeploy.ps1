@@ -16,7 +16,8 @@
 .PARAMETER Tool
     Bicep (demo path) or Terraform (parity path, azapi).
 .PARAMETER Stage
-    One stage, or All (Prereqs, Generate, Validate, Preview; Execute only with -Execute).
+    One stage, or All (Prereqs, Generate, Validate, Preview; Execute only with -Execute). Watch resumes polling a pass that
+    is already submitted (never submits).
 .PARAMETER BackendConfig
     Terraform only: backend-config file from environment/ (never committed).
 .PARAMETER TimeoutMinutes
@@ -32,7 +33,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('Validate', 'Deploy')][string]$Pass,
     [ValidateSet('Bicep', 'Terraform')][string]$Tool = 'Bicep',
-    [ValidateSet('Prereqs', 'Generate', 'Validate', 'Preview', 'Execute', 'All')][string]$Stage = 'All',
+    [ValidateSet('Prereqs', 'Generate', 'Validate', 'Preview', 'Execute', 'Watch', 'All')][string]$Stage = 'All',
     [string]$Scope = 'azure-local',
     [string]$Solution = 'cluster-deploy',
     [string]$BackendConfig,
@@ -43,6 +44,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClusterDeploy.Common.ps1')
+# The retry helper is a public module command; dot-source it in this script scope because
+# stage execution occurs here (nested module imports do not leak exported commands).
+$retryHelper = Join-Path (Get-ClusterDeployRepoRoot) 'automation\shared\powershell\NIC26.Automation\Public\Invoke-NIC26WithRetry.ps1'
+if (-not (Get-Command Invoke-NIC26WithRetry -ErrorAction SilentlyContinue)) { . $retryHelper }
 
 # Hard guard first: a Deploy pass without -Execute never touches Azure (contract §7).
 if ($Stage -in 'Execute', 'All' -and -not $Execute) {
@@ -59,6 +64,36 @@ $tfVarsFile = Join-Path $tfDir 'terraform.generated.tfvars.json'
 $bicepParamFile = Join-Path $bicepDir 'main.generated.bicepparam'
 $stages = if ($Stage -eq 'All') { @('Prereqs', 'Generate', 'Validate', 'Preview') + $(if ($Execute) { @('Execute') } else { @() }) } else { @($Stage) }
 $started = Get-Date
+
+# Polls one submitted pass to its end: ARM deployment (Bicep) + deploymentSettings reportedProperties (both tools).
+$waitPass = {
+    param($inputs, $deploymentName, $submitAt)
+    # Poll: ARM deployment (Bicep) + deploymentSettings reportedProperties (both tools). Bounded; transient errors retried.
+    $deadline = $submitAt.AddMinutes($TimeoutMinutes)
+    $lastSteps = ''
+    $final = $null
+    do {
+        Start-Sleep -Seconds $PollIntervalSeconds
+        $state = Invoke-NIC26WithRetry -Activity 'poll deploymentSettings' -MaxMinutes 5 -ScriptBlock {
+            Get-ClusterDeploymentSettingsState -SubscriptionId $inputs.subscription_id -ResourceGroupName $inputs.names.rg_azl -ClusterName $inputs.cluster_name
+        }
+        # The deployment name is reused per pass: only a record stamped after this submission counts, so the state of an earlier run is never read as this one.
+        $armState = 'n/a'
+        if ($Tool -eq 'Bicep') {
+            $armRecord = Get-AzResourceGroupDeployment -ResourceGroupName $inputs.names.rg_azl -Name $deploymentName -ErrorAction SilentlyContinue
+            $armState = if ($armRecord -and $armRecord.Timestamp.ToUniversalTime() -ge $submitAt.ToUniversalTime().AddMinutes(-2)) { [string]$armRecord.ProvisioningState } else { 'Pending' }
+        }
+        $stepsText = ($state.Steps | Where-Object { $_.Status -and $_.Status -ne 'Success' } | ForEach-Object { "$($_.Name)=$($_.Status)" }) -join ', '
+        if ($stepsText -ne $lastSteps) { Write-ClusterDeployLog -Message "[$([int]((Get-Date) - $submitAt).TotalMinutes) min] arm=$armState provisioning=$($state.ProvisioningState) validation=$($state.ValidationStatus) deployment=$($state.DeploymentStatus) | $stepsText"; $lastSteps = $stepsText }
+        $final = Resolve-ClusterDeployPassOutcome -Tool $Tool -Pass $Pass -ArmState $armState -ValidationStatus ([string]$state.ValidationStatus) -DeploymentStatus ([string]$state.DeploymentStatus)
+    } while (-not $final -and (Get-Date) -lt $deadline)
+
+    $elapsed = (Get-Date) - $submitAt
+    if (-not $final) { throw "Pass '$Pass' did not finish within $TimeoutMinutes min (elapsed $([int]$elapsed.TotalMinutes) min). It may still be running: resume with -Stage Watch (never resubmits)." }
+    Write-ClusterDeployLog -Message "Pass '$Pass' finished with status '$final' after $([int]$elapsed.TotalMinutes) min (ARM deployment '$deploymentName')."
+    if ($final -ne 'Success') { throw "Pass '$Pass' ended with status '$final'. Inspect the failed step(s) above and the cluster resource's Deployments blade." }
+    if ($Pass -eq 'Deploy') { Write-ClusterDeployLog -Message 'Next: Test-ClusterPostDeployment.ps1, then Set-ClusterVaultPublicAccess.ps1 -Mode Disable (design §5.3 phase flag).' }
+}
 
 foreach ($current in $stages) {
     Write-ClusterDeployLog -Message "=== Stage: $current (pass $Pass, $Tool) ==="
@@ -96,7 +131,8 @@ foreach ($current in $stages) {
             $inputs = Get-ClusterDeployInputs -InputFile $tfVarsFile
             Assert-ClusterDeployAzContext -SubscriptionId $inputs.subscription_id
             # Read-only pre-checks shared by both tools: the two ECE secrets exist (names only) and the previous pass state.
-            foreach ($secretName in @("$($inputs.cluster_name)-LocalAdminCredential", "$($inputs.cluster_name)-WitnessStorageKey")) {
+            $eceNames = Get-ClusterDeploySecretName -Inputs $inputs
+            foreach ($secretName in @($eceNames.LocalAdmin, $eceNames.WitnessKey)) {
                 $present = [bool](Get-AzKeyVaultSecret -VaultName $inputs.kv_azl_name -Name $secretName -ErrorAction SilentlyContinue)
                 Write-ClusterDeployLog -Message "Cluster vault '$($inputs.kv_azl_name)' secret '$secretName' present: $present" -Level ($present ? 'Info' : 'Warning')
             }
@@ -122,10 +158,17 @@ foreach ($current in $stages) {
             $deploymentName = "$($inputs.names.deployment_name)-$($Pass.ToLowerInvariant())"
             $target = "cluster $($inputs.cluster_name) in $($inputs.names.rg_azl) (pass $Pass, $Tool)"
             if (-not $PSCmdlet.ShouldProcess($target, "Submit Azure Local $Pass")) { break }
+            # Repeat the state guard here so a standalone -Stage Execute cannot skip Preview's check (GPT review, 10 Oct).
+            $state = Get-ClusterDeploymentSettingsState -SubscriptionId $inputs.subscription_id -ResourceGroupName $inputs.names.rg_azl -ClusterName $inputs.cluster_name
+            if ($Pass -eq 'Deploy' -and $state.ValidationStatus -ne 'Success') {
+                throw "Refusing the Deploy pass: the last Validate pass did not report Success (validationStatus='$($state.ValidationStatus)'). Run -Pass Validate first."
+            }
+            if ($state.ValidationStatus -eq 'InProgress' -or $state.DeploymentStatus -eq 'InProgress') {
+                throw "Refusing pass '$Pass': a previous operation is still running (validation=$($state.ValidationStatus), deployment=$($state.DeploymentStatus)). Use -Stage Watch."
+            }
             # The pass reads both ECE secrets while it runs (Deploy takes hours): refuse a missing, disabled or soon-expiring secret before submitting.
-            $localAdminName = if ($inputs.PSObject.Properties.Name -contains 'local_admin_secret_name' -and $inputs.local_admin_secret_name) { [string]$inputs.local_admin_secret_name } else { "$($inputs.cluster_name)-LocalAdminCredential" }
-            $witnessKeyName = if ($inputs.PSObject.Properties.Name -contains 'witness_key_secret_name' -and $inputs.witness_key_secret_name) { [string]$inputs.witness_key_secret_name } else { "$($inputs.cluster_name)-WitnessStorageKey" }
-            foreach ($secretName in @($localAdminName, $witnessKeyName)) {
+            $eceNames = Get-ClusterDeploySecretName -Inputs $inputs
+            foreach ($secretName in @($eceNames.LocalAdmin, $eceNames.WitnessKey)) {
                 $secret = Get-AzKeyVaultSecret -VaultName $inputs.kv_azl_name -Name $secretName -ErrorAction Stop
                 $problem = Test-ClusterDeploySecretUsable -Secret $secret -ValidUntil ((Get-Date).ToUniversalTime().AddMinutes($TimeoutMinutes + 30))
                 if ($problem) { throw "Refusing to submit pass '$Pass': secret '$secretName' in '$($inputs.kv_azl_name)' is $problem. Run Set-ClusterDeploymentSecrets.ps1 -Execute (-Overwrite to rotate)." }
@@ -141,31 +184,18 @@ foreach ($current in $stages) {
                 Invoke-ClusterDeployNative -FilePath 'terraform' -ArgumentList @('apply', '-input=false', $planFile) -WorkingDirectory $tfDir
             }
 
-            # Poll: ARM deployment (Bicep) + deploymentSettings reportedProperties (both tools). Bounded; transient errors retried.
-            $deadline = $submitAt.AddMinutes($TimeoutMinutes)
-            $lastSteps = ''
-            $final = $null
-            do {
-                Start-Sleep -Seconds $PollIntervalSeconds
-                $state = Invoke-NIC26WithRetry -Activity 'poll deploymentSettings' -MaxMinutes 5 -ScriptBlock {
-                    Get-ClusterDeploymentSettingsState -SubscriptionId $inputs.subscription_id -ResourceGroupName $inputs.names.rg_azl -ClusterName $inputs.cluster_name
-                }
-                # The deployment name is reused per pass: only a record stamped after this submission counts, so the state of an earlier run is never read as this one.
-                $armState = 'n/a'
-                if ($Tool -eq 'Bicep') {
-                    $armRecord = Get-AzResourceGroupDeployment -ResourceGroupName $inputs.names.rg_azl -Name $deploymentName -ErrorAction SilentlyContinue
-                    $armState = if ($armRecord -and $armRecord.Timestamp.ToUniversalTime() -ge $submitAt.ToUniversalTime().AddMinutes(-2)) { [string]$armRecord.ProvisioningState } else { 'Pending' }
-                }
-                $stepsText = ($state.Steps | Where-Object { $_.Status -and $_.Status -ne 'Success' } | ForEach-Object { "$($_.Name)=$($_.Status)" }) -join ', '
-                if ($stepsText -ne $lastSteps) { Write-ClusterDeployLog -Message "[$([int]((Get-Date) - $submitAt).TotalMinutes) min] arm=$armState provisioning=$($state.ProvisioningState) validation=$($state.ValidationStatus) deployment=$($state.DeploymentStatus) | $stepsText"; $lastSteps = $stepsText }
-                $final = Resolve-ClusterDeployPassOutcome -Tool $Tool -Pass $Pass -ArmState $armState -ValidationStatus ([string]$state.ValidationStatus) -DeploymentStatus ([string]$state.DeploymentStatus)
-            } while (-not $final -and (Get-Date) -lt $deadline)
-
-            $elapsed = (Get-Date) - $submitAt
-            if (-not $final) { throw "Pass '$Pass' did not finish within $TimeoutMinutes min (elapsed $([int]$elapsed.TotalMinutes) min). It may still be running: watch the cluster's Deployments blade or re-run with -Stage Execute later only after checking state." }
-            Write-ClusterDeployLog -Message "Pass '$Pass' finished with status '$final' after $([int]$elapsed.TotalMinutes) min (ARM deployment '$deploymentName')."
-            if ($final -ne 'Success') { throw "Pass '$Pass' ended with status '$final'. Inspect the failed step(s) above and the cluster resource's Deployments blade." }
-            if ($Pass -eq 'Deploy') { Write-ClusterDeployLog -Message 'Next: Test-ClusterPostDeployment.ps1, then Set-ClusterVaultPublicAccess.ps1 -Mode Disable (design §5.3 phase flag).' }
+            & $waitPass $inputs $deploymentName $submitAt
+        }
+        'Watch' {
+            # Resume polling a pass that is already submitted (the watcher was interrupted); never submits anything.
+            $inputs = Get-ClusterDeployInputs -InputFile $tfVarsFile
+            Assert-ClusterDeployAzContext -SubscriptionId $inputs.subscription_id
+            $deploymentName = "$($inputs.names.deployment_name)-$($Pass.ToLowerInvariant())"
+            $armRecord = Get-AzResourceGroupDeployment -ResourceGroupName $inputs.names.rg_azl -Name $deploymentName -ErrorAction SilentlyContinue
+            if (-not $armRecord -and $Tool -eq 'Bicep') { throw "No ARM deployment '$deploymentName' to watch; submit the pass with -Stage Execute -Execute." }
+            $submitAt = if ($armRecord) { $armRecord.Timestamp.ToLocalTime().AddMinutes(-1) } else { Get-Date }
+            Write-ClusterDeployLog -Message "Watching pass '$Pass' ($deploymentName, ARM state $($armRecord.ProvisioningState))."
+            & $waitPass $inputs $deploymentName $submitAt
         }
     }
 }

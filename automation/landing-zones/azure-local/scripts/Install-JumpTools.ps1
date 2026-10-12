@@ -46,6 +46,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'JumpPython.Common.ps1')
+. (Join-Path $PSScriptRoot 'JumpNode.Common.ps1')
 
 function Write-Log {
     param([Parameter(Mandatory)][string] $Message)
@@ -104,7 +106,7 @@ function Get-JumpMsixManifest {
 
 function Assert-JumpMsixPackage {
     param([string] $Path, [System.Collections.IDictionary] $Pin)
-    if ($Pin.Sha256 -notmatch '^[A-Fa-f0-9]{64}$' -or (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -cne $Pin.Sha256) {
+    if ($Pin.Sha256 -notmatch '^[A-Fa-f0-9]{64}$' -or (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -ine $Pin.Sha256) {
         throw "Package SHA-256 mismatch: $($Pin.Name)."
     }
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
@@ -139,51 +141,113 @@ function Get-ProvisionedJumpMsixVersion {
     return $Pin.Version
 }
 
+function New-JumpMsixStagingDirectory {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Private staging is created only inside the caller Execute/ShouldProcess gate.')]
+    param()
+    $base = [IO.Path]::GetFullPath((Join-Path $env:ProgramData 'JumpTools/MSIXStaging'))
+    foreach ($parent in @($env:ProgramData, (Join-Path $env:ProgramData 'JumpTools'), $base)) {
+        if (Test-Path -LiteralPath $parent) {
+            if ((Get-Item -LiteralPath $parent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'MSIX staging parent is a reparse point.' }
+        }
+        else { New-Item -ItemType Directory -Path $parent | Out-Null }
+    }
+    $directory = Join-Path $base ('nic26-msix-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    $administrators = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+    $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+    $acl = [Security.AccessControl.DirectorySecurity]::new()
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.SetOwner($administrators)
+    foreach ($identity in @($administrators, $system)) {
+        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+    }
+    Set-Acl -LiteralPath $directory -AclObject $acl
+    return $directory
+}
+
+function Get-JumpMsixDependencyArtifact {
+    param([System.Collections.IDictionary] $Pin, [string] $Directory)
+    if ($Pin.Name -notmatch '^[A-Za-z0-9.-]+$' -or $Pin.DownloadUrl -notmatch '^https://' -or $Pin.ArchiveSha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
+        $Pin.ArchiveEntry -notmatch '^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.(?:appx|msix|xml)$' -or
+        @($Pin.ArchiveEntry.Split('/') | Where-Object { $_ -in @('.', '..') }).Count -gt 0) {
+        throw 'Invalid direct MSIX dependency source pin.'
+    }
+    $archive = Join-Path $Directory ($Pin.Name + '.zip')
+    $artifact = Join-Path $Directory ($Pin.Name + [IO.Path]::GetExtension($Pin.ArchiveEntry))
+    Invoke-WebRequest -Uri $Pin.DownloadUrl -OutFile $archive
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $Pin.ArchiveSha256) { throw 'Dependency archive SHA-256 mismatch.' }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        $entries = @($zip.Entries | Where-Object { $_.FullName -ceq $Pin.ArchiveEntry })
+        if ($entries.Count -ne 1) { throw 'Pinned dependency archive entry missing or ambiguous.' }
+        # Choose the output filename locally; never expand paths supplied by an archive.
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($entries[0], $artifact, $false)
+    }
+    finally { $zip.Dispose() }
+    return $artifact
+}
+
 function Invoke-JumpMsixProvisioning {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called only within Invoke-JumpTools Execute and ShouldProcess gate.')]
     param([System.Collections.IDictionary] $Spec)
     $pin = $Spec.Msix
     if ($pin.DownloadUrl -notmatch '^https://') { throw 'MSIX download requires HTTPS.' }
-    $directory = Join-Path ([IO.Path]::GetTempPath()) ('nic26-msix-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $directory | Out-Null
-    # Store download only acquires files. Every artifact is independently checked before provisioning.
-    if ($pin.Dependencies.Count -gt 0) {
-        & winget download --id $pin.StoreId --source msstore --exact --architecture $pin.Architecture --download-directory $directory --skip-license --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "MSIX dependency download failed (exit $LASTEXITCODE)." }
-    }
-    $main = Join-Path $directory 'pinned-main.msix'
-    Invoke-WebRequest -Uri $pin.DownloadUrl -OutFile $main
-    $manifest = Assert-JumpMsixPackage -Path $main -Pin $pin
-    $dependencyPaths = [Collections.Generic.List[string]]::new()
-    $files = if ($pin.Dependencies.Count -gt 0) { @(Get-ChildItem -LiteralPath (Join-Path $directory 'Dependencies') -File) } else { @() }
-    $required = @($manifest.SelectNodes("/*[local-name()='Package']/*[local-name()='Dependencies']/*[local-name()='PackageDependency']"))
-    if ($required.Count -ne $pin.Dependencies.Count) { throw 'Required dependency set does not match the pins.' }
-    foreach ($dependency in $required) {
-        $packageMatches = @($pin.Dependencies | Where-Object { $_.Name -ceq $dependency.Name -and $_.Publisher -ceq $dependency.Publisher })
-        if ($packageMatches.Count -ne 1 -or [version]$packageMatches[0].Version -lt [version]$dependency.MinVersion) { throw "Missing or insufficient dependency pin: $($dependency.Name)." }
-        $dependencyPin = $packageMatches[0]
-        $candidates = @($files | Where-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -ceq $dependencyPin.Sha256 })
-        if ($candidates.Count -ne 1) { throw "Pinned dependency unavailable: $($dependency.Name)." }
-        $dependencyManifest = Assert-JumpMsixPackage -Path $candidates[0].FullName -Pin $dependencyPin
-        if (@($dependencyManifest.SelectNodes("/*[local-name()='Package']/*[local-name()='Dependencies']/*[local-name()='PackageDependency']")).Count -gt 0) {
-            throw "Unresolved transitive package dependencies: $($dependency.Name)."
+    if ($pin.Contains('RequireLicense') -and $pin.RequireLicense -and -not $pin.Contains('License')) { throw 'Required offline MSIX license pin is missing.' }
+    $directory = New-JumpMsixStagingDirectory
+    try {
+        if ($pin.Contains('ArchiveSha256')) { $main = Get-JumpMsixDependencyArtifact -Pin $pin -Directory $directory }
+        else {
+            $main = Join-Path $directory 'pinned-main.msix'
+            Invoke-WebRequest -Uri $pin.DownloadUrl -OutFile $main
         }
-        $dependencyPaths.Add($candidates[0].FullName)
+        $manifest = Assert-JumpMsixPackage -Path $main -Pin $pin
+        $dependencyPaths = [Collections.Generic.List[string]]::new()
+        $required = @($manifest.SelectNodes("/*[local-name()='Package']/*[local-name()='Dependencies']/*[local-name()='PackageDependency']"))
+        if ($required.Count -ne $pin.Dependencies.Count) { throw 'Required dependency set does not match the pins.' }
+        foreach ($dependency in $required) {
+            $packageMatches = @($pin.Dependencies | Where-Object { $_.Name -ceq $dependency.Name -and $_.Publisher -ceq $dependency.Publisher })
+            if ($packageMatches.Count -ne 1 -or [version]$packageMatches[0].Version -lt [version]$dependency.MinVersion) { throw "Missing or insufficient dependency pin: $($dependency.Name)." }
+            $dependencyPin = $packageMatches[0]
+            if ($dependencyPin.Architecture -cne $pin.Architecture -or
+                ($dependency.HasAttribute('ProcessorArchitecture') -and $dependency.ProcessorArchitecture -cne $dependencyPin.Architecture)) {
+                throw "Dependency architecture mismatch: $($dependency.Name)."
+            }
+            $artifact = Get-JumpMsixDependencyArtifact -Pin $dependencyPin -Directory $directory
+            $dependencyManifest = Assert-JumpMsixPackage -Path $artifact -Pin $dependencyPin
+            if (@($dependencyManifest.SelectNodes("/*[local-name()='Package']/*[local-name()='Dependencies']/*[local-name()='PackageDependency']")).Count -gt 0) {
+                throw "Unresolved transitive package dependencies: $($dependency.Name)."
+            }
+            $dependencyPaths.Add($artifact)
+        }
+        # No package state is changed until every main/dependency check above has passed.
+        $provisionArguments = @{ Online = $true; PackagePath = $main; ErrorAction = 'Stop' }
+        if ($dependencyPaths.Count -gt 0) { $provisionArguments.DependencyPackagePath = $dependencyPaths.ToArray() }
+        if ($pin.Contains('License')) {
+            if ($pin.License.DownloadUrl -notmatch '^https://' -or $pin.License.Sha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid offline MSIX license pin.' }
+            if ($pin.License.Contains('ArchiveSha256')) { $licensePath = Get-JumpMsixDependencyArtifact -Pin $pin.License -Directory $directory }
+            else {
+                $licensePath = Join-Path $directory 'pinned-license.xml'
+                Invoke-WebRequest -Uri $pin.License.DownloadUrl -OutFile $licensePath
+            }
+            if ((Get-FileHash -LiteralPath $licensePath -Algorithm SHA256).Hash -ine $pin.License.Sha256) { throw 'Offline MSIX license SHA-256 mismatch.' }
+            $provisionArguments.LicensePath = $licensePath
+            $provisionArguments.Regions = 'all'
+        }
+        else { $provisionArguments.SkipLicense = $true }
+        Add-AppxProvisionedPackage @provisionArguments | Out-Null
+        # Provisioning makes the package available to new profiles. Existing-profile registration and launch are separate live checks.
     }
-    # No package state is changed until every main/dependency check above has passed.
-    $provisionArguments = @{ Online = $true; PackagePath = $main; ErrorAction = 'Stop' }
-    if ($dependencyPaths.Count -gt 0) { $provisionArguments.DependencyPackagePath = $dependencyPaths.ToArray() }
-    if ($pin.Contains('License')) {
-        if ($pin.License.DownloadUrl -notmatch '^https://' -or $pin.License.Sha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid offline MSIX license pin.' }
-        $licensePath = Join-Path $directory 'pinned-license.xml'
-        Invoke-WebRequest -Uri $pin.License.DownloadUrl -OutFile $licensePath
-        if ((Get-FileHash -LiteralPath $licensePath -Algorithm SHA256).Hash -cne $pin.License.Sha256) { throw 'Offline MSIX license SHA-256 mismatch.' }
-        $provisionArguments.LicensePath = $licensePath
-        $provisionArguments.Regions = 'all'
+    finally {
+        if (Test-Path -LiteralPath $directory) {
+            $base = [IO.Path]::GetFullPath((Join-Path $env:ProgramData 'JumpTools/MSIXStaging'))
+            $full = [IO.Path]::GetFullPath($directory)
+            if (-not $full.StartsWith($base + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+                [IO.Path]::GetFileName($full) -notmatch '^nic26-msix-[a-f0-9]{32}$' -or
+                (Get-Item -LiteralPath $directory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'MSIX cleanup target failed the private staging guard.' }
+            Remove-Item -LiteralPath $directory -Recurse -Force
+        }
     }
-    else { $provisionArguments.SkipLicense = $true }
-    Add-AppxProvisionedPackage @provisionArguments | Out-Null
-    # Provisioning makes the package available to new profiles. Existing-profile registration and launch are separate live checks.
 }
 
 function Get-JumpCodexLayout {
@@ -313,8 +377,74 @@ function Get-JumpMachineUninstallEntry {
     }
 }
 
+function Get-JumpEvidenceInstalledVersion {
+    param($Package, [System.Collections.IDictionary] $Evidence)
+    if ($Package.Id -cne $Evidence.PackageId -or $Package.Source -cne 'winget' -or $Package.InstalledVersion -cne $Evidence.CatalogVersion) { return $null }
+    $entries = @(Get-JumpMachineUninstallEntry | Where-Object { $_.PSChildName -ceq $Evidence.UninstallKey })
+    if ($entries.Count -gt 1) { throw 'Configured machine package registration is ambiguous.' }
+    if ($entries.Count -ne 1) { return $null }
+    $entry = $entries[0]
+    if ($entry.DisplayVersion -cne $Evidence.CatalogVersion -or $entry.Publisher -cne $Evidence.Publisher) { return $null }
+    foreach ($relative in @($Evidence.Directory, $Evidence.Binary)) {
+        if ([IO.Path]::IsPathRooted($relative) -or @($relative -split '[/\\]' | Where-Object { $_ -in @('.', '..') }).Count -gt 0) { throw 'Machine evidence path is not a bounded relative path.' }
+    }
+    $root = [IO.Path]::GetFullPath($env:ProgramFiles).TrimEnd('\')
+    $directory = [IO.Path]::GetFullPath((Join-Path $root $Evidence.Directory)).TrimEnd('\')
+    $binary = [IO.Path]::GetFullPath((Join-Path $directory $Evidence.Binary))
+    $emptyMsiLocation = $Evidence.Kind -ceq 'msi-file-hash' -and [string]::IsNullOrWhiteSpace($entry.InstallLocation)
+    if (-not $directory.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        -not $binary.StartsWith($directory + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        (-not $emptyMsiLocation -and [IO.Path]::GetFullPath($entry.InstallLocation).TrimEnd('\') -ine $directory)) { return $null }
+    $inspect = $binary
+    while ($inspect.Length -ge $root.Length) {
+        if (-not (Test-Path -LiteralPath $inspect)) { return $null }
+        if ((Get-Item -LiteralPath $inspect -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Machine evidence path contains a reparse point.' }
+        if ($inspect -ieq $root) { break }
+        $inspect = Split-Path -Path $inspect -Parent
+    }
+    if ($Evidence.Kind -ceq 'portable') {
+        if ($entry.WinGetPackageIdentifier -cne $Package.Id -or $entry.WinGetSourceIdentifier -cne $Evidence.SourceIdentifier -or
+            $entry.WinGetInstallerType -cne 'portable' -or $Evidence.UninstallKey -cne ($Package.Id + '_' + $Evidence.SourceIdentifier)) { return $null }
+        if ($Evidence.BinarySha256 -notmatch '^[A-Fa-f0-9]{64}$' -or (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash -ine $Evidence.BinarySha256) { return $null }
+    }
+    elseif ($Evidence.Kind -ceq 'msi-file-hash') {
+        # Some vendors publish a short catalog version and an explicitly different MSI ProductVersion.
+        # Both are pinned independently; never trim, normalize or guess a version mapping.
+        $productCode = [guid]::Empty
+        if (-not [guid]::TryParse($Evidence.UninstallKey, [ref]$productCode)) { throw 'Configured MSI ProductCode is not a GUID.' }
+        $matchingCodes = @($Package.GetPackageVersionInfo($Evidence.PackageVersion).ProductCodes | Where-Object {
+                $candidate = [guid]::Empty
+                [guid]::TryParse($_, [ref]$candidate) -and $candidate -eq $productCode
+            })
+        if ($Package.AvailableVersions -cnotcontains $Evidence.PackageVersion -or
+            $matchingCodes.Count -eq 0 -or
+            $Evidence.BinarySha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash -ine $Evidence.BinarySha256 -or
+            (Get-Item -LiteralPath $binary -Force).VersionInfo.ProductVersion -cne $Evidence.PackageVersion) { return $null }
+        return $Evidence.PackageVersion
+    }
+    elseif ($Evidence.Kind -ceq 'signed-inno') {
+        $signature = Get-AuthenticodeSignature -LiteralPath $binary
+        if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Subject -cne $Evidence.Signer -or
+            (Get-Item -LiteralPath $binary -Force).VersionInfo.ProductVersion -cne $Evidence.ProductVersion) { return $null }
+        if ($Evidence.Contains('ProductJson')) {
+            $productPath = [IO.Path]::GetFullPath((Join-Path $directory $Evidence.ProductJson))
+            if (-not $productPath.StartsWith($directory + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Machine product identity escaped its directory.' }
+            $inspect = $productPath
+            while ($inspect.Length -gt $directory.Length) {
+                if ((Get-Item -LiteralPath $inspect -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Machine product identity contains a reparse point.' }
+                $inspect = Split-Path -Path $inspect -Parent
+            }
+            $product = Get-Content -LiteralPath $productPath -Raw | ConvertFrom-Json
+            if ($product.commit -cne $Evidence.Commit -or $product.win32x64AppId -cne $Evidence.SystemAppId) { return $null }
+        }
+    }
+    else { throw 'Unknown configured machine evidence kind.' }
+    return $Package.InstalledVersion
+}
+
 function Get-JumpClientInstalledVersion {
-    param([string] $Id, [string] $Source, [string] $ClientVersion)
+    param([string] $Id, [string] $Source, [string] $ClientVersion, [System.Collections.IDictionary] $MachineEvidence)
     if (-not $Id -or -not $Source) { throw 'SYSTEM package inventory requires an exact package ID and source.' }
     Import-JumpPackageClient -ClientVersion $ClientVersion
     $packages = @(Get-WinGetPackage -Id $Id -Source $Source -MatchOption Equals -ErrorAction Stop)
@@ -322,6 +452,7 @@ function Get-JumpClientInstalledVersion {
     if ($packages.Count -ne 1 -or $packages[0].Id -cne $Id -or $packages[0].Source -cne $Source) { throw 'Package catalog identity is ambiguous or does not match the requested ID/source.' }
     $package = $packages[0]
     if ([string]::IsNullOrWhiteSpace($package.InstalledVersion)) { throw 'Package catalog returned no installed version.' }
+    if ($MachineEvidence) { return Get-JumpEvidenceInstalledVersion -Package $package -Evidence $MachineEvidence }
     # Catalog correlation alone proves neither machine scope nor every operator's registration.
     $metadata = $package.GetPackageVersionInfo($package.InstalledVersion)
     $machine = @(Get-JumpMachineUninstallEntry | Where-Object {
@@ -343,12 +474,18 @@ function Get-JumpClientInstalledVersion {
 }
 
 function Get-InstalledWingetVersion {
-    param([string] $Id, [string] $Source, [string] $ClientVersion)
+    param([string] $Id, [string] $Source, [string] $ClientVersion, [System.Collections.IDictionary] $MachineEvidence)
+    if ($MachineEvidence) { return Get-JumpClientInstalledVersion -Id $Id -Source $Source -ClientVersion $ClientVersion -MachineEvidence $MachineEvidence }
     if (Test-JumpSystemContext) { return Get-JumpClientInstalledVersion -Id $Id -Source $Source -ClientVersion $ClientVersion }
     $arguments = @('list', '--id', $Id, '--exact', '--scope', 'machine', '--disable-interactivity')
     if ($Source) { $arguments += @('--source', $Source) }
     $output = & winget @arguments 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
+    if ($LASTEXITCODE -ne 0) {
+        # The operator's CLI source can be inaccessible even when the pinned machine API works.
+        # Reuse exact catalog and machine-registration proof; inventory errors remain errors.
+        Write-Verbose "WinGet CLI inventory failed with exit code $LASTEXITCODE; checking pinned machine inventory."
+        return Get-JumpClientInstalledVersion -Id $Id -Source $Source -ClientVersion $ClientVersion
+    }
     foreach ($line in $output) {
         if ($line -match ('\s{2,}' + [regex]::Escape($Id) + '\s{2,}(?<Version>\S+)')) { return $Matches.Version }
     }
@@ -738,7 +875,11 @@ function Invoke-OfficeSetup {
 function Get-JumpComponentVersion {
     param($Component, $Spec, [string] $ExtensionDirectory, [string] $ClientVersion)
     switch ($Component.Kind) {
-        'winget' { Get-InstalledWingetVersion -Id $Component.Name -Source $Component.Data.Source -ClientVersion $ClientVersion }
+        'winget' {
+            $arguments = @{ Id = $Component.Name; Source = $Component.Data.Source; ClientVersion = $ClientVersion }
+            if ($Component.Data.Contains('MachineEvidence')) { $arguments.MachineEvidence = $Component.Data.MachineEvidence }
+            Get-InstalledWingetVersion @arguments
+        }
         'msix' { Get-ProvisionedJumpMsixVersion -Pin $Component.Data }
         'psresource' { Get-InstalledPSResourceVersion -Name $Component.Name }
         'az-extension' { Get-InstalledAzExtensionVersion -Name $Component.Name }
@@ -749,6 +890,8 @@ function Get-JumpComponentVersion {
         'wsl' { if (Get-WslState -Distribution $Component.Name) { $Component.Version } else { $null } }
         'ansible' { if (Get-WslState -Distribution $Spec.Distribution) { Get-AnsibleState -Distribution $Spec.Distribution -Component $Component.Name } else { $null } }
         'office' { Get-OfficeBuild }
+        'python' { Get-InstalledJumpPythonVersion -Spec $Spec }
+        'node' { Get-InstalledJumpNodeVersion -Spec $Spec }
     }
 }
 
@@ -774,7 +917,7 @@ function Invoke-JumpTools {
 
     $script:JumpToolsFailed = $false
     if ($VerifyOnly -and $Execute) { throw 'VerifyOnly cannot be combined with Execute.' }
-    if (-not $Execute) { $WhatIfPreference = $true }
+    if (-not $Execute -and -not $VerifyOnly) { $WhatIfPreference = $true }
     $configuration = Get-JumpConfiguration -Path $VersionsPath
     if ($AdditionalVersionsPath) {
         $extra = Get-JumpConfiguration -Path $AdditionalVersionsPath
@@ -839,6 +982,8 @@ function Invoke-JumpTools {
         }
         if ($key -eq 'bicep') { $components.Add([pscustomobject]@{ Kind = 'az-bicep'; Name = 'az bicep'; Version = $spec.Version; Data = $null }) }
         if ($key -eq 'codex-cli') { $components.Add([pscustomobject]@{ Kind = 'codex-cli'; Name = 'Codex CLI'; Version = $spec.Version; Data = $null }) }
+        if ($key -eq 'python') { $components.Add([pscustomobject]@{ Kind = 'python'; Name = 'Python and renderer'; Version = $spec.Version; Data = $null }) }
+        if ($key -eq 'node') { $components.Add([pscustomobject]@{ Kind = 'node'; Name = 'Node and npm'; Version = $spec.Version; Data = $null }) }
         if ($key -eq 'vscode') {
             foreach ($name in $spec.Extensions.Keys) { $components.Add([pscustomobject]@{ Kind = 'code'; Name = $name; Version = $spec.Extensions[$name]; Data = $null }) }
         }
@@ -922,6 +1067,8 @@ function Invoke-JumpTools {
                             }
                         }
                         'office' { Invoke-OfficeSetup -Build $component.Version -DownloadUrl $spec.DownloadUrl -Sha256 $spec.DownloadSha256 }
+                        'python' { Invoke-JumpPythonSetup -Spec $spec }
+                        'node' { Invoke-JumpNodeSetup -Spec $spec }
                     }
                     # Install-then-verify: an exit code of 0 does not prove the pinned version landed (winget can pick another one).
                     if ($verify) {

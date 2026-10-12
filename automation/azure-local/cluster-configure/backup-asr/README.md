@@ -13,6 +13,12 @@ Every operational script previews by default; pass `-Execute` to change anything
 5. `Invoke-AsrTestFailover.ps1 -Action Start`, validate the isolated VM, then `-Action Cleanup` (test failover is due by Oct 9).
 6. `Enable-AzureVmBackup.ps1` for the Azure jump VM (and failed-over Azure VMs); `Test-BackupAsrReadiness.ps1` checks vault, policies, site, replication health and a jump-VM recovery point.
 
+## As built 12 Oct 2026
+
+- Policies applied (`Invoke-BackupAsrConfigure.ps1 -Action Apply -Execute`): `bkp-iic-nic26-tier1-eus-01` (Enhanced, daily, 30 days) and `asrpol-iic-nic26-tier1-eus-01` in `rsv-iic-nic26-azl-eus-01`. The solution's name catalog now lists the landing-zone names it works in (`rg_bcdr`, `rsv_azl`, `asrpol_tier1`, `bkp_tier1`); without them the converter emitted only `deployment_name` and every script failed.
+- Azure VMs to protect come from `backup_azure_vms` in environment/azure-local: the Entra Connect sync server is protected (initial backup started 12 Oct). Run: `$i = Get-Content ..	erraform	erraform.generated.tfvars.json | ConvertFrom-Json; .\Enable-AzureVmBackup.ps1 -SubscriptionId $i.subscription_id -VaultResourceGroup $i.names.rg_bcdr -VaultName $i.names.rsv_azl -PolicyName $i.names.bkp_tier1 -VmResourceGroup $i.backup_azure_vms[0].resource_group -VmName $i.backup_azure_vms.name -RunInitialBackup -Execute`.
+- ASR replication is **blocked** (T-5.5.3): Prepare infrastructure is a portal flow that installs the ASR agent on every node (owner go needed), and the Azure Local VMs are Trusted launch, which ASR does not support.
+
 ## Constraints
 
 - **Trusted launch Azure Local VMs are not supported by Azure Site Recovery**; the replicated VM must be a standard VM.

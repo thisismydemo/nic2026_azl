@@ -1,0 +1,141 @@
+{
+  "$comment": "Automation identity role map: the single source read by bicep/main.bicep (loadJsonContent), terraform/s3-automation-identity.tf (jsondecode) and automation/shared/scripts/NIC26.AutomationIdentity.ps1 (Test-NIC26AutomationIdentityRoles). scope = a key of the names catalog (rg_azl, rg_sec, kv_azl, kv_ops). role = a key of builtInRoles in bicep/modules/built-in-roles.bicep (the role definition IDs live there only); role_display_names maps each key to the built-in role name (Terraform role_definition_name, the PowerShell check). feature: core = Arc registration (OEM image, Invoke-AzStackHciArcInitialization) + cluster deployment with Local Identity and Key Vault; simplified_provisioning = os-provisioning/bicep/main.bicep. delegable_roles = the ABAC condition: the identity may assign or remove only these roles, only to service principals, never to itself. granted_by_s3 = the landing zone S3 security stage already grants it to the deployment identity (names.id_deploy), so IaC skips it for that identity.",
+  "role_display_names": {
+    "AzureConnectedMachineOnboarding": "Azure Connected Machine Onboarding",
+    "AzureConnectedMachineResourceAdministrator": "Azure Connected Machine Resource Administrator",
+    "AzureConnectedMachineResourceManager": "Azure Connected Machine Resource Manager",
+    "AzureStackHCIAdministrator": "Azure Stack HCI Administrator",
+    "Contributor": "Contributor",
+    "KeyVaultContributor": "Key Vault Contributor",
+    "KeyVaultDataAccessAdministrator": "Key Vault Data Access Administrator",
+    "KeyVaultSecretsOfficer": "Key Vault Secrets Officer",
+    "KeyVaultSecretsUser": "Key Vault Secrets User",
+    "LocksContributor": "Locks Contributor",
+    "MonitoringContributor": "Monitoring Contributor",
+    "Reader": "Reader",
+    "RoleBasedAccessControlAdministrator": "Role Based Access Control Administrator",
+    "StorageAccountContributor": "Storage Account Contributor"
+  },
+  "assignments": [
+    {
+      "key": "arc_onboarding",
+      "scope": "rg_azl",
+      "role": "AzureConnectedMachineOnboarding",
+      "feature": "core",
+      "purpose": "Arc registration of the nodes (Invoke-AzStackHciArcInitialization): create the Microsoft.HybridCompute/machines resources in the cluster resource group",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#prerequisites"
+    },
+    {
+      "key": "arc_resource_admin",
+      "scope": "rg_azl",
+      "role": "AzureConnectedMachineResourceAdministrator",
+      "feature": "core",
+      "purpose": "Arc registration: manage the Arc machines and install the mandatory Azure Local extensions",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#prerequisites"
+    },
+    {
+      "key": "hci_admin",
+      "scope": "rg_azl",
+      "role": "AzureStackHCIAdministrator",
+      "feature": "core",
+      "purpose": "Cluster deployment: clusters, deploymentSettings, edgeDevices, edgeMachines, custom location, resource bridge; its built-in condition lets it assign only the Azure Local service roles (Device Management, Connected InfraVMs, Connected Machine Resource Manager, Key Vault Secrets/Certificates roles) that cluster-deploy/bicep/main.bicep assigns to the node Arc identities",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment"
+    },
+    {
+      "key": "reader",
+      "scope": "rg_azl",
+      "role": "Reader",
+      "feature": "core",
+      "purpose": "Cluster deployment: read the Arc machines, the witness account and the deployment state",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment"
+    },
+    {
+      "key": "storage_contributor",
+      "scope": "rg_azl",
+      "role": "StorageAccountContributor",
+      "feature": "core",
+      "purpose": "Cluster deployment: create the Key Vault audit-log storage account (st_diag) with its lifecycle rule; read the cloud witness key (Set-ClusterDeploymentSecrets.ps1)",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment"
+    },
+    {
+      "key": "locks_contributor",
+      "scope": "rg_azl",
+      "role": "LocksContributor",
+      "feature": "core",
+      "purpose": "Cluster deployment: the CanNotDelete lock on the audit-log storage account (template: 'an LRS account with a lock'); only Owner, User Access Administrator or a lock role may write locks",
+      "source": "https://learn.microsoft.com/azure/azure-resource-manager/management/lock-resources#who-can-create-or-delete-locks"
+    },
+    {
+      "key": "monitoring_contributor_sec",
+      "scope": "rg_sec",
+      "role": "MonitoringContributor",
+      "feature": "core",
+      "purpose": "Nested deployments into the security resource group (cluster-deploy key-vault-access module, os-provisioning key-vault-delegation module) and the Key Vault audit diagnostic setting to st_diag (the storage destination's listKeys right comes from Storage Account Contributor on rg_azl); the vault lives outside the cluster resource group (design section 5.2)",
+      "source": "https://learn.microsoft.com/azure/azure-monitor/fundamentals/roles-permissions-security"
+    },
+    {
+      "key": "kv_data_access_admin",
+      "scope": "kv_azl",
+      "role": "KeyVaultDataAccessAdministrator",
+      "feature": "core",
+      "purpose": "Local Identity with Key Vault: assign Key Vault Secrets Officer and Certificates Officer on the cluster vault to the node Arc identities",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment"
+    },
+    {
+      "key": "kv_secrets_officer",
+      "scope": "kv_azl",
+      "role": "KeyVaultSecretsOfficer",
+      "feature": "core",
+      "purpose": "Write the deployment secrets (<cluster>-LocalAdminCredential, <cluster>-WitnessStorageKey) and the provisioning administrator secret into the cluster vault",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment"
+    },
+    {
+      "key": "kv_contributor",
+      "scope": "kv_azl",
+      "role": "KeyVaultContributor",
+      "feature": "core",
+      "purpose": "Manage the cluster vault resource (public network access toggle in Set-ClusterVaultPublicAccess.ps1); the vault itself is created by the landing zone",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/deployment-arc-register-server-permissions?view=azloc-2609#assign-azure-permissions-for-deployment"
+    },
+    {
+      "key": "kv_ops_secrets_user",
+      "scope": "kv_ops",
+      "role": "KeyVaultSecretsUser",
+      "feature": "core",
+      "granted_by_s3": true,
+      "purpose": "Read the node local-administrator and BMC credentials from the operations vault (the source the deployment secrets are copied from); never writes",
+      "source": "https://learn.microsoft.com/azure/key-vault/general/rbac-guide#azure-built-in-roles-for-key-vault-data-plane-operations"
+    },
+    {
+      "key": "contributor_rg",
+      "scope": "rg_azl",
+      "role": "Contributor",
+      "feature": "simplified_provisioning",
+      "purpose": "Simplified machine provisioning: Microsoft.Edge sites, site configurations and configuration references, edge machines (Learn: Owner, or Contributor plus Role Based Access Control Administrator on the resource group)",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/simplified-machine-provisioning?view=azloc-2609#prerequisites"
+    },
+    {
+      "key": "rbac_admin_rg",
+      "scope": "rg_azl",
+      "role": "RoleBasedAccessControlAdministrator",
+      "feature": "simplified_provisioning",
+      "delegable_roles": [
+        "RoleBasedAccessControlAdministrator",
+        "AzureConnectedMachineResourceManager"
+      ],
+      "purpose": "Simplified machine provisioning: the template gives each edge machine identity a constrained Role Based Access Control Administrator on the resource group and the Azure Local resource provider app Azure Connected Machine Resource Manager; constrained to those two roles, service principals only, never itself",
+      "source": "https://learn.microsoft.com/azure/azure-local/deploy/simplified-machine-provisioning?view=azloc-2609#prerequisites"
+    },
+    {
+      "key": "rbac_admin_kv",
+      "scope": "kv_azl",
+      "role": "RoleBasedAccessControlAdministrator",
+      "feature": "simplified_provisioning",
+      "delegable_roles": [
+        "RoleBasedAccessControlAdministrator"
+      ],
+      "purpose": "Simplified machine provisioning: the template gives each edge machine identity a constrained Role Based Access Control Administrator on the cluster vault (limited to Key Vault Secrets User); constrained to that one role, service principals only, never itself",
+      "source": "https://learn.microsoft.com/azure/role-based-access-control/delegate-role-assignments-examples#example-constrain-roles-and-principal-types"
+    }
+  ]
+}

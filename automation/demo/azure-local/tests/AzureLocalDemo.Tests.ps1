@@ -38,9 +38,9 @@ BeforeAll {
             @{ name = 'nic26-01-n02'; management_ip = '192.0.2.12' }
         )
         intents = @(
-            @{ name = 'Management'; adapters = @('NIC1', 'NIC2') },
-            @{ name = 'Compute'; adapters = @('SLOT 3 Port 1', 'SLOT 6 Port 2') },
-            @{ name = 'Storage'; adapters = @('SLOT 3 Port 2', 'SLOT 6 Port 1') }
+            @{ name = 'Management'; adapters = @('Port1', 'Port2') },
+            @{ name = 'Compute'; adapters = @('Port3', 'Port5') },
+            @{ name = 'Storage'; adapters = @('Port4', 'Port6') }
         )
         secret_refs = @{}
     }
@@ -66,7 +66,7 @@ BeforeAll {
             StorageJobs   = @()
             Intents       = @($intents)
             Quorum        = [pscustomobject]@{ WitnessName = 'Cloud Witness'; WitnessState = 'Online' }
-            RdmaAdapters  = @([pscustomobject]@{ Name = 'SLOT 3 Port 2'; Enabled = $true; Node = 'nic26-01-n01' }, [pscustomobject]@{ Name = 'SLOT 6 Port 1'; Enabled = $true; Node = 'nic26-01-n01' })
+            RdmaAdapters  = @([pscustomobject]@{ Name = 'Port4'; Enabled = $true; Node = 'nic26-01-n01' }, [pscustomobject]@{ Name = 'Port6'; Enabled = $true; Node = 'nic26-01-n01' })
             Faults        = @()
             CollectedAt   = [DateTime]::UtcNow.ToString('o')
         }
@@ -232,7 +232,7 @@ Describe 'Invoke-IntentDrift / Undo-IntentDrift' {
     }
     It '-Execute changes ONE adapter on ONE node, records the original value, prints AFTER; Undo restores it' {
         $plan = & $script:Drift -NodeName nic26-01-n02 -Execute -PassThru 6>$null
-        $plan.Adapter | Should -Be 'SLOT 3 Port 1'
+        $plan.Adapter | Should -Be 'Port3'
         $plan.OriginalValue | Should -Be '1514'
         $global:NIC26Test.Jumbo | Should -Be '4088'
         Should -Invoke Invoke-DemoRemote -Times 2 -ParameterFilter { $ComputerName -eq 'nic26-01-n02' }

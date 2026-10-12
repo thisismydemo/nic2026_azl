@@ -13,6 +13,7 @@ Scripts behind the live beats of planning/sessions/azure-local/outline.md. All o
 | every fault | `Test-FaultPreflight.ps1` | read-only refusal gate shared by the fault helpers (also knows a node-outage fault for layers that add one) |
 | §3.3 / §4.5 / §5 | `Show-AsrState.ps1`, `Start-AsrPlannedFailover.ps1`, `Get-AsrFailoverStatus.ps1` | start is `-WhatIf` default; status read-only |
 | before the session | `Test-DemoSmoke.ps1` | read-only pass/fail list; exit code |
+| build (T-5.5.2): IIC workload VMs | `New-IicWorkloadVm.ps1` | plan by default, `-Execute` creates; idempotent (NIC → data disks → VM from `workload_vms` in `environment.yml`, tier NSG, static IP, Trusted launch, explicit storage path, tags merged); local administrator from the ops vault (`-CreateMissingSecret` generates it, never printed) |
 
 ## Fault safety (outline §4.2: drive → drift → node, never stacked)
 

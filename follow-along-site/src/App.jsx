@@ -28,7 +28,8 @@ export default function App() {
   return (
     <div className="app">
       <header className="top">
-        <div className="bifrost" aria-hidden="true" />
+        {/* per-session stripe: the Bifröst rainbow for AVD, the brass chart line for Azure Local */}
+        <div className={`stripe stripe-${session.id}`} aria-hidden="true" />
         <a href="#/" className="brand">{session.title}: follow along</a>
       </header>
       <main>{body}</main>

@@ -1,10 +1,13 @@
 // NIC 2026 — Day-2 Ready 3.1 monitoring (cluster-configure/monitoring), Bicep track. Resource-group scope: names.rg_mon.
 // AVM (confirmed on MCR 2026-10-03): avm/res/insights/data-collection-rule:0.11.0, avm/res/insights/scheduled-query-rule:0.6.0.
-// Gap-fill: Microsoft.AlertsManagement/actionRules@2021-08-08 (alert processing rule; no AVM module).
-// The Insights DCR (dcr_insights) is created ONCE through the Insights dialog (design §7.2 A); the association to the
-// nodes is scripts/Enable-ClusterInsights.ps1. manage_insights_dcr_in_iac=true authors it here with the documented
-// five counters and two channels (Learn: Monitor a single Azure Local system with Insights) — against Microsoft's
-// recommendation, documented in the README.
+// Gap-fill: Microsoft.AlertsManagement/actionRules@2021-08-08 (alert processing rule; no AVM module),
+// Microsoft.OperationalInsights/workspaces@2025-02-01 and Microsoft.Insights/metricAlerts@2018-03-01 (native resources).
+// The Insights DCR (dcr_insights): manage_insights_dcr_in_iac=true authors it here in the exact shape the Insights
+// dialog creates (perfCounterDataSource, five counters at 10 s; eventLogsDataSource with the health and SDDC 3000-3004
+// channels; Learn: Monitor a single Azure Local system with Insights), plus insights_extra_event_channels. The node
+// associations, the AMA and health-alert extensions are scripts/Enable-ClusterInsights.ps1 (12 Oct, D-054).
+// create_workspace=true creates the nic26 lab workspace names.law (design §7.1; D-054) instead of using
+// log_analytics_workspace_id.
 targetScope = 'resourceGroup'
 
 param subscription_id string
@@ -23,13 +26,45 @@ param alert_window_size string = 'PT15M'
 param node_heartbeat_minutes int = 10
 param enable_vm_insights_dcr bool = true
 param manage_insights_dcr_in_iac bool = false
+@description('Create the lab workspace names.law in rg_mon (D-054). When false, log_analytics_workspace_id (or the derived ID) is used.')
+param create_workspace bool = false
+param law_retention_days int = 30
+param law_daily_cap_gb int = 2
+@description('Extra event channels (XPath) added to the Insights DCR, for example the Network ATC channel the intent-drift alert reads.')
+param insights_extra_event_channels array = []
+@description('Sampling interval of the five Insights counters (the Insights dialog uses 10 s).')
+param insights_sampling_seconds int = 10
+@description('Create the Learn recommended metric alert rules on the cluster resource (Enable recommended alert rules for Azure Local).')
+param enable_recommended_metric_alerts bool = true
+@description('Route the Azure Local health alerts (AzureEdgeAlerts extension) on the cluster to the action group.')
+param enable_health_alert_routing bool = true
+@description('VM Insights selection, used by scripts/Enable-VmInsights.ps1 (declared because the converters render every input).')
+#disable-next-line no-unused-params
+param vm_insights_scope_tags object = {}
 param names object
 
-var lawId = empty(log_analytics_workspace_id) ? resourceId(subscription_id, names.rg_mon, 'Microsoft.OperationalInsights/workspaces', names.law) : log_analytics_workspace_id
+var derivedLawId = resourceId(subscription_id, names.rg_mon, 'Microsoft.OperationalInsights/workspaces', names.law)
+var lawId = create_workspace ? derivedLawId : (empty(log_analytics_workspace_id) ? derivedLawId : log_analytics_workspace_id)
+var clusterId = resourceId(subscription_id, names.rg_azl, 'Microsoft.AzureStackHCI/clusters', cluster_name)
 var agId = empty(action_group_id) ? resourceId(subscription_id, names.rg_mon, 'Microsoft.Insights/actionGroups', names.ag_ops) : action_group_id
 var clusterRgId = resourceId(subscription_id, 'Microsoft.Resources/resourceGroups', names.rg_azl)
 var allTags = union(tags, { 'managed-by': 'bicep' })
 var insightsDcrId = resourceId(subscription_id, names.rg_mon, 'Microsoft.Insights/dataCollectionRules', names.dcr_insights)
+
+// ---------------------------------------------------------------- nic26 lab workspace (optional, D-054)
+resource law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = if (create_workspace) {
+  name: names.law
+  location: location
+  tags: allTags
+  properties: {
+    sku: { name: 'PerGB2018' }
+    retentionInDays: law_retention_days
+    workspaceCapping: { dailyQuotaGb: law_daily_cap_gb }
+    features: { enableLogAccessUsingOnlyResourcePermissions: true }
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+  }
+}
 
 // ---------------------------------------------------------------- Azure Local Insights DCR (optional, documented streams)
 module insightsDcr 'br/public:avm/res/insights/data-collection-rule:0.11.0' = if (manage_insights_dcr_in_iac) {
@@ -40,13 +75,13 @@ module insightsDcr 'br/public:avm/res/insights/data-collection-rule:0.11.0' = if
     tags: allTags
     dataCollectionRuleProperties: {
       kind: 'Windows'
-      description: 'Azure Local Insights (cost-conscious): five counters + health and SDDC channels (design §7.2).'
+      description: 'Azure Local Insights: the five counters and the health and SDDC channels the Insights dialog configures, plus the demo channels (design §7.2, D-054).'
       dataSources: {
         performanceCounters: [
           {
-            name: 'AzureStackHCI-Perf'
+            name: 'perfCounterDataSource'
             streams: ['Microsoft-Perf']
-            samplingFrequencyInSeconds: 60
+            samplingFrequencyInSeconds: insights_sampling_seconds
             counterSpecifiers: [
               '\\Memory\\Available Bytes'
               '\\Network Interface(*)\\Bytes Total/sec'
@@ -58,12 +93,12 @@ module insightsDcr 'br/public:avm/res/insights/data-collection-rule:0.11.0' = if
         ]
         windowsEventLogs: [
           {
-            name: 'AzureStackHCI-Events'
+            name: 'eventLogsDataSource'
             streams: ['Microsoft-Event']
-            xPathQueries: [
+            xPathQueries: concat([
+              'Microsoft-Windows-SDDC-Management/Operational!*[System[(EventID=3000 or EventID=3001 or EventID=3002 or EventID=3003 or EventID=3004)]]'
               'microsoft-windows-health/operational!*'
-              'microsoft-windows-sddc-management/operational!*[System[(EventID=3000 or EventID=3001 or EventID=3002 or EventID=3003 or EventID=3004)]]'
-            ]
+            ], insights_extra_event_channels)
           }
         ]
       }
@@ -75,6 +110,7 @@ module insightsDcr 'br/public:avm/res/insights/data-collection-rule:0.11.0' = if
       ]
     }
   }
+  dependsOn: [law]
 }
 
 // ---------------------------------------------------------------- VM Insights DCR for the workload VMs (Arc)
@@ -114,6 +150,7 @@ module vmInsightsDcr 'br/public:avm/res/insights/data-collection-rule:0.11.0' = 
       ]
     }
   }
+  dependsOn: [law]
 }
 
 // ---------------------------------------------------------------- alert rules (outline §3.1: faults section 4 shows)
@@ -144,7 +181,7 @@ var alertRules = [
   }
   {
     key: 'alert_intent_drift'
-    description: 'Network ATC intent drift / failed provisioning (channel added by Enable-ClusterInsights -ExtraEventChannels).'
+    description: 'Network ATC intent drift / failed provisioning (Network ATC channel in the Insights DCR, D-054).'
     severity: 2
     query: 'Event | where EventLog =~ "Microsoft-Windows-Networking-NetworkATC/Operational" | where EventLevelName in ("Warning", "Error") | summarize count() by Computer, EventID'
     operator: 'GreaterThan'
@@ -196,7 +233,79 @@ module alert 'br/public:avm/res/insights/scheduled-query-rule:0.6.0' = [for (r, 
       actionGroupResourceIds: [agId]
     }
   }
+  dependsOn: [law]
 }]
+
+// ---------------------------------------------------------------- recommended metric alerts on the cluster resource
+// Learn: Enable recommended alert rules for Azure Local (table "Recommended alert rules"); metric names as the
+// Microsoft.AzureStackHCI/clusters metric definitions return them (read live 12 Oct). Thresholds in the metric's unit.
+var metricAlerts = [
+  { key: 'alert_cpu', metric: 'Hyper-V Hypervisor Logical Processor\\% Total Run Time', op: 'GreaterThan', threshold: 80, text: 'Percentage CPU above 80 % (recommended alert rule)' }
+  { key: 'alert_memory', metric: 'Memory\\Available Bytes', op: 'LessThan', threshold: 1073741824, text: 'Available memory below 1 GB (recommended alert rule)' }
+  { key: 'alert_vol_read_latency', metric: 'Cluster CSVFS\\Avg. sec/Read', op: 'GreaterThan', threshold: json('0.5'), text: 'Volume read latency above 500 ms (recommended alert rule)' }
+  { key: 'alert_vol_write_latency', metric: 'Cluster CSVFS\\Avg. sec/Write', op: 'GreaterThan', threshold: json('0.5'), text: 'Volume write latency above 500 ms (recommended alert rule)' }
+  { key: 'alert_net_in', metric: 'Network Adapter\\Bytes Received/sec', op: 'GreaterThan', threshold: 500000000000, text: 'Network in above 500 GB/s (recommended alert rule, Learn threshold)' }
+  { key: 'alert_net_out', metric: 'Network Adapter\\Bytes Sent/sec', op: 'GreaterThan', threshold: 200000000000, text: 'Network out above 200 GB/s (recommended alert rule, Learn threshold)' }
+]
+
+resource metricAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = [for m in metricAlerts: if (enable_recommended_metric_alerts) {
+  name: names[m.key]
+  location: 'global'
+  tags: allTags
+  properties: {
+    description: '${cluster_name}: ${m.text}.'
+    severity: 3
+    enabled: true
+    scopes: [clusterId]
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT15M'
+    autoMitigate: true
+    criteria: {
+      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      allOf: [
+        {
+          criterionType: 'StaticThresholdCriterion'
+          name: 'c1'
+          metricNamespace: 'Microsoft.AzureStackHCI/clusters'
+          metricName: m.metric
+          dimensions: [{ name: 'ClusterNodeName', operator: 'Include', values: ['*'] }]
+          operator: m.op
+          threshold: m.threshold
+          timeAggregation: 'Average'
+          skipMetricValidation: false
+        }
+      ]
+    }
+    actions: [{ actionGroupId: agId }]
+  }
+}]
+
+// ---------------------------------------------------------------- health alerts (AzureEdgeAlerts) -> action group
+// Learn: Respond to Azure Local health alerts using Azure Monitor alerts, step 2 (alert processing rule). Health alerts
+// fire on the cluster resource; the metric rules above already notify the action group, so metric signals are excluded.
+resource healthRouting 'Microsoft.AlertsManagement/actionRules@2021-08-08' = if (enable_health_alert_routing) {
+  name: names.alert_health_routing
+  location: 'Global'
+  tags: allTags
+  properties: {
+    enabled: true
+    description: 'Routes the Azure Local OS health alerts (AzureEdgeAlerts extension) raised on ${cluster_name} to the ops action group.'
+    scopes: [clusterId]
+    conditions: [
+      {
+        field: 'SignalType'
+        operator: 'NotEquals'
+        values: ['Metric']
+      }
+    ]
+    actions: [
+      {
+        actionType: 'AddActionGroups'
+        actionGroupIds: [agId]
+      }
+    ]
+  }
+}
 
 // ---------------------------------------------------------------- platform alerts KeyVaultAccess / KeyVaultDoesNotExist -> action group
 resource kvBackupRouting 'Microsoft.AlertsManagement/actionRules@2021-08-08' = {
@@ -228,3 +337,6 @@ output vm_insights_dcr_id string = enable_vm_insights_dcr ? vmInsightsDcr!.outpu
 output alert_rule_ids array = [for i in range(0, length(alertRules)): alert[i].outputs.resourceId]
 output kv_backup_processing_rule_id string = kvBackupRouting.id
 output action_group_id string = agId
+output log_analytics_workspace_id string = lawId
+output metric_alert_rule_ids array = [for (m, i) in metricAlerts: enable_recommended_metric_alerts ? metricAlert[i].id : '']
+output health_processing_rule_id string = enable_health_alert_routing ? healthRouting.id : ''

@@ -481,7 +481,13 @@ function Get-DemoConfigValue {
     foreach ($segment in ($Key -split '\.')) {
         if ($null -eq $current) { return $null }
         if ($current -is [System.Collections.IDictionary]) {
-            if (-not $current.Contains($segment)) { return $null }
+            if (-not $current.Contains($segment)) {
+                # Get-NIC26Config returns envelope metadata alongside the merged canonical values.
+                if ($current.Contains('values')) {
+                    return Get-DemoConfigValue -Config $current['values'] -Key (($Key -split '\.', 2)[-1])
+                }
+                return $null
+            }
             $current = $current[$segment]
         }
         else {

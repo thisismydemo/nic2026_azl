@@ -25,6 +25,8 @@ var builtInRoles = {
   LogAnalyticsContributor: '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
   MonitoringReader: '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
   MonitoringContributor: '749f88d5-cbae-40b8-bcfc-e573ddc772fa'
+  IssueContributor: '8d7ecc5c-f27b-43cf-883f-46409d445502'
+  LocksContributor: '28bf596f-4eb7-45ce-b5bc-6cf482fec137'
 }
 
 // Roles the deployment identity may assign or remove (design §6.2: RBAC Administrator "constrained to the roles in this table").
