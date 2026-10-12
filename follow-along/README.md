@@ -242,6 +242,12 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `automation/azure-local/cluster-configure/policy`
 
+### Workload platform: SDN enabled by Arc, six logical networks and their NSGs
+
+**Goal:** Read how logical networks and network security groups are defined for each workload tier on an Azure Local instance with SDN enabled by Azure Arc.
+
+**In the repo:** `automation/azure-local/cluster-configure`
+
 ### Acceptance: the readiness gate, red to green
 
 **Goal:** Understand the evidence states.
@@ -259,6 +265,33 @@ Replace the placeholders in the commands with your own values:
 **Goal:** Understand the update flow.
 
 **In the repo:** `handouts/Day2_Operations_Runbook.md`
+
+### Signal to diagnosis: the Observability Agent investigates the drive fault (preview)
+
+**Goal:** Investigate an Azure Monitor alert with the Azure Copilot Observability Agent (preview) in your own subscription.
+
+**You need**
+
+- Access to Azure Copilot in your tenant
+- An Azure Monitor workspace associated with the subscription (it holds the issues)
+- Issue Contributor, Monitoring Contributor or Contributor on that workspace to save an issue
+- A fired Azure Monitor alert in a region where the agent is available
+
+**Steps**
+
+1. **Start an investigation from an alert.** Open a fired alert in Azure Monitor > Alerts and select Investigate. Confirm the scope the agent proposes.
+   - You should see: The agent reports its plan, then findings, hypotheses ruled out and next steps.
+2. **Keep the result.** Select Create issue to save the investigation as an Azure Monitor issue in your Azure Monitor workspace.
+   - You should see: The issue is listed under Monitor > Issues with the investigation attached.
+
+**Troubleshooting**
+
+- Asked for an Azure Monitor workspace: associate the subscription with one (once per subscription).
+- No Investigate action: check that your account has Azure Copilot access.
+
+**Clean up**
+
+- Close or delete test issues; chat and investigations are billed per use.
 
 ### Capacity: a decision, not a chart
 

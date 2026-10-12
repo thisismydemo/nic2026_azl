@@ -17,8 +17,8 @@ The session and this repository target the current Azure Local release, the 2609
 
 ## Start here
 
-1. Open the [follow-along site](https://thisismydemo.cloud/nic2026_azl/) (GitHub Pages, built by the workflow in this repository), or read [follow-along/README.md](follow-along/README.md). The session is mostly watch and read. You can follow along fully for the Surveyor assessment on the synthetic workbook and for the Bicep what-if; neither needs a cluster.
-2. Read the guides and runbooks in [handouts/](handouts/).
+1. Open the [follow-along site](https://thisismydemo.cloud/nic2026_azl/) (GitHub Pages, built by the workflow in this repository), or open the guide as [PDF](follow-along/Azure_Local_Follow_Along_Guide.pdf) or [Word](follow-along/Azure_Local_Follow_Along_Guide.docx) (Markdown: [follow-along/README.md](follow-along/README.md)). The session is mostly watch and read. You can follow along fully for the Surveyor assessment on the synthetic workbook and for the Bicep what-if; neither needs a cluster.
+2. Read the guides and runbooks, each as PDF or Word (Markdown alongside in [handouts/](handouts/)): ASR Failover Procedures ([PDF](handouts/ASR_Failover_Procedures.pdf), [Word](handouts/ASR_Failover_Procedures.docx)) · Azure Local Sizing Guide ([PDF](handouts/Azure_Local_Sizing_Guide.pdf), [Word](handouts/Azure_Local_Sizing_Guide.docx)) · Azure Migrate to Azure Local ([PDF](handouts/Azure_Migrate_to_Azure_Local.pdf), [Word](handouts/Azure_Migrate_to_Azure_Local.docx)) · Day2 Operations Runbook ([PDF](handouts/Day2_Operations_Runbook.pdf), [Word](handouts/Day2_Operations_Runbook.docx)) · Day2 Readiness Checklist ([PDF](handouts/Day2_Readiness_Checklist.pdf), [Word](handouts/Day2_Readiness_Checklist.docx)) · Deployment Guide ([PDF](handouts/Deployment_Guide.pdf), [Word](handouts/Deployment_Guide.docx)) · Network ATC Design ([PDF](handouts/Network_ATC_Design.pdf), [Word](handouts/Network_ATC_Design.docx)) · Planning and Design Decisions ([PDF](handouts/Planning_and_Design_Decisions.pdf), [Word](handouts/Planning_and_Design_Decisions.docx)) · Troubleshooting Guide ([PDF](handouts/Troubleshooting_Guide.pdf), [Word](handouts/Troubleshooting_Guide.docx)).
 3. Read [automation/README.md](automation/README.md) for the run order, configuration and tests of the deployment automation.
 
 ## What is in this repository
@@ -26,9 +26,9 @@ The session and this repository target the current Azure Local release, the 2609
 | Path | What it holds |
 |---|---|
 | `presentation/Azure_Local_Discovery_to_Day2_NIC2026.pptx` | The deck |
-| `handouts/` | `Azure_Local_Sizing_Guide.md`, `Planning_and_Design_Decisions.md`, `Network_ATC_Design.md`, `Deployment_Guide.md`, `Day2_Readiness_Checklist.md`, `Day2_Operations_Runbook.md`, `ASR_Failover_Procedures.md`, `Azure_Migrate_to_Azure_Local.md`, `Troubleshooting_Guide.md` |
+| `handouts/` | Each handout as PDF and Word (`.pdf`, `.docx`) with its Markdown source: `Azure_Local_Sizing_Guide.md`, `Planning_and_Design_Decisions.md`, `Network_ATC_Design.md`, `Deployment_Guide.md`, `Day2_Readiness_Checklist.md`, `Day2_Operations_Runbook.md`, `ASR_Failover_Procedures.md`, `Azure_Migrate_to_Azure_Local.md`, `Troubleshooting_Guide.md` |
 | `src/assessment/` | `IIC-RVTools-demo.xlsx`, a synthetic RVTools workbook, and its README |
-| `follow-along/README.md` | The attendee guide in Markdown |
+| `follow-along/` | The attendee guide: `Azure_Local_Follow_Along_Guide.pdf`, `Azure_Local_Follow_Along_Guide.docx` and `README.md` (Markdown) |
 | `follow-along-site/` | Source of the follow-along site |
 | `automation/shared/` | The `NIC26.Automation` PowerShell module (config loader, naming, converters, Key Vault resolver), JSON Schemas and example environment files |
 | `automation/landing-zones/azure-local/` | Subscription foundation, spoke network, vaults, Log Analytics, Recovery Services vault, witness storage and jump server |
