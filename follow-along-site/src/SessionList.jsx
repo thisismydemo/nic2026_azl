@@ -12,6 +12,16 @@ export default function SessionList({ session }) {
       <p className="lede">{session.subtitle}</p>
       <p className="meta">{session.date} · {session.length} min · Level {session.level}</p>
       <p className="policy">{session.followAlongPolicy}</p>
+      {session.downloads?.guide && (
+        <p className="meta">
+          The same guide to keep:{' '}
+          <a href={`https://github.com/thisismydemo/${session.downloads.repo}/raw/main/follow-along/${session.downloads.guide}.pdf`}>PDF</a>
+          {' · '}
+          <a href={`https://github.com/thisismydemo/${session.downloads.repo}/raw/main/follow-along/${session.downloads.guide}.docx`}>Word</a>
+          {' · '}
+          <a href={`https://github.com/thisismydemo/${session.downloads.repo}/tree/main/handouts`}>Handouts (PDF and Word)</a>
+        </p>
+      )}
       {session.variables?.length > 0 && (
         <div className="policy">
           <strong>Placeholders used in the commands</strong>

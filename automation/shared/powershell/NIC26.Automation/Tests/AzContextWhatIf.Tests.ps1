@@ -14,6 +14,6 @@ Describe 'Set-AzContext in scripts' {
     It 'is called with -WhatIf:$false in <Name>' -ForEach $script:ScriptFiles {
         $calls = Select-String -LiteralPath $Path -Pattern '(?<![\w''"-])Set-AzContext\s+-' | Where-Object { $_.Line -notmatch '^\s*#' }
         $calls | Should -Not -BeNullOrEmpty
-        foreach ($c in $calls) { $c.Line | Should -Match 'Set-AzContext\s+-WhatIf:\$false' }
+        foreach ($c in $calls) { $c.Line | Should -Match 'Set-AzContext\b.*-WhatIf:\$false' }
     }
 }

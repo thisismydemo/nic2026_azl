@@ -61,6 +61,10 @@
       "minutes": 5
     }
   ],
+  "downloads": {
+    "repo": "nic2026_azl",
+    "guide": "Azure_Local_Follow_Along_Guide"
+  },
   "demos": [
     {
       "id": "az-1-1-surveyor",

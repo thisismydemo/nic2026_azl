@@ -642,6 +642,10 @@ Describe 'Publishing hygiene (CONTRACT.md section 7)' {
             Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' -and $_.Name -ne 'NIC26.Automation.Tests.ps1' }
         $guidHits = $files | Select-String -Pattern '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' -AllMatches |
             ForEach-Object { $_.Matches.Value } | Where-Object { $_ -ne '00000000-0000-0000-0000-000000000000' -and $_ -ne '3f1c8b7e-6a2d-4c5e-9b1a-0d2e4f6a8c10' }
+        # verified Azure built-in role and policy definition ids (public constants) listed in security/builtin-definition-ids.txt
+        $builtinFile = Join-Path $script:SharedRoot 'security' 'builtin-definition-ids.txt'
+        $builtins = if (Test-Path -LiteralPath $builtinFile) { @(Get-Content -LiteralPath $builtinFile | Where-Object { $_ -match '^[0-9a-f]{8}-' } | ForEach-Object { ($_ -split '\s+')[0] }) } else { @() }
+        $guidHits = @($guidHits | Where-Object { $_ -notin $builtins })
         @($guidHits) | Should -BeNullOrEmpty
     }
 

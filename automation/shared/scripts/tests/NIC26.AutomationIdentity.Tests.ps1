@@ -4,6 +4,11 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'BeforeAll variables are consumed inside It blocks.')]
 param()
 
+BeforeDiscovery {
+    # The role map ships with the Azure Local landing zone; an attendee repository without it (the AVD one) skips these tests.
+    $script:HasRoleMap = Test-Path -LiteralPath (Join-Path $PSScriptRoot '..' '..' '..' 'landing-zones' 'azure-local' 'automation-identity-roles.json')
+}
+
 BeforeAll {
     # Stubs so the mocks bind when Az is not installed on the test host.
     foreach ($cmd in 'Connect-AzAccount', 'Get-AzContext', 'Get-AzAccessToken', 'Get-AzRoleAssignment', 'Get-AzRoleDefinition', 'Resolve-NIC26KeyVaultRef') {
@@ -35,7 +40,7 @@ BeforeAll {
     }
 }
 
-Describe 'Get-NIC26AutomationIdentityRequirement' {
+Describe 'Get-NIC26AutomationIdentityRequirement' -Skip:(-not $script:HasRoleMap) {
     It 'expands the core roles to the four scopes' {
         $r = @(Get-NIC26AutomationIdentityRequirement -SubscriptionId $script:Sub -Names $script:Names)
         $r.Count | Should -Be 11
@@ -53,7 +58,7 @@ Describe 'Get-NIC26AutomationIdentityRequirement' {
     }
 }
 
-Describe 'Test-NIC26AutomationIdentityRoles (read-only, mocked)' {
+Describe 'Test-NIC26AutomationIdentityRoles (read-only, mocked)' -Skip:(-not $script:HasRoleMap) {
     BeforeEach {
         Mock Get-AzRoleDefinition {
             if ($Name -eq 'Role Based Access Control Administrator') { return [pscustomobject]@{ Id = $script:RbacAdminId } }
@@ -111,7 +116,7 @@ Describe 'Test-NIC26AutomationIdentityRoles (read-only, mocked)' {
     }
 }
 
-Describe 'Connect-NIC26AutomationIdentity (mocked)' {
+Describe 'Connect-NIC26AutomationIdentity (mocked)' -Skip:(-not $script:HasRoleMap) {
     BeforeEach {
         Mock Get-AzContext { [pscustomobject]@{ Account = [pscustomobject]@{ Id = (Get-TestGuid '5') }; Environment = [pscustomobject]@{ ResourceManagerUrl = 'https://management.example.test/' } } }
         Mock Get-AzAccessToken { [pscustomobject]@{ Token = (ConvertTo-TestSecure 'not-a-real-token'); ExpiresOn = [datetimeoffset]::new(2030, 1, 1, 0, 0, 0, [timespan]::Zero) } }

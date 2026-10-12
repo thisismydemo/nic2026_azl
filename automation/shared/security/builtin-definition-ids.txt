@@ -1,0 +1,17 @@
+# Azure built-in role and policy definition ids used by automation/shared/security (public constants, each verified with
+# az role definition list / az policy definition show on 12 Oct 2026). The shared-tree hygiene test in
+# NIC26.Automation.Tests.ps1 allows these ids and no other literal GUID.
+e56962a6-4747-49cd-b67b-bf8b01975c4c  policy  Allowed locations
+e765b5de-1225-4ba3-bd56-1ac6695af988  policy  Allowed locations for resource groups
+96670d01-0a4d-4649-9c89-2d3abc0a5025  policy  Require a tag on resource groups
+ea3f2387-9b95-492a-a190-fcdc54f7b070  policy  Inherit a tag from the resource group if missing
+2465583e-4e78-4c15-b6be-a36cbc7c8b0f  policy  Configure Azure Activity logs to stream to specified Log Analytics workspace
+94f686d6-9a24-4e19-91f1-de937dc171a4  policy  Configure Windows Arc-enabled machines to run Azure Monitor Agent
+ca817e41-e85a-4783-bc7f-dc532d36235e  policy  Configure Windows virtual machines to run Azure Monitor Agent using system-assigned managed identity
+eab1f514-22e3-42e3-9a1f-e1dc9199355c  policy  Configure Windows Machines to be associated with a Data Collection Rule or a Data Collection Endpoint
+1f3afdf9-d0c9-4c3d-847f-89da613e70a8  initiative  Microsoft cloud security benchmark
+b24988ac-6180-42a0-ab88-20f7382dd24c  role  Contributor
+749f88d5-cbae-40b8-bcfc-e573ddc772fa  role  Monitoring Contributor
+92aaf0da-9dab-42b6-94a3-d43ce8d16293  role  Log Analytics Contributor
+9980e02c-c2be-4d73-94e8-173b1dc7cf3c  role  Virtual Machine Contributor
+cd570a14-e51a-42ad-bac8-bafd67325302  role  Azure Connected Machine Resource Administrator

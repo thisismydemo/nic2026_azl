@@ -18,7 +18,7 @@ param(
     [switch]$Execute
 )
 $ErrorActionPreference = 'Stop'
-$null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue
+$null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue -WhatIf:$false
 $bicepRoot = Join-Path $PSScriptRoot '..\bicep'
 $passes = [ordered]@{ Networks = 'networks-only.generated.bicepparam'; Nsgs = 'main.generated.bicepparam' }
 foreach ($p in $passes.Keys) {

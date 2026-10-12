@@ -40,7 +40,7 @@ $tags = @{ project = 'nic26'; environment = 'demo'; workload = 'identity'; role 
 function Step($m) { "$(Get-Date -Format HH:mm:ss) $m" }
 
 # 1. local admin secret ----------------------------------------------------------------------------------------------
-$null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue
+$null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue -WhatIf:$false
 $kvTags = @{ project = 'nic26'; purpose = 'entra-connect-sync'; 'managed-by' = 'script' }
 $userSecret = $ss.admin_username_secret; $pwSecret = $ss.admin_password_secret
 if (-not (Get-AzKeyVaultSecret -VaultName $OpsVault -Name $userSecret -ErrorAction SilentlyContinue)) {
@@ -64,7 +64,7 @@ if (-not ($mgmtNsg.SecurityRules | Where-Object Name -eq 'AllowSyncCrlHttpOutbou
     $null = $mgmtNsg | Set-AzNetworkSecurityGroup
 }
 Step "mgmt NSG: AllowSyncCrlHttpOutbound (125, TCP 80 from $PrivateIp)"
-$null = Set-AzContext -Subscription $identitySubId -Tenant $TenantId -WarningAction SilentlyContinue
+$null = Set-AzContext -Subscription $identitySubId -Tenant $TenantId -WarningAction SilentlyContinue -WhatIf:$false
 $idNsg = Get-AzNetworkSecurityGroup -Name $IdentityNsgName -ResourceGroupName $IdentityNsgResourceGroup
 $changed = $false
 if (-not ($idNsg.SecurityRules | Where-Object Name -eq 'Allow-AD-TCP-From-Nic26Sync')) {
@@ -84,7 +84,7 @@ $adArgs = @{}; if ($EnvironmentPath) { $adArgs.Path = $EnvironmentPath }
 $ouPath = "OU=$($ss.ou),OU=Servers,OU=$($hi.ou_root),DC=" + ($DomainName -replace '\.', ',DC=')
 
 # 4. VM ----------------------------------------------------------------------------------------------------------------
-$null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue
+$null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue -WhatIf:$false
 $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $VmName -ErrorAction SilentlyContinue
 if (-not $vm) {
     $subnet = Get-AzVirtualNetwork -Name $VnetName -ResourceGroupName $VnetResourceGroup | Get-AzVirtualNetworkSubnetConfig -Name $SubnetName

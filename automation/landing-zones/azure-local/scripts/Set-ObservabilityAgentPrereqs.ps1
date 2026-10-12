@@ -104,7 +104,7 @@ if (-not $Execute) { Write-Warning 'Plan only (default): nothing is changed. Re-
 # Every context switch names the tenant: without it Az can pick the home-tenant (delegated) projection of the same
 # subscription, whose identity cannot write role assignments.
 $ctx = Get-AzContext
-if (-not $ctx) { throw 'No Az context. Sign in and pin the tenant first (Set-AzContext -Tenant <tenant> -Scope Process).' }
+if (-not $ctx) { throw 'No Az context. Sign in and pin the tenant first (Set-AzContext -Tenant <tenant> -Scope Process -WhatIf:$false).' }
 $tenantId = [string]$ctx.Tenant.Id
 
 # ------------------------------------------------------------------ 1. resource provider

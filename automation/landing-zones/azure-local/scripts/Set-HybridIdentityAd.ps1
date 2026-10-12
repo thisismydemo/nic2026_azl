@@ -24,7 +24,7 @@ $v = (Get-NIC26Config @cfgArgs).values
 $hi = $v.hybrid_identity
 $tags = @{ project = 'nic26'; purpose = 'hybrid-identity-sofs'; 'managed-by' = 'script' }
 
-$null = Set-AzContext -Subscription $v.subscription_id -Tenant $v.tenant_id -WarningAction SilentlyContinue
+$null = Set-AzContext -Subscription $v.subscription_id -Tenant $v.tenant_id -WarningAction SilentlyContinue -WhatIf:$false
 function Get-RandomPassword { $c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%+=?'; -join (1..24 | ForEach-Object { $c[[Security.Cryptography.RandomNumberGenerator]::GetInt32($c.Length)] }) + 'a9!Q' }
 function Get-OrNewSecret([string]$Name) {
     $s = Get-AzKeyVaultSecret -VaultName $v.kv_ops_name -Name $Name -ErrorAction SilentlyContinue
@@ -86,7 +86,7 @@ foreach ($u in $p.users) {
 }
 "users: $(($p.users | ForEach-Object { "$($_.sam)@$($p.upnSuffix)" }) -join ', ')"
 '@
-$null = Set-AzContext -Subscription $v.subscriptions.identity -Tenant $v.tenant_id -WarningAction SilentlyContinue
+$null = Set-AzContext -Subscription $v.subscriptions.identity -Tenant $v.tenant_id -WarningAction SilentlyContinue -WhatIf:$false
 $dc = Get-AzVM -ResourceGroupName $hi.dc_resource_group -Name $hi.dc_vm_name
 $rcName = 'nic26-hybrid-identity-ad'
 try {
