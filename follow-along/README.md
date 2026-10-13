@@ -309,6 +309,21 @@ Replace the placeholders in the commands with your own values:
 
 - Close or delete test issues; chat and investigations are billed per use.
 
+### Fault 3: node failure (animation)
+
+**Goal:** Read what a node failure does on a two-node instance and how to prove recovery.
+
+**Steps**
+
+1. **Quorum.** Read 'Understanding cluster and pool quorum' (https://learn.microsoft.com/windows-server/storage/storage-spaces/quorum): two nodes with a witness survive one node failure, not a second.
+   - You should see: You can say why a two-node instance needs a witness.
+2. **VMs and GPUs.** Read 'Virtual machine resiliency for Azure Local' (https://learn.microsoft.com/azure/azure-local/manage/disaster-recovery-vm-resiliency) and the DDA note in 'Use GPUs with clustered VMs' (https://learn.microsoft.com/windows-server/virtualization/hyper-v/deploy/use-gpu-with-clustered-vm).
+   - You should see: You know why a node failure restarts VMs instead of live-migrating them, and where a DDA VM can restart.
+3. **Storage resync and the checks.** Read 'Understand and monitor storage resync' (https://learn.microsoft.com/windows-server/storage/storage-spaces/understand-storage-resync) and the resume and resync steps of 'Failover cluster maintenance procedures' (https://learn.microsoft.com/azure/azure-local/manage/maintain-servers).
+   - You should see: You can name the commands that prove recovery: Get-StorageJob empty, Get-VirtualDisk Healthy.
+
+**In the repo:** `handouts/Day2_Operations_Runbook.md`
+
 ### Capacity: a decision, not a chart
 
 **Goal:** Read the capacity method.
@@ -340,8 +355,4 @@ Replace the placeholders in the commands with your own values:
 **Goal:** Faults are run only on the lab cluster.
 
 **In the repo:** `automation/demo/azure-local/scripts/Invoke-IntentDrift.ps1`
-
-### Fault 3: node failure (recorded incident, live commentary)
-
-**Goal:** Not run outside the lab.
 

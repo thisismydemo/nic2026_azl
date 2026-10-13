@@ -23,7 +23,7 @@ Name the chain in your design record: **source platform** (Azure Local VM, Hyper
 | Windows generation 1 and 2 | To Azure | To the same or an alternate host |
 | Linux generation 1 and 2 | To Azure | To the same or an alternate host |
 
-Limits to check against the Hyper-V to Azure support matrix: BitLocker must be disabled before replication; shared cluster disks, encrypted disks and SMB 3.0 guest storage are not supported; Trusted Launch and confidential VM security types are not supported as targets.
+Limits to check against the Hyper-V to Azure support matrix: BitLocker must be disabled before replication; shared cluster disks, encrypted disks and SMB 3.0 guest storage are not supported; Trusted Launch and confidential VM security types are not supported as targets. On Azure Local, a VM created with Trusted launch is not supported by Site Recovery as a source either (Microsoft Learn, Trusted launch for Azure Local VMs): decide the VM security type before you plan Site Recovery for it.
 
 ## Prerequisites
 

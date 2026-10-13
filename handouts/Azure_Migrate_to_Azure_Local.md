@@ -1,8 +1,8 @@
 # Migrating VMware Workloads to Azure Local with Azure Migrate
 
-Discovery, replication, test migration and cutover for moving VMware virtual machines to an Azure Local instance with Azure Migrate. The assessment that feeds it (inventory, sizing, waves) is covered in the sizing guide.
+Discovery, replication, migration, verification and completion for moving VMware virtual machines to an Azure Local instance with Azure Migrate. The assessment that feeds it (inventory, sizing, waves) is covered in the sizing guide.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). Migration of **VMware** VMs to Azure Local is generally available (announced October 2025); migration of **Hyper-V** VMs is a **preview**. Both statuses were checked against the 2609 documentation on 6 Oct 2026. Status and limits change, so re-read the migration overview for your release when you plan.
+**Status:** prepared 2026-10-06 and re-checked 2026-10-13 against Microsoft Learn (2609 release family; the run table follows the current replicate and migrate articles, which have no test-migration step for Azure Local targets). Migration of **VMware** VMs to Azure Local is generally available (announced October 2025); migration of **Hyper-V** VMs is a **preview**. Both statuses were checked against the 2609 documentation on 6 Oct 2026. Status and limits change, so re-read the migration overview for your release when you plan.
 
 ## What you need in place
 
@@ -10,8 +10,8 @@ Discovery, replication, test migration and cutover for moving VMware virtual mac
 |---|---|
 | Target | An Azure Local instance (2311.2 or later; the migration articles apply to 2503 and later), deployed, registered and validated; its custom location noted; a storage path and a logical network for the migrated VMs |
 | Source | vCenter Server and ESXi 8.0, 7, 6.7 or 6.5 |
-| Source appliance | A Windows Server 2022 VM on the VMware side with at least 16 GB memory, 80 GB disk and 8 vCPUs |
-| Target appliance | A Windows Server 2022 VM on Azure Local |
+| Source appliance | A Windows Server 2022 or 2025 VM on the VMware side with at least 16 GB memory, 80 GB disk and 8 vCPUs |
+| Target appliance | A Windows Server 2022 or 2025 VM on Azure Local, same size |
 | Network | The source environment must be able to open a network connection to the target Azure Local instance, on the same network or over a VPN |
 | Appliances and registration | Each appliance registers to the Azure Migrate project; use a separate Microsoft Entra application per appliance if you use preconfigured applications |
 
@@ -41,13 +41,13 @@ Firewall ports (Microsoft Learn): on the source side 443 (Azure Migrate services
 
 | Step | Action | Evidence |
 |---|---|---|
-| 1 | Create the Azure Migrate project; deploy the source appliance; discover | VMs listed with sizes |
+| 1 | Create the Azure Migrate project in the Azure portal; deploy the source appliance (project key, VDDK, vCenter account; leave agentless dependency analysis off, it is not supported for Azure Local); onboard to Azure Local; discover | VMs listed with sizes and readiness |
 | 2 | Deploy the target appliance on the Azure Local instance | Appliance shows connected |
-| 3 | Replicate: choose the target logical network and storage path for each VM | Replication status healthy |
-| 4 | Test migration, then clean up the test | Test VM boots, network and application checks pass |
-| 5 | Migrate: stop the source, final sync, start the target | VM shows as an Azure Local VM enabled by Azure Arc |
-| 6 | Verify in the guest and the application | Application owner sign-off |
-| 7 | Complete migration | Replication disabled; the migration resource is marked migrated |
+| 3 | Replicate (up to 10 VMs per batch): choose the target logical network and storage path, vCPU and memory, VHDX disks | Initial copy into seed disks, then hourly deltas; status Ready to migrate |
+| 4 | Migrate: shut down the source (recommended), planned failover with a final sync, start the target | VM shows as an Azure Local VM enabled by Azure Arc; status Completed |
+| 5 | Verify in the portal, the guest and the application (there is no test-migration step for Azure Local targets, so this is the check) | VM running, source off, disks and network as configured; application owner sign-off |
+| 6 | Complete migration | Delete protected item job done: replication state and seed disks removed, the migrated VM untouched |
+| 7 | Enable guest management on the migrated VM | Extensions, monitoring, updates and backup can be applied |
 
 To migrate the same source VM again later, complete the migration on the migrated resource first; that clears the state and allows replication to be enabled again.
 

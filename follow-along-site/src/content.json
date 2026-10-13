@@ -71,7 +71,7 @@
       "title": "Workload assessment in Surveyor (RVTools route)",
       "section": "1.1",
       "mode": "live+recorded",
-      "minutes": 2,
+      "minutes": 1.5,
       "followAlong": {
         "level": "full",
         "goal": "Import a synthetic RVTools workbook into Azure Local Surveyor and read the inventory totals.",
@@ -121,15 +121,28 @@
     },
     {
       "id": "az-1-1-migrate-discovery",
-      "title": "Azure Migrate discovery (recorded)",
+      "title": "Azure Migrate discovery (animation)",
       "section": "1.1",
-      "mode": "recorded",
+      "mode": "animation",
       "minutes": 0.5,
       "followAlong": {
         "level": "read",
-        "goal": "Understand the Azure Migrate discovery route.",
+        "goal": "Understand the Azure Migrate discovery route to Azure Local.",
         "needs": [],
-        "steps": [],
+        "steps": [
+          {
+            "title": "Read the overview and prerequisites",
+            "instructions": "Read the Azure Migrate overview for VMware to Azure Local (https://learn.microsoft.com/azure/azure-local/migrate/migration-azure-migrate-vmware-overview) and the prerequisites (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-prerequisites): the Azure Migrate project is created in the Azure portal, and the Azure Local instance needs a logical network and a storage path.",
+            "command": "",
+            "check": "You can list the source-side and target-side prerequisites."
+          },
+          {
+            "title": "Read the discovery steps",
+            "instructions": "Read Step 1 of 'Discover and replicate VMware VMs' (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-replicate): project key, source appliance, VDDK 8.0.x, vCenter credentials, onboarding to Azure Local, Start discovery.",
+            "command": "",
+            "check": "You know why agentless dependency analysis is switched off on this route."
+          }
+        ],
         "troubleshooting": [],
         "cleanup": [],
         "repoPaths": [
@@ -527,15 +540,34 @@
     },
     {
       "id": "az-3b-migrate",
-      "title": "Azure Migrate: VMware to Azure Local (recorded)",
+      "title": "Azure Migrate: VMware to Azure Local (animation)",
       "section": "3B",
-      "mode": "recorded",
-      "minutes": 1.5,
+      "mode": "animation",
+      "minutes": 1,
       "followAlong": {
         "level": "read",
-        "goal": "Read the migration guide.",
+        "goal": "Read the migration procedure end to end.",
         "needs": [],
-        "steps": [],
+        "steps": [
+          {
+            "title": "Replicate",
+            "instructions": "Read Steps 2 and 3 of 'Discover and replicate VMware VMs' (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-replicate): target appliance, replicate (up to 10 VMs per batch; logical network, storage path, VHDX), seed disks, Ready to migrate.",
+            "command": "",
+            "check": "You know what the storage account holds (metadata only) and where the disk data goes."
+          },
+          {
+            "title": "Migrate, verify, complete",
+            "instructions": "Read 'Migrate VMware VMs to Azure Local' (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-migrate): migrate with the source shut down, verify in the portal and the guest, Complete migration, clean up, enable guest management.",
+            "command": "",
+            "check": "You can say why Complete migration matters (seed disks and replication state)."
+          },
+          {
+            "title": "Check the limits",
+            "instructions": "Read the migration FAQ (https://learn.microsoft.com/azure/azure-local/migrate/migrate-faq): batches, boot type, static IPs, Arc agent reuse. Hyper-V sources follow the same pattern as a preview (https://learn.microsoft.com/azure/azure-local/migrate/migration-azure-migrate-overview).",
+            "command": "",
+            "check": "You know which source VMs need preparation (BitLocker, shared disks, Linux integration services)."
+          }
+        ],
         "troubleshooting": [],
         "cleanup": [],
         "repoPaths": [
@@ -638,18 +670,39 @@
     },
     {
       "id": "az-4-2-node",
-      "title": "Fault 3: node failure (recorded incident, live commentary)",
+      "title": "Fault 3: node failure (animation)",
       "section": "4.2",
-      "mode": "recorded",
+      "mode": "animation",
       "minutes": 1.5,
       "followAlong": {
-        "level": "none",
-        "goal": "Not run outside the lab.",
+        "level": "read",
+        "goal": "Read what a node failure does on a two-node instance and how to prove recovery.",
         "needs": [],
-        "steps": [],
+        "steps": [
+          {
+            "title": "Quorum",
+            "instructions": "Read 'Understanding cluster and pool quorum' (https://learn.microsoft.com/windows-server/storage/storage-spaces/quorum): two nodes with a witness survive one node failure, not a second.",
+            "command": "",
+            "check": "You can say why a two-node instance needs a witness."
+          },
+          {
+            "title": "VMs and GPUs",
+            "instructions": "Read 'Virtual machine resiliency for Azure Local' (https://learn.microsoft.com/azure/azure-local/manage/disaster-recovery-vm-resiliency) and the DDA note in 'Use GPUs with clustered VMs' (https://learn.microsoft.com/windows-server/virtualization/hyper-v/deploy/use-gpu-with-clustered-vm).",
+            "command": "",
+            "check": "You know why a node failure restarts VMs instead of live-migrating them, and where a DDA VM can restart."
+          },
+          {
+            "title": "Storage resync and the checks",
+            "instructions": "Read 'Understand and monitor storage resync' (https://learn.microsoft.com/windows-server/storage/storage-spaces/understand-storage-resync) and the resume and resync steps of 'Failover cluster maintenance procedures' (https://learn.microsoft.com/azure/azure-local/manage/maintain-servers).",
+            "command": "",
+            "check": "You can name the commands that prove recovery: Get-StorageJob empty, Get-VirtualDisk Healthy."
+          }
+        ],
         "troubleshooting": [],
         "cleanup": [],
-        "repoPaths": []
+        "repoPaths": [
+          "handouts/Day2_Operations_Runbook.md"
+        ]
       }
     },
     {

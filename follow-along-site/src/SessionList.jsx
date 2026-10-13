@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const MODE_LABEL = { live: 'Live', recorded: 'Recorded', 'live+recorded': 'Live + clip', slide: 'Slide' };
+const MODE_LABEL = { live: 'Live', recorded: 'Recorded', 'live+recorded': 'Live + clip', slide: 'Slide', animation: 'Animation' };
 const LEVEL_LABEL = { full: 'Follow along', read: 'Read along', none: 'Watch only' };
 
 export default function SessionList({ session }) {

@@ -72,8 +72,8 @@ Deployment runs in two passes of the same definition.
 
 | Pass | What it does | Typical duration |
 |---|---|---|
-| **Validate** | Creates the remaining prerequisite resources, runs the Environment Checker and the deployment validation | About 10 minutes |
-| **Deploy** | Builds the cluster, the storage pool and infrastructure volume, applies the network intents, deploys the Arc Resource Bridge and management stack (40 to 45 minutes on its own), creates the custom location and writes secrets to Key Vault | 2.5 to 3 hours |
+| **Validate** | Creates the remaining prerequisite resources, runs the Environment Checker and the deployment validation | About 15 minutes for one or two machines |
+| **Deploy** | Builds the cluster, the storage pool and infrastructure volume, applies the network intents, deploys the Arc Resource Bridge and management stack (40 to 45 minutes on its own in our build), creates the custom location and writes secrets to Key Vault | About 2.5 hours for two nodes (the template guide says 2.5 to 3 hours) |
 
 Use the portal wizard for the first deployment and the Resource Manager template for repeats (Microsoft recommends this order). In the portal: Azure Local, Create instance; choose subscription, resource group, instance name and region; choose **Standard** or **Rack aware**; choose the identity provider **Local Identity with Azure Key Vault**; add the machines.
 

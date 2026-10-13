@@ -61,7 +61,7 @@ Start from an exact SKU in the Azure Local catalog and ask the hardware provider
 | **Options** | Two nodes, switched storage; two nodes, switchless; three or more nodes; Rack Aware cluster |
 | **Decision (IIC)** | Two nodes, switched storage, cloud witness |
 
-Quorum facts (Microsoft Learn): with two nodes a witness is required. Two nodes plus a witness survive one node failure; they cannot survive a second failure. If a node and then the witness are lost (or both at once), the cluster has one vote of three and goes offline. Use a cloud witness when you have internet access, and a file share witness otherwise. In the current release a witness storage account cannot be shared between systems.
+Quorum facts (Microsoft Learn): with two nodes a witness is required. Two nodes plus a witness survive one node failure; they cannot survive a second failure. If a node and then the witness are lost (or both at once), the cluster has one vote of three and goes offline. A two-node cloud deployment requires a cloud witness (the deployment template accepts only Cloud as the witness type for two nodes). In the current release a witness storage account cannot be shared between systems.
 
 Trade-off to state to the customer: on two nodes, volumes use a two-way mirror, so one fault leaves zero redundancy until the repair finishes.
 
@@ -92,7 +92,7 @@ Why it is not chosen for IIC: it needs two rooms or racks with the required late
 |---|---|---|
 | Direct outbound | More than 100 FQDNs | Simplest to build, largest allow-list |
 | Enterprise proxy | Same list | TLS inspection must be disabled for the required endpoints |
-| **Arc gateway** | Roughly 23 to fewer than 30 | Tunnels supported HTTPS traffic; **new deployments on 2506 or later only; it cannot be enabled after deployment** |
+| **Arc gateway** | Fewer than 30 | Tunnels supported HTTPS traffic; **new deployments on 2506 or later only; it cannot be enabled after deployment** |
 | Proxy plus Arc gateway | Fewest | Recommended for new production deployments on a public path |
 | Private path | Arc gateway plus a firewall explicit proxy over ExpressRoute or site-to-site VPN | Requires Azure Local 2608 or later; earlier releases do not support it |
 | Disconnected operations | n/a | For air-gapped sites |
@@ -149,7 +149,7 @@ The landing zone must contain, before Deploy: resource groups, registered resour
 | **Options** | Backup only; backup plus Azure Site Recovery to Azure; Hyper-V Replica to a second cluster; none |
 | **Decision (IIC)** | Backup for all tiers; Site Recovery to Azure for tier-1 workloads with a quarterly test failover |
 
-Facts: backup is recovery in hours and replication is continuity in minutes; neither replaces the other. Site Recovery can reach a recovery point objective as low as 30 seconds. The Site Recovery extension for Azure Local is documented as **preview and for test environments**; for production, configure Site Recovery manually with the Hyper-V to Azure option. Confirm the status on the day you design. Restoring or failing back an Azure Local VM to a different cluster returns it as an unmanaged VM until it is re-registered.
+Facts: backup is recovery in hours and replication is continuity in minutes; neither replaces the other. For Azure Local VMs, Microsoft Learn documents two backup routes: Azure Backup Server (host-level or guest-level, with long-term retention in a Recovery Services vault) or a supported partner product; choose by the tier requirements ([VM resiliency for Azure Local](https://learn.microsoft.com/azure/azure-local/manage/disaster-recovery-vm-resiliency)). Site Recovery can reach a recovery point objective as low as 30 seconds. The Site Recovery extension for Azure Local is documented as **preview and for test environments**; for production, configure Site Recovery manually with the Hyper-V to Azure option. Confirm the status on the day you design. Restoring or failing back an Azure Local VM to a different cluster returns it as an unmanaged VM until it is re-registered.
 
 Operations requirements to decide now and build later: monitoring scope and cost ceiling, maintenance windows for guests and for the cluster, the security baseline and policy scope, the support model and escalation, and which team owns which update plane.
 

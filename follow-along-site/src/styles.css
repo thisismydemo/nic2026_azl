@@ -84,6 +84,7 @@ footer { max-width: 980px; margin: 0 auto; padding: 1rem; color: var(--muted); f
 .mode-live { color: var(--good); border-color: var(--good); }
 .mode-recorded { color: var(--warn); border-color: var(--warn); }
 .mode-live-recorded { color: var(--accent); border-color: var(--accent); }
+.mode-animation { color: var(--accent); border-color: var(--accent); }
 .lvl-full { color: var(--good); border-color: var(--good); }
 .lvl-read { color: var(--accent); border-color: var(--accent); }
 .lvl-none { color: var(--muted); }
