@@ -236,6 +236,7 @@ asr:
             Mock New-AzRoleAssignment {}
             Mock Invoke-AzRestMethod {
                 if ($Method -ne 'GET') { throw 'no write expected' }
+                if ($Path -match 'clusters/example-cluster\?') { return [pscustomobject]@{ StatusCode = 200; Content = '{"identity":{"principalId":"example-principal"}}' } }
                 if ($Path -match 'machines/') { return [pscustomobject]@{ StatusCode = 200; Content = '{"identity":{"principalId":"example-principal"}}' } }
                 if ($Path -match '(replicationFabrics|extendedInformation|extensions)/') { return [pscustomobject]@{ StatusCode = 404; Content = '' } }
                 [pscustomobject]@{ StatusCode = 200; Content = '{}' }

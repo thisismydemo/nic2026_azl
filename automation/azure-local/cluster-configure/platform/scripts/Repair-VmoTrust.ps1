@@ -23,6 +23,7 @@
     Lab values come from environment/azure-local (Get-NIC26Config); the expected root thumbprint and signing kid are
     parameters (read them from the PreCheck output / the incident record).
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Private helpers inside a script that is gated as a whole (-Execute); they never run on their own.')]
 [CmdletBinding()]
 param(
     [ValidateSet('PreCheck', 'Evidence', 'StopAgents', 'StartFirst', 'StartSecond', 'ReFeed', 'Reload', 'Verify', 'All')]
@@ -63,7 +64,8 @@ function Get-PkiState {
         $h = @{}; foreach ($f in 'ca-pool.json', 'rootca.pem', 'jwt-signing-pool.json') { $h[$f] = (Get-FileHash "$d\$f" -Algorithm SHA256).Hash }
         $pool = Get-Content -Raw "$d\jwt-signing-pool.json" | ConvertFrom-Json
         [pscustomobject]@{ Hashes = $h; PubKeys = @($pool.payload.keys); Kids = @($pool.payload.key_metas.kid); Jwt = (Get-Content -Raw "$d\overlay.jwt").Trim()
-            CaPem = (Get-Content -Raw "$d\rootca.pem").TrimEnd("`r", "`n"); CaPool = (Get-Content -Raw "$d\ca-pool.json" | ConvertFrom-Json) }
+            CaPem = (Get-Content -Raw "$d\rootca.pem").TrimEnd("`r", "`n"); CaPool = (Get-Content -Raw "$d\ca-pool.json" | ConvertFrom-Json)
+        }
     }
     $parts = $r.Jwt.Split('.')
     $hdr = [Text.Encoding]::UTF8.GetString((B64U $parts[0])) | ConvertFrom-Json
@@ -110,7 +112,8 @@ function Get-NodeLeafOk($node, $caCert) {
         $ch = [Security.Cryptography.X509Certificates.X509Chain]::new(); $ch.ChainPolicy.TrustMode = 'CustomRootTrust'
         $null = $ch.ChainPolicy.CustomTrustStore.Add($caCert); $ch.ChainPolicy.RevocationMode = 'NoCheck'
         $ch.Build($leaf)
-    } catch { $false }
+    }
+    catch { $false }
 }
 function Invoke-Node($node, [scriptblock]$sb) { Invoke-Command -ComputerName $node.management_ip -Credential $cred -ScriptBlock $sb }
 function Start-Agent($node, $base) {

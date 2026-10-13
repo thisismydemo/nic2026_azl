@@ -264,17 +264,20 @@ function Invoke-Remove {
         $t0 = Get-Date
         $null = Invoke-DAz @('stack-hci-vm', 'delete', '-g', $rg, '--name', $vmName, '--yes')
         T 'vm-deleted' $t0
-    } else { L "${vmName}: not present" }
+    }
+    else { L "${vmName}: not present" }
     if (Get-State $nicId) {
         $t0 = Get-Date
         $null = Invoke-DAz @('stack-hci-vm', 'network', 'nic', 'delete', '-g', $rg, '--name', $nicName, '--yes')
         T 'nic-deleted' $t0
-    } else { L "${nicName}: not present" }
+    }
+    else { L "${nicName}: not present" }
     if (Get-Json $machineId) {
         $t0 = Get-Date
         $null = Invoke-DAz @('resource', 'delete', '--ids', $machineId)
         T 'arc-machine-deleted' $t0
-    } else { L "Arc machine ${vmName}: not present" }
+    }
+    else { L "Arc machine ${vmName}: not present" }
     # Verify nothing with the VM's name is left. The resource list lags a direct read by seconds (dry run 12 Oct: the machine
     # was already 404 on show and still listed 4 s later), so re-read for up to a minute before reporting a leftover.
     for ($n = 1; $n -le 6; $n++) {

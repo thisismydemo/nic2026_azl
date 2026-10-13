@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
     Scripted "Prepare infrastructure" for Azure Site Recovery on Azure Local (T-5.5.3): Hyper-V site in the vault, the
-    node identities on the vault, the ASRExtension cluster extension on every node, and the replication policy mapped
+    cluster identity on the vault, the ASRExtension cluster extension on every node, and the replication policy mapped
     to the site. Preview by default; -Execute changes Azure and installs the agent on the nodes.
 .DESCRIPTION
     Microsoft documents two routes to the same result: the portal (Azure Local resource > Capabilities > Disaster recovery
@@ -16,8 +16,10 @@
       0. Vault extended information (integrity key) when missing, as the portal creates it on first use.
       1. Hyper-V site (replicationFabrics, instanceType HyperVSite); its internalIdentifier is the extension's SiteId.
       2. Role asr.node_vault_role (default Site Recovery Contributor: vault certificates/write, extendedInformation,
-         replicationFabrics) for each node's Arc system-assigned identity, scope = the vault only.
+         replicationFabrics) for the Azure Local cluster resource's system-assigned identity, scope = the vault only:
+         the extension fetches the vault credentials with the cluster identity, not the node identities.
       3. Cluster extension asr.extension_name (cluster-aware: Azure installs it on every node; the portal does the same).
+         Healthy only when aggregateState is Succeeded; a failed node registration is re-run with a new forceUpdateTag.
          Learn documents no node restart for this install; run Get-AsrNodeState.ps1 before (no pending reboot) and after
          (LastBootUpTime unchanged).
       4. Wait until every node is a Connected provider in the site, then map the replication policy to the site's
@@ -94,7 +96,7 @@ else {
 }
 
 # 1. Hyper-V site
-$site =Invoke-Arm GET $siteId $asrApi $null
+$site = Invoke-Arm GET $siteId $asrApi $null
 if ($site) { L "site $($asr.hyperv_site_name): exists (SiteId $($site.properties.internalIdentifier))" }
 elseif (-not $Execute) { L "PLAN create Hyper-V site $($asr.hyperv_site_name) in $($asr.vault_name)" }
 else {
@@ -103,44 +105,58 @@ else {
     L "site $($asr.hyperv_site_name): created (SiteId $($site.properties.internalIdentifier))"
 }
 
-# 2. Node identities on the vault
-foreach ($node in @($envy.nodes)) {
-    $m = Invoke-Arm GET "/subscriptions/$sub/resourceGroups/$($envy.vm_management.resource_group)/providers/Microsoft.HybridCompute/machines/$($node.name)" '2024-07-10' $null
-    if (-not $m -or -not $m.identity.principalId) { throw "Arc machine $($node.name) has no system-assigned identity." }
-    $pid_ = [string]$m.identity.principalId
-    $has = Get-AzRoleAssignment -ObjectId $pid_ -Scope $vaultId -RoleDefinitionName $role -ErrorAction SilentlyContinue | Where-Object Scope -eq $vaultId
-    if ($has) { L "$($node.name): '$role' on the vault exists" }
-    elseif (-not $Execute) { L "PLAN grant '$role' on $($asr.vault_name) to $($node.name) (Arc identity)" }
-    else { $null = New-AzRoleAssignment -ObjectId $pid_ -Scope $vaultId -RoleDefinitionName $role -ObjectType ServicePrincipal; L "$($node.name): '$role' on the vault granted" }
-}
+# 2. The cluster identity on the vault. The extension's RegisterAsr.ps1 takes a token for the Azure Local CLUSTER
+#    resource's system-assigned identity (Arc IMDS on the node, "Get cluster msi token") and PUTs a vault credential
+#    certificate (vaults/certificates/write), so the role belongs to the cluster identity, not the node identities
+#    (13 Oct 2026: AuthorizationFailed for the cluster identity while only the nodes held the role).
+$cluster = Invoke-Arm GET $clusterId $hciApi $null
+if (-not $cluster -or -not $cluster.PSObject.Properties['identity'] -or -not $cluster.identity.principalId) { throw "Cluster $($envy.cluster_name) has no system-assigned identity." }
+$clusterPrincipal = [string]$cluster.identity.principalId
+$has = Get-AzRoleAssignment -ObjectId $clusterPrincipal -Scope $vaultId -RoleDefinitionName $role -ErrorAction SilentlyContinue | Where-Object Scope -eq $vaultId
+if ($has) { L "cluster $($envy.cluster_name): '$role' on the vault exists" }
+elseif (-not $Execute) { L "PLAN grant '$role' on $($asr.vault_name) to the cluster identity of $($envy.cluster_name)" }
+else { $null = New-AzRoleAssignment -ObjectId $clusterPrincipal -Scope $vaultId -RoleDefinitionName $role -ObjectType ServicePrincipal; L "cluster $($envy.cluster_name): '$role' on the vault granted (allow a few minutes for propagation)"; Start-Sleep -Seconds 300 }
 
-# 3. Cluster extension
+# 3. Cluster extension. Healthy only when every node reports Succeeded (aggregateState). A failed Enable on any node is
+#    re-run with a new forceUpdateTag: the Enable handler runs again (registration only; no reinstall, no node restart).
+function Write-ExtState($e) {
+    L "extension ${extName}: $($e.properties.provisioningState) / aggregate $($e.properties.aggregateState)"
+    foreach ($pn in @($e.properties.perNodeExtensionDetails)) { L "  $($pn.name): $($pn.state)" }
+}
+$settings = [ordered]@{
+    SubscriptionId                      = $sub
+    Environment                         = 'AzureCloud'
+    ResourceGroup                       = [string]$asr.vault_resource_group
+    ResourceName                        = [string]$asr.vault_name
+    Location                            = [string]$shared.location
+    SiteId                              = if ($site) { [string]$site.properties.internalIdentifier } else { '' }
+    SiteName                            = [string]$asr.hyperv_site_name
+    PolicyId                            = $policyId
+    PrivateEndpointStateForSiteRecovery = 'None'
+}
 $ext = Invoke-Arm GET $extId $hciApi $null
-if ($ext -and $ext.properties.provisioningState -eq 'Succeeded') { L "extension ${extName}: $($ext.properties.provisioningState) / $($ext.properties.aggregateState)" }
-elseif (-not $Execute) { L "PLAN install cluster extension $extName (Microsoft.SiteRecovery.Dra/Windows) on $($envy.cluster_name): every node" }
-elseif ($ext) { L "extension ${extName}: present in state '$($ext.properties.provisioningState)' - left for an operator decision"; return }
+$healthy = $ext -and $ext.properties.provisioningState -eq 'Succeeded' -and $ext.properties.aggregateState -eq 'Succeeded'
+if ($healthy) { Write-ExtState $ext }
+elseif (-not $Execute) {
+    if ($ext) { Write-ExtState $ext; L "PLAN re-run the Enable handler of $extName on every node (new forceUpdateTag)" }
+    else { L "PLAN install cluster extension $extName (Microsoft.SiteRecovery.Dra/Windows) on $($envy.cluster_name): every node" }
+}
+elseif ($ext -and $ext.properties.provisioningState -notin 'Succeeded', 'Failed') { Write-ExtState $ext; L 'extension busy - rerun later'; return }
 else {
-    $settings = [ordered]@{
-        SubscriptionId                      = $sub
-        Environment                         = 'AzureCloud'
-        ResourceGroup                       = [string]$asr.vault_resource_group
-        ResourceName                        = [string]$asr.vault_name
-        Location                            = [string]$shared.location
-        SiteId                              = [string]$site.properties.internalIdentifier
-        SiteName                            = [string]$asr.hyperv_site_name
-        PolicyId                            = $policyId
-        PrivateEndpointStateForSiteRecovery = 'None'
+    $params = @{ publisher = 'Microsoft.SiteRecovery.Dra'; type = 'Windows'; enableAutomaticUpgrade = $true; settings = $settings }
+    if ($ext) {
+        $params.forceUpdateTag = [guid]::NewGuid().ToString()
+        L "extension ${extName}: re-running the Enable handler on every node (forceUpdateTag)"
     }
-    $body = @{ properties = @{ extensionParameters = @{ publisher = 'Microsoft.SiteRecovery.Dra'; type = 'Windows'; enableAutomaticUpgrade = $true; settings = $settings } } }
-    L "extension ${extName}: installing on every node"
-    $null = Invoke-Arm PUT $extId $hciApi $body
+    else { L "extension ${extName}: installing on every node" }
+    $null = Invoke-Arm PUT $extId $hciApi @{ properties = @{ extensionParameters = $params } }
+    Start-Sleep -Seconds 60
     $ext = Wait-Until {
         $e = Invoke-Arm GET $extId $hciApi $null
-        if ($e -and $e.properties.provisioningState -in 'Succeeded', 'Failed', 'Canceled') { $e }
+        if ($e -and $e.properties.provisioningState -in 'Succeeded', 'Failed', 'Canceled' -and $e.properties.aggregateState -in 'Succeeded', 'Failed', 'PartiallySucceeded', 'Canceled') { $e }
     } "extension $extName" $WaitMinutes
-    L "extension ${extName}: $($ext.properties.provisioningState) / $($ext.properties.aggregateState)"
-    foreach ($pn in @($ext.properties.perNodeExtensionDetails)) { L "  $($pn.name): $($pn.state) $($pn.instanceView.status.message)" }
-    if ($ext.properties.provisioningState -ne 'Succeeded') { throw "Extension $extName did not succeed." }
+    Write-ExtState $ext
+    if ($ext.properties.aggregateState -ne 'Succeeded') { throw "Extension $extName did not succeed on every node; read RegisterLog_*.log under C:\ProgramData\GuestConfig\extension_logs\Microsoft.SiteRecovery.Dra.Windows on the node." }
 }
 if (-not $Execute) { return }
 

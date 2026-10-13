@@ -193,7 +193,8 @@ if ('CloudAccount' -in $run) {
             try {
                 $body = @{ accountEnabled = $true; displayName = (Get-Opt $cs 'cloud_account_display_name' ($cs.cloud_account_upn -split '@')[0]); mailNickname = ($cs.cloud_account_upn -split '@')[0]
                     userPrincipalName = $cs.cloud_account_upn; usageLocation = (Get-Opt $cs 'cloud_account_usage_location' 'US')
-                    passwordProfile = @{ forceChangePasswordNextSignIn = $false; password = $pw }; passwordPolicies = 'DisablePasswordExpiration' }
+                    passwordProfile = @{ forceChangePasswordNextSignIn = $false; password = $pw }; passwordPolicies = 'DisablePasswordExpiration'
+                }
                 $null = Invoke-Graph post "$Graph/v1.0/users" $body -Sensitive
             }
             finally { Remove-Variable pw, body -ErrorAction SilentlyContinue }
@@ -353,7 +354,8 @@ if ('Configure' -in $run) {
     $secrets = @{ value = @(
             @{ key = 'Domain'; value = (@{ domain = $Domain } | ConvertTo-Json -Compress) },
             @{ key = 'AppKey'; value = (@{ appKeyScenario = $(if ($Phs) { 'AD2AADPasswordHash' } else { 'AD2AADProvisioning' }) } | ConvertTo-Json -Compress) },
-            @{ key = 'SyncNotificationSettings'; value = (@{ Enabled = [bool](Get-Opt $cs 'notification_email_enabled' $false); DeleteThresholdEnabled = $true; DeleteThresholdValue = [int](Get-Opt $cs 'delete_threshold' 50) } | ConvertTo-Json -Compress) }) }
+            @{ key = 'SyncNotificationSettings'; value = (@{ Enabled = [bool](Get-Opt $cs 'notification_email_enabled' $false); DeleteThresholdEnabled = $true; DeleteThresholdValue = [int](Get-Opt $cs 'delete_threshold' 50) } | ConvertTo-Json -Compress) })
+    }
     Invoke-Change $ConfigName "PUT synchronization secrets, full set, always sent (Domain=$Domain, AppKey, SyncNotificationSettings delete threshold $(Get-Opt $cs 'delete_threshold' 50))" { $null = Invoke-Graph put "$Graph/beta/servicePrincipals/$($sp.id)/synchronization/secrets" $secrets }
     if ($job) {
         $schemaUrl = "$Graph/beta/servicePrincipals/$($sp.id)/synchronization/jobs/$($job.id)/schema"

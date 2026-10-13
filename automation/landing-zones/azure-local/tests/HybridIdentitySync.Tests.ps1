@@ -137,7 +137,7 @@ Describe 'cloud_sync configuration contract' -Tag 'Scripts', 'Identity' {
         $schema = Get-Content $script:SchemaPath -Raw | ConvertFrom-Json -AsHashtable
         $script:CsSchema = $schema.properties.hybrid_identity.properties.cloud_sync
         $script:Used = @([regex]::Matches($script:Text, '\$cs\.(\w+)') | ForEach-Object { $_.Groups[1].Value }) +
-            @([regex]::Matches($script:Text, "Get-Opt \`$cs '(\w+)'") | ForEach-Object { $_.Groups[1].Value }) | Sort-Object -Unique
+        @([regex]::Matches($script:Text, "Get-Opt \`$cs '(\w+)'") | ForEach-Object { $_.Groups[1].Value }) | Sort-Object -Unique
     }
     It 'the schema defines hybrid_identity.cloud_sync and rejects unknown keys' {
         $script:CsSchema | Should -Not -BeNullOrEmpty
