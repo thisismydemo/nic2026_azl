@@ -2,7 +2,7 @@
 
 Replicating Azure Local virtual machines to Azure with Azure Site Recovery, and running the planned failover, test failover, commit, re-protect and failback procedures.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family). **Important:** the Azure Site Recovery extension for Azure Local that automates deployment is documented as a **preview** and applicable to test environments. For production, configure Site Recovery manually with the **Hyper-V to Azure disaster recovery** option on the cluster. Confirm the current status when you design, and state it in your design record.
+**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family); lab-tested 2026-10-13 (replication, test failover, cleanup). **Important:** the Azure Site Recovery extension for Azure Local that automates deployment is documented as a **preview** and applicable to test environments. For production, configure Site Recovery manually with the **Hyper-V to Azure disaster recovery** option on the cluster. Confirm the current status when you design, and state it in your design record.
 
 ## When to use it
 
@@ -40,6 +40,13 @@ Limits to check against the Hyper-V to Azure support matrix: BitLocker must be d
 3. Select **Prepare infrastructure**. The portal creates a resource group with a storage account, the vault and the policy; downloads the Site Recovery agent to each node; registers the nodes with the service; and associates the policy with the Hyper-V site. This can take several minutes per node.
 
 Evidence: the Hyper-V site shows the nodes registered and connected in the vault.
+
+**By script instead of the portal.** Microsoft documents the same agent as a cluster extension (Azure Arc extension management on Azure Local: publisher `Microsoft.SiteRecovery.Dra`, type `Windows`, with the vault, Hyper-V site and policy in its settings). Create the Hyper-V site in the vault first (its internal identifier is the extension's site ID), then:
+
+- give the **Azure Local cluster resource's** managed identity *Site Recovery Contributor* on the vault: the extension fetches the vault registration key with that identity, not with the machines' identities;
+- give the **vault's** managed identity *Contributor* and *Storage Blob Data Contributor* on the cache storage account (Standard account) before you enable replication to managed disks;
+- install the extension (it installs on every machine; no restart was needed in our lab), wait until every machine reports success, then associate the replication policy with the site;
+- if a machine reports a failed registration, uninstall the extension and install it again (the documented route); a force-update tag is not honoured for this extension.
 
 ## Procedure 2: Enable replication
 
@@ -83,6 +90,26 @@ Failover duration varies with VM size and the hydration process; allow for it in
 4. **Reverse replicate** so the VM again replicates to Azure.
 
 If the original cluster is unavailable, register another Azure Local cluster to the Site Recovery Hyper-V site and fail back there. The VM returns as an **unmanaged VM**: its services run, but it cannot be managed from Azure until it is registered on the new cluster and reconnected to its Azure resource (with the new resource group, custom location, storage path and logical network). Failing back to the same cluster restores the Azure connection within the Arc agent's 45-day reconnection window.
+
+## What we measured in the lab (13 Oct 2026)
+
+Two-machine Azure Local instance, one Windows Server 2025 VM (Standard security type, 2 vCPU, 8 GB, 127 GB dynamic OS disk), replication to managed disks in the same region:
+
+| Step | Time |
+|---|---|
+| Agent installed on both machines (cluster extension) | about 11 min, plus about 3 min to associate the policy |
+| Enable replication job | 77 s |
+| Initial replication until *Protected* | about 25 min |
+| Test failover job (latest processed point) | 13 min 25 s |
+| Test failover cleanup | 70 s |
+
+Things that cost us time, so they do not cost you:
+
+- Create the VM as a **Standard** security type (no Trusted launch, secure boot off) before you plan Site Recovery for it.
+- Without a connected guest agent the protectable item reports no operating system: choose the OS type and the OS disk yourself.
+- Pick a failover size that your subscription offers in the region and that has a SCSI disk controller and supports the VM's generation; several current sizes are NVMe-only.
+- The test VM takes the subnet of the test network that has the **recovery subnet's name**. If your test network is a separate, NSG-isolated subnet in the recovery virtual network, point the recovery subnet at it for the drill and back afterwards, or use a separate test network with the same subnet names.
+- Compute and network settings are accepted only once the item is *Protected*.
 
 ## Caveats to put in the design record
 

@@ -28,7 +28,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="top">
-        {/* per-session stripe: the Bifröst rainbow for AVD, the brass chart line for Azure Local */}
+        {/* per-session stripe: a departures board for AVD (amber split-flap cells), the brass chart line for Azure Local */}
         <div className={`stripe stripe-${session.id}`} aria-hidden="true" />
         <a href="#/" className="brand">{session.title}: follow along</a>
       </header>

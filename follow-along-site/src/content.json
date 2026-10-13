@@ -745,7 +745,7 @@
       "id": "az-4-5-asr",
       "title": "Planned ASR failover to Azure: start and result",
       "section": "4.5",
-      "mode": "live+recorded",
+      "mode": "live",
       "minutes": 1.5,
       "followAlong": {
         "level": "read",

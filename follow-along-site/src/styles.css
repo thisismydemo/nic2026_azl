@@ -52,10 +52,10 @@ h3 { font-size: 1rem; margin: 1rem 0 0.3rem; }
 
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 0.7rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line); position: relative; }
 .top .stripe { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
-/* AVD: Bifröst, the rainbow bridge. Azure Local: the Voyage Chart's sea, brass course and current. Home: both, half each. */
-.top .stripe-avd { background: linear-gradient(90deg, #ff5c5c, #ffb84d, #f4e04d, #52d19a, #4dc3ff, #7a7cff, #b48cff); }
+/* AVD (Departures, D-060): a departures board, amber split-flap cells on charcoal. Azure Local: the Voyage Chart's sea, brass course and current. Home: both, half each. */
+.top .stripe-avd { background: repeating-linear-gradient(90deg, #F2B630 0 18px, #1B2633 18px 21px); }
 .top .stripe-azl { background: linear-gradient(90deg, #12324A 0 20%, #B07A12 20% 80%, #2B78A3 80% 100%); }
-.top .stripe-home { background: linear-gradient(90deg, #ff5c5c, #f4e04d, #4dc3ff, #b48cff 50%, #12324A 50% 60%, #B07A12 60% 90%, #2B78A3 90%); }
+.top .stripe-home { background: linear-gradient(90deg, transparent 50%, #12324A 50% 60%, #B07A12 60% 90%, #2B78A3 90%), repeating-linear-gradient(90deg, #F2B630 0 18px, #1B2633 18px 21px); }
 .brand { font-weight: 700; color: var(--ink); }
 .top nav { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.95rem; }
 footer { max-width: 980px; margin: 0 auto; padding: 1rem; color: var(--muted); font-size: 0.85rem; }
