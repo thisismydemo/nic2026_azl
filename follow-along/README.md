@@ -160,9 +160,16 @@ Replace the placeholders in the commands with your own values:
 
 ## Read along
 
-### Azure Migrate discovery (recorded)
+### Azure Migrate discovery (animation)
 
-**Goal:** Understand the Azure Migrate discovery route.
+**Goal:** Understand the Azure Migrate discovery route to Azure Local.
+
+**Steps**
+
+1. **Read the overview and prerequisites.** Read the Azure Migrate overview for VMware to Azure Local (https://learn.microsoft.com/azure/azure-local/migrate/migration-azure-migrate-vmware-overview) and the prerequisites (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-prerequisites): the Azure Migrate project is created in the Azure portal, and the Azure Local instance needs a logical network and a storage path.
+   - You should see: You can list the source-side and target-side prerequisites.
+2. **Read the discovery steps.** Read Step 1 of 'Discover and replicate VMware VMs' (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-replicate): project key, source appliance, VDDK 8.0.x, vCenter credentials, onboarding to Azure Local, Start discovery.
+   - You should see: You know why agentless dependency analysis is switched off on this route.
 
 **In the repo:** `handouts/Azure_Migrate_to_Azure_Local.md`
 
@@ -254,9 +261,18 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `automation/demo/azure-local/scripts/Test-Day2Readiness.ps1`
 
-### Azure Migrate: VMware to Azure Local (recorded)
+### Azure Migrate: VMware to Azure Local (animation)
 
-**Goal:** Read the migration guide.
+**Goal:** Read the migration procedure end to end.
+
+**Steps**
+
+1. **Replicate.** Read Steps 2 and 3 of 'Discover and replicate VMware VMs' (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-replicate): target appliance, replicate (up to 10 VMs per batch; logical network, storage path, VHDX), seed disks, Ready to migrate.
+   - You should see: You know what the storage account holds (metadata only) and where the disk data goes.
+2. **Migrate, verify, complete.** Read 'Migrate VMware VMs to Azure Local' (https://learn.microsoft.com/azure/azure-local/migrate/migrate-vmware-migrate): migrate with the source shut down, verify in the portal and the guest, Complete migration, clean up, enable guest management.
+   - You should see: You can say why Complete migration matters (seed disks and replication state).
+3. **Check the limits.** Read the migration FAQ (https://learn.microsoft.com/azure/azure-local/migrate/migrate-faq): batches, boot type, static IPs, Arc agent reuse. Hyper-V sources follow the same pattern as a preview (https://learn.microsoft.com/azure/azure-local/migrate/migration-azure-migrate-overview).
+   - You should see: You know which source VMs need preparation (BitLocker, shared disks, Linux integration services).
 
 **In the repo:** `handouts/Azure_Migrate_to_Azure_Local.md`
 
