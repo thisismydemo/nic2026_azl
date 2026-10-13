@@ -9,9 +9,14 @@ locals {
     var.avd_spoke_prefix == "" ? [] : [var.avd_spoke_prefix]
   )
 
-  # name, priority, direction, access, protocol, ports, sources, destinations (mirrors bicep/modules/network.bicep)
+  # D-056: the jump server is never blocked by any NSG (allow-all inbound at 101); empty jump_server_source_prefix = no rule
+  jump_server_rules = [for p in compact([var.jump_server_source_prefix]) :
+    ["AllowJumpServerInbound", 101, "Inbound", "Allow", "*", ["*"], [p], ["*"], "Jump server is never blocked (owner, 12 Oct 2026)"]
+  ]
+
+  # name, priority, direction, access, protocol, ports, sources, destinations[, description] (mirrors bicep/modules/network.bicep)
   nsg_rules = {
-    nsg_jump = concat([
+    nsg_jump = concat(local.jump_server_rules, [
       ["AllowBastionRdpSshInbound", 100, "Inbound", "Allow", "Tcp", ["3389", "22"], [var.bastion_subnet_prefix], [var.subnet_jump_prefix]],
       ["AllowP2sRdpSshInbound", 110, "Inbound", "Allow", "Tcp", ["3389", "22"], [var.p2s_client_pool], [var.subnet_jump_prefix]],
       ["AllowP2sWinRmInbound", 120, "Inbound", "Allow", "Tcp", ["5985", "5986"], [var.p2s_client_pool], [var.subnet_jump_prefix]],
@@ -23,11 +28,11 @@ locals {
       ["AllowAzureKmsActivationOutbound", 130, "Outbound", "Allow", "Tcp", ["1688"], ["*"], ["Internet"]],
       ["DenyAllOutbound", 4096, "Outbound", "Deny", "*", ["*"], ["*"], ["*"]],
     ])
-    nsg_pe = [
+    nsg_pe = concat(local.jump_server_rules, [
       ["AllowHttpsFromConsumersInbound", 100, "Inbound", "Allow", "Tcp", ["443"], local.pe_sources, [var.subnet_pe_prefix]],
       ["DenyAllInbound", 4096, "Inbound", "Deny", "*", ["*"], ["*"], ["*"]],
-    ]
-    nsg_mgmt = [
+    ])
+    nsg_mgmt = concat(local.jump_server_rules, [
       ["AllowBastionRdpSshInbound", 100, "Inbound", "Allow", "Tcp", ["3389", "22"], [var.bastion_subnet_prefix], [var.subnet_mgmt_prefix]],
       ["AllowP2sSshWinRmInbound", 110, "Inbound", "Allow", "Tcp", ["22", "5985", "5986"], [var.p2s_client_pool], [var.subnet_mgmt_prefix]],
       ["DenyAllInbound", 4096, "Inbound", "Deny", "*", ["*"], ["*"], ["*"]],
@@ -36,16 +41,16 @@ locals {
       ["AllowInternetHttpsOutbound", 120, "Outbound", "Allow", "Tcp", ["443"], ["*"], ["Internet"]],
       ["AllowAzureKmsActivationOutbound", 130, "Outbound", "Allow", "Tcp", ["1688"], ["*"], ["Internet"]],
       ["DenyAllOutbound", 4096, "Outbound", "Deny", "*", ["*"], ["*"], ["*"]],
-    ]
-    nsg_asr = [
+    ])
+    nsg_asr = concat(local.jump_server_rules, [
       ["AllowJumpRdpSshInbound", 100, "Inbound", "Allow", "Tcp", ["3389", "22"], [var.subnet_jump_prefix], [var.subnet_asr_prefix]],
       ["DenyAllInbound", 4096, "Inbound", "Deny", "*", ["*"], ["*"], ["*"]],
       ["AllowVnetOutbound", 100, "Outbound", "Allow", "*", ["*"], ["VirtualNetwork"], ["VirtualNetwork"]],
       ["AllowOnPremOutbound", 110, "Outbound", "Allow", "*", ["*"], ["*"], var.onprem_prefixes],
       ["AllowAzureKmsActivationOutbound", 120, "Outbound", "Allow", "Tcp", ["1688"], ["*"], ["Internet"]],
       ["DenyAllOutbound", 4096, "Outbound", "Deny", "*", ["*"], ["*"], ["*"]],
-    ]
-    nsg_asr_test = concat([
+    ])
+    nsg_asr_test = concat(local.jump_server_rules, [
       ["AllowJumpInbound", 100, "Inbound", "Allow", "*", ["*"], [var.subnet_jump_prefix], [var.subnet_asr_test_prefix]],
       ["DenyAllInbound", 4096, "Inbound", "Deny", "*", ["*"], ["*"], ["*"]],
       ["AllowIntraSubnetOutbound", 100, "Outbound", "Allow", "*", ["*"], [var.subnet_asr_test_prefix], [var.subnet_asr_test_prefix]],
@@ -90,12 +95,13 @@ resource "azurerm_network_security_group" "this" {
       access                       = security_rule.value[3]
       protocol                     = security_rule.value[4]
       source_port_range            = "*"
-      destination_port_range       = contains(security_rule.value[5], "*") ? "*" : null
-      destination_port_ranges      = contains(security_rule.value[5], "*") ? null : security_rule.value[5]
+      destination_port_range       = length(security_rule.value[5]) == 1 ? security_rule.value[5][0] : null
+      destination_port_ranges      = length(security_rule.value[5]) == 1 ? null : security_rule.value[5]
       source_address_prefix        = length(security_rule.value[6]) == 1 ? security_rule.value[6][0] : null
       source_address_prefixes      = length(security_rule.value[6]) == 1 ? null : security_rule.value[6]
       destination_address_prefix   = length(security_rule.value[7]) == 1 ? security_rule.value[7][0] : null
       destination_address_prefixes = length(security_rule.value[7]) == 1 ? null : security_rule.value[7]
+      description                  = try(security_rule.value[8], null)
     }
   }
   depends_on = [azurerm_resource_group.this]

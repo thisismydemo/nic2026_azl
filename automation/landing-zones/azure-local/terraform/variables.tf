@@ -95,6 +95,15 @@ variable "avd_spoke_prefix" {
   type    = string
   default = ""
 }
+variable "jump_server_source_prefix" {
+  type        = string
+  default     = ""
+  description = "D-056: private IPv4 /32 of the jump server; every NSG gets AllowJumpServerInbound (101, all protocols and ports) from it. Empty = no rule."
+  validation {
+    condition     = var.jump_server_source_prefix == "" || (can(cidrnetmask(var.jump_server_source_prefix)) && endswith(var.jump_server_source_prefix, "/32"))
+    error_message = "jump_server_source_prefix must be empty or one IPv4 /32 host prefix."
+  }
+}
 variable "enable_identity_peering" {
   type        = bool
   description = "P-13: direct spoke<->identity peerings (one resource on the shared identity VNet; owner approval)."

@@ -29,6 +29,12 @@ $envy = (Get-NIC26Config @cfgArgs).values
 $SubscriptionId = $envy.subscription_id; $ResourceGroupName = $envy.vm_management.resource_group
 $CustomLocationName = $envy.vm_management.custom_location; $Location = $envy.location
 $cl = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.ExtendedLocation/customLocations/$CustomLocationName"
+# StrictMode-safe lookup of an optional key on a config object (dictionary or PSCustomObject)
+function Get-Opt($Object, [string]$Key) {
+    if ($Object -is [System.Collections.IDictionary]) { return $Object[$Key] }
+    if ($Object.PSObject.Properties[$Key]) { return $Object.$Key }
+    return $null
+}
 $switch = [string]$envy.sdn.vm_switch_name
 $tags = @('project=nic26', 'environment=demo', 'workload=azure-local', 'lifecycle=temporary')
 function L([string]$m) { $line = "$(Get-Date -Format HH:mm:ss) $m"; $line; if ($LogFile) { Add-Content -LiteralPath $LogFile -Value $line } }
@@ -52,7 +58,7 @@ foreach ($l in $envy.logical_networks) {
         $a = @('stack-hci-vm', 'network', 'lnet', 'create', '-g', $ResourceGroupName, '--custom-location', $cl, '--location', $Location, '--name', $l.name,
             '--vm-switch-name', "`"$switch`"", '--ip-allocation-method', 'Static', '--address-prefixes', $l.subnet, '--gateway', $l.gateway,
             '--dns-servers') + @($l.dns_servers) + @('--vlan', [string]$l.vlan_id, '--ip-pool-start', $l.ip_pool.start, '--ip-pool-end', $l.ip_pool.end,
-            '--tags') + $tags + @("vlan=$($l.vlan_id)", "purpose=$($l.purpose)")
+            '--tags') + $tags + @("vlan=$($l.vlan_id)", "purpose=$(Get-Opt $l purpose)")
         $null = Invoke-AzCli $a; L "lnet $($l.name): created ($(State 'logicalNetworks' $l.name))"
     }
 }
@@ -72,14 +78,14 @@ foreach ($n in $envy.network_security_groups) {
             '--nsg-name', $n.name, '--name', $r.name, '--priority', [string]$r.priority, '--direction', $r.direction, '--access', $r.access,
             '--protocol', $r.protocol, '--source-port-ranges', '*', '--source-address-prefixes') + @($r.source) + @('--destination-address-prefixes') + @($r.destination) +
         @('--destination-port-ranges') + @($r.ports)
-        if ($r.description) { $a += @('--description', [string]$r.description) }
+        $desc = Get-Opt $r description; if ($desc) { $a += @('--description', [string]$desc) }
         $null = Invoke-AzCli $a; L "  rule $($r.name): created"
     }
 }
 
 # 3. Attach each NSG to its logical network (NSG only; DNS is never re-sent)
 foreach ($l in $envy.logical_networks) {
-    if (-not $l.nsg) { continue }
+    if (-not (Get-Opt $l nsg)) { continue }
     $cur = & $azExe stack-hci-vm network lnet show -g $ResourceGroupName --name $l.name --subscription $SubscriptionId --query 'properties.subnets[0].properties.networkSecurityGroup.id' -o tsv --only-show-errors 2>$null
     if ($cur -and ($cur -split '/')[-1] -eq $l.nsg) { L "lnet $($l.name): NSG $($l.nsg) already attached"; continue }
     if ($PSCmdlet.ShouldProcess($l.name, "Attach NSG $($l.nsg)")) {

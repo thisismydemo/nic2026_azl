@@ -45,6 +45,11 @@
     Import: expand the payload zip on this machine and compare every file with the signed inventory (slow, ~1 GB).
 .PARAMETER SkipGpuVmHandling
     Start/Post: do not drain/stop/start the DDA GPU VMs.
+.PARAMETER StartTimeoutMinutes
+    Post: how long to wait for a GPU VM started through Azure to run on the host (default 20).
+.PARAMETER HostStartFallback
+    Post: if the Azure start does not reach the host in time, start the clustered VM role on the host (Start-ClusterGroup).
+    A host-side power change syncs back to Azure on this build. Off by default.
 .PARAMETER PollSeconds
     Monitor poll interval (default 60).
 .PARAMETER TimeoutHours
@@ -67,6 +72,8 @@ param(
     [switch]$SkipGpuVmHandling,
     [ValidateRange(15, 600)][int]$PollSeconds = 60,
     [ValidateRange(1, 24)][int]$TimeoutHours = 8,
+    [ValidateRange(5, 120)][int]$StartTimeoutMinutes = 20,
+    [switch]$HostStartFallback,
     [string]$EnvironmentPath
 )
 Set-StrictMode -Version Latest
@@ -284,22 +291,47 @@ function Stop-GpuVms {
         Write-Step "$($vm.name) power state: $(Get-ArcVmPower $vm.name)"
     }
 }
+function Get-HostVmState([string]$Name) {
+    # State of the clustered VM role on the host (Hyper-V name = Azure name + unique suffix on this build)
+    foreach ($n in $nodeIp.Keys) {
+        $st = Invoke-Command -ComputerName $nodeIp[$n] -Credential $cred -Authentication Negotiate -ScriptBlock {
+            param($Prefix) $v = Get-VM | Where-Object { $_.Name -like "$Prefix*" } | Select-Object -First 1; if ($v) { [string]$v.State }
+        } -ArgumentList $Name
+        if ($st) { return $st }
+    }
+    'NotFound'
+}
 function Start-GpuVms {
     foreach ($vm in $gpuVms) {
-        if ((Get-ArcVmPower $vm.name) -ne 'Running') {
-            Write-Step "Starting $($vm.name)."
-            az stack-hci-vm start -g $cfg.vm_management.resource_group --name $vm.name --subscription $cfg.subscription_id --only-show-errors -o none
-            if ($LASTEXITCODE -ne 0) { throw "az stack-hci-vm start $($vm.name) failed." }
+        if ((Get-HostVmState $vm.name) -ne 'Running' -and (Get-ArcVmPower $vm.name) -ne 'Running') {
+            Write-Step "Starting $($vm.name) (az stack-hci-vm start --no-wait)."
+            az stack-hci-vm start -g $cfg.vm_management.resource_group --name $vm.name --subscription $cfg.subscription_id --no-wait --only-show-errors -o none
+            if ($LASTEXITCODE -ne 0) { Write-Warning "az stack-hci-vm start $($vm.name) returned $LASTEXITCODE (a previous operation may still be running)." }
+            $deadline = (Get-Date).AddMinutes($StartTimeoutMinutes)
+            while ((Get-HostVmState $vm.name) -ne 'Running' -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 30 }
+            if ((Get-HostVmState $vm.name) -ne 'Running') {
+                # 12 Oct 2026: after the rolling SBE update the Azure start stayed InProgress and never reached the host.
+                # A host-side power-on is synced back to Azure on this build; it runs only with -HostStartFallback.
+                if (-not $HostStartFallback) { throw "$($vm.name) did not start within $StartTimeoutMinutes min (Azure: $(Get-ArcVmPower $vm.name)). Re-run -Stage Post -Execute -HostStartFallback to start the clustered VM role on the host." }
+                Write-Step "Azure start did not reach the host; Start-ClusterGroup for $($vm.name) (-HostStartFallback)."
+                Invoke-OnCluster -ScriptBlock {
+                    param($Prefix) $g = Get-ClusterGroup | Where-Object { $_.GroupType -eq 'VirtualMachine' -and $_.Name -like "$Prefix*" } | Select-Object -First 1
+                    Start-ClusterGroup -Name $g.Name -Wait 300 | Out-Null
+                } -ArgumentList ([string]$vm.name) | Out-Null
+            }
         }
-        Write-Step "$($vm.name) power state: $(Get-ArcVmPower $vm.name)"
+        Write-Step "$($vm.name) host state: $(Get-HostVmState $vm.name); Azure power state: $(Get-ArcVmPower $vm.name)"
         # Hyper-V name on this build = Azure name lowercased + unique suffix; read the DDA device on the owning node
         foreach ($n in $nodeIp.Keys) {
             $dda = Invoke-Command -ComputerName $nodeIp[$n] -Credential $cred -Authentication Negotiate -ScriptBlock {
                 param($Prefix)
                 $v = Get-VM | Where-Object { $_.Name -like "$Prefix*" } | Select-Object -First 1
                 if ($v) {
+                    # Azure Local assigns from a resource pool (ResourcePoolName ArcVMGpuPool, LocationPath empty): report
+                    # the pool and the host's dismounted (assignable) devices, which is where the GPU comes from
                     $d = @(Get-VMAssignableDevice -VMName $v.Name -ErrorAction SilentlyContinue)
-                    "$($v.State) on $env:COMPUTERNAME, $($d.Count) DDA device(s) $((@($d | ForEach-Object { $_.LocationPath }) -join ','))"
+                    $hostDev = @(Get-VMHostAssignableDevice -ErrorAction SilentlyContinue | ForEach-Object { $_.LocationPath })
+                    "$($v.State) on $env:COMPUTERNAME, $($d.Count) DDA device(s) $((@($d | ForEach-Object { if ($_.LocationPath) { $_.LocationPath } else { "pool $($_.ResourcePoolName)" } }) -join ',')); host assignable $($hostDev -join ',')"
                 }
             } -ArgumentList ([string]$vm.name)
             if ($dda) {

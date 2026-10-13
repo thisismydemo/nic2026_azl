@@ -122,6 +122,25 @@ Describe 'backup-asr specifics' {
             }
         }
 
+        It 'passes the cache account, size and tags, and sets the isolated test subnet on the primary NIC' {
+            $global:BackupAsrEnabled = $false
+            Mock Get-AzRecoveryServicesAsrReplicationProtectedItem {
+                if ($global:BackupAsrEnabled) {
+                    [pscustomobject]@{ FriendlyName = $FriendlyName; SelectedTfoAzureNetworkId = $null; NicDetailsList = @([pscustomobject]@{ NicId = 'example-nic' }) }
+                }
+            }
+            $parameters = $script:asrParameters.Clone()
+            $parameters.VmName = @('example-vm')
+            & (Join-Path $script:scripts 'Enable-AsrReplication.ps1') @parameters -TestSubnetName 'example-test-subnet' `
+                -LogStorageAccountId '/subscriptions/example/storageAccounts/examplecache' -Size 'Standard_D2s_v5' -Tag @{ project = 'example' } -Execute | Out-Null
+            Should -Invoke New-AzRecoveryServicesAsrReplicationProtectedItem -Times 1 -Exactly -ParameterFilter {
+                $LogStorageAccountId -eq '/subscriptions/example/storageAccounts/examplecache' -and $Size -eq 'Standard_D2s_v5' -and $RecoveryVmTag.project -eq 'example' -and $DiskTag.project -eq 'example'
+            }
+            Should -Invoke Set-AzRecoveryServicesAsrReplicationProtectedItem -Times 1 -Exactly -ParameterFilter {
+                $UpdateNic -eq 'example-nic' -and $TestNicSubnetName -eq 'example-test-subnet' -and $RecoveryNicSubnetName -eq 'example-recovery-subnet'
+            }
+        }
+
         It 'throws when the requested policy has no container mapping' {
             Mock Get-AzRecoveryServicesAsrProtectionContainerMapping { [pscustomobject]@{ PolicyFriendlyName = 'another-policy' } }
             { & (Join-Path $script:scripts 'Enable-AsrReplication.ps1') @script:asrParameters -Execute } | Should -Throw '*mapping*'
@@ -176,6 +195,55 @@ Describe 'backup-asr specifics' {
             $parameters = $script:failoverParameters.Clone()
             $parameters.Remove('TestNetworkId')
             { & (Join-Path $script:scripts 'Invoke-AsrTestFailover.ps1') @parameters -Execute } | Should -Throw '*TestNetworkId*'
+        }
+    }
+
+    Context 'scripted Prepare infrastructure' {
+        It 'reads lab values from the environment only and installs the documented extension' {
+            $source = Get-Content (Join-Path $script:scripts 'Install-AsrInfrastructure.ps1') -Raw
+            $source | Should -Match "publisher = 'Microsoft.SiteRecovery.Dra'; type = 'Windows'"
+            $source | Should -Match 'arcSettings/default/extensions'
+            $source | Should -Match 'instanceType = ''HyperVSite'''
+            $source | Should -Not -Match '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+            $source | Should -Not -Match 'Restart-Computer|Restart-Service|shutdown'
+        }
+
+        It 'changes nothing without Execute' {
+            $envFile = Join-Path $TestDrive 'environment.yml'
+            $sharedFile = Join-Path $TestDrive 'shared.yml'
+            @"
+subscription_id: 00000000-0000-0000-0000-000000000000
+cluster_name: example-cluster
+vm_management: { resource_group: example-rg }
+nodes:
+  - { name: example-node-01, management_ip: 192.0.2.11 }
+asr:
+  vault_resource_group: example-bcdr
+  vault_name: example-vault
+  hyperv_site_name: example-site
+  replication_policy_name: example-policy
+  cache_storage_account: examplecache
+  recovery_resource_group: example-dr
+  network_resource_group: example-net
+  vnet_name: example-vnet
+  recovery_subnet_name: example-recovery
+  test_subnet_name: example-test
+  protected_vms: [ { name: example-vm, target_vm_size: Standard_D2s_v5 } ]
+"@ | Set-Content $envFile
+            "tenant_id: 00000000-0000-0000-0000-000000000000`nlocation: example" | Set-Content $sharedFile
+            Mock Set-AzContext {}
+            Mock Get-AzRoleAssignment {}
+            Mock New-AzRoleAssignment {}
+            Mock Invoke-AzRestMethod {
+                if ($Method -ne 'GET') { throw 'no write expected' }
+                if ($Path -match 'machines/') { return [pscustomobject]@{ StatusCode = 200; Content = '{"identity":{"principalId":"example-principal"}}' } }
+                if ($Path -match '(replicationFabrics|extendedInformation|extensions)/') { return [pscustomobject]@{ StatusCode = 404; Content = '' } }
+                [pscustomobject]@{ StatusCode = 200; Content = '{}' }
+            }
+            $out = & (Join-Path $script:scripts 'Install-AsrInfrastructure.ps1') -EnvironmentFile $envFile -SharedEnvironmentFile $sharedFile
+            ($out -join "`n") | Should -Match 'PLAN install cluster extension'
+            Should -Invoke Invoke-AzRestMethod -Times 0 -Exactly -ParameterFilter { $Method -ne 'GET' }
+            Should -Invoke New-AzRoleAssignment -Times 0 -Exactly
         }
     }
 

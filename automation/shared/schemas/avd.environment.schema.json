@@ -334,6 +334,21 @@
         "hybrid": { "$ref": "#/$defs/realm" }
       }
     },
+    "gpu_demo_workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "GPU beat a4b (option B): short CUDA/AI job on the GPU session host, installed by session-hosts-azure-local/scripts/Invoke-GpuDemoWorkload.ps1.",
+      "required": ["host", "python_version", "python_url", "torch_version", "torch_index_url"],
+      "properties": {
+        "host": { "type": "string" },
+        "python_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "python_url": { "type": "string", "pattern": "^https://" },
+        "torch_version": { "type": "string", "pattern": "^\\d+\\.\\d+(\\.\\d+)?$" },
+        "torch_index_url": { "type": "string", "pattern": "^https://" },
+        "seconds": { "type": "integer", "minimum": 10, "maximum": 300 },
+        "shortcut_name": { "type": "string" }
+      }
+    },
     "patch_channel": { "type": "string", "enum": ["intune", "wufb-local"] },
     "avm_versions": {
       "type": "object",

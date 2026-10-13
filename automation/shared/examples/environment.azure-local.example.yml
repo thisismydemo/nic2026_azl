@@ -16,6 +16,7 @@ subnet_asr_prefix: 10.100.6.128/26
 subnet_asr_test_prefix: 10.100.6.192/26
 avd_spoke_vnet_id: ""            # leave empty: lz-avd creates both sides of the spoke-to-spoke peering (a second peering would fail)
 avd_spoke_prefix: 10.100.8.0/22  # AVD spoke prefix for NSG rules (same value as avd.avd_vnet_prefix)
+jump_server_source_prefix: 192.0.2.10/32  # D-056: jump server private IPv4 /32; allowed inbound on every NSG (empty = no rule). Same value as avd.jump_admin_source_prefix
 enable_identity_peering: true    # P-13: direct spoke<->identity peering (owner approval for the shared VNet side)
 enable_management_peering: true  # P-13: direct spoke<->management peering
 

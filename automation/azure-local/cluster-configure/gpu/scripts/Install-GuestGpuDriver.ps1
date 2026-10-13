@@ -42,10 +42,12 @@ if ($gpu.Count -eq 0) { throw 'No NVIDIA PCI device in this VM: attach the GPU f
 $smi = Join-Path $env:SystemRoot 'System32\nvidia-smi.exe'
 function Get-NvidiaState {
     if (-not (Test-Path -LiteralPath $smi)) { return $null }
-    $line = & $smi --query-gpu=name, driver_version, driver_model.current --format=csv, noheader 2>$null | Select-Object -First 1
+    # one argument each, no spaces inside (nvidia-smi rejects 'name, driver_version')
+    $line = & $smi '--query-gpu=name,driver_version,driver_model.current' '--format=csv,noheader' 2>$null | Select-Object -First 1
     if (-not $line) { return $null }
-    $f = $line -split ',\s*'
-    [pscustomobject]@{ Name = $f[0]; Driver = $f[1]; DriverModel = $f[2] }
+    $f = @($line -split ',\s*')
+    if ($f.Count -lt 3) { return [pscustomobject]@{ Name = $null; Driver = $null; DriverModel = $null; Raw = [string]$line } }
+    [pscustomobject]@{ Name = $f[0]; Driver = $f[1]; DriverModel = $f[2]; Raw = [string]$line }
 }
 
 $needsRestart = $false

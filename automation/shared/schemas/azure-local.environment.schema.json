@@ -243,6 +243,18 @@
       "maximum": 4096,
       "description": "Jump server data disk size in GiB (MP-02)."
     },
+    "jump_server_source_prefix": {
+      "anyOf": [
+        {
+          "const": ""
+        },
+        {
+          "$ref": "#/$defs/cidr",
+          "pattern": "/32$"
+        }
+      ],
+      "description": "D-056: private IPv4 /32 of the jump server; lz-azure-local adds AllowJumpServerInbound (priority 101, all protocols and ports) to every NSG. Empty = no rule."
+    },
     "jump_private_ip": {
       "$ref": "#/$defs/ipv4",
       "description": "Static private IP of the jump server inside subnet_jump_prefix (MP-02)."
@@ -620,6 +632,99 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "asr": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "cluster-configure/backup-asr: Hyper-V-to-Azure Site Recovery of Azure Local VMs (T-5.5.3): scripted Prepare infrastructure, replication and test failover.",
+      "required": [
+        "vault_resource_group",
+        "vault_name",
+        "hyperv_site_name",
+        "replication_policy_name",
+        "cache_storage_account",
+        "recovery_resource_group",
+        "network_resource_group",
+        "vnet_name",
+        "recovery_subnet_name",
+        "test_subnet_name",
+        "protected_vms"
+      ],
+      "properties": {
+        "vault_resource_group": {
+          "type": "string",
+          "pattern": "^rg-[a-z0-9-]+$"
+        },
+        "vault_name": {
+          "type": "string",
+          "pattern": "^rsv-[a-z0-9-]+$"
+        },
+        "hyperv_site_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,63}$"
+        },
+        "replication_policy_name": {
+          "type": "string",
+          "pattern": "^asrpol-[a-z0-9-]+$"
+        },
+        "cache_storage_account": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{3,24}$"
+        },
+        "node_vault_role": {
+          "type": "string",
+          "description": "Built-in role granted to each node's Arc identity on the vault (default Site Recovery Contributor)."
+        },
+        "extension_name": {
+          "type": "string",
+          "description": "Cluster extension name (default ASRExtension)."
+        },
+        "recovery_resource_group": {
+          "type": "string",
+          "pattern": "^rg-[a-z0-9-]+$"
+        },
+        "network_resource_group": {
+          "type": "string",
+          "pattern": "^rg-[a-z0-9-]+$"
+        },
+        "vnet_name": {
+          "type": "string",
+          "pattern": "^vnet-[a-z0-9-]+$"
+        },
+        "recovery_subnet_name": {
+          "type": "string",
+          "pattern": "^snet-[a-z0-9-]+$"
+        },
+        "test_subnet_name": {
+          "type": "string",
+          "pattern": "^snet-[a-z0-9-]+$"
+        },
+        "recovery_plan_name": {
+          "type": "string",
+          "pattern": "^rp-[a-z0-9-]+$"
+        },
+        "protected_vms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "target_vm_size"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^vm-[a-z0-9-]+$"
+              },
+              "target_vm_size": {
+                "type": "string",
+                "pattern": "^Standard_[A-Za-z0-9_]+$"
+              }
+            }
           }
         }
       }
@@ -1432,6 +1537,18 @@
               "ip_address": {
                 "$ref": "#/$defs/ipv4"
               },
+              "security_type": {
+                "enum": [
+                  "TrustedLaunch",
+                  "Standard"
+                ],
+                "description": "Default TrustedLaunch. Standard (no Trusted launch, secure boot and vTPM off) for a VM replicated by Azure Site Recovery (Hyper-V-to-Azure DR supports neither)."
+              },
+              "purpose": {
+                "type": "string",
+                "pattern": "^[a-z0-9.-]+$",
+                "description": "Optional purpose tag merged on the VM, NIC and disks (for example asr-demo)."
+              },
               "storage_path": {
                 "type": "string",
                 "pattern": "^sp-[a-z0-9-]+$"
@@ -1457,6 +1574,88 @@
               }
             }
           }
+        }
+      }
+    },
+    "demo_vm_lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Azure Local outline 4.4 VM lifecycle through Arc (resource inventory A10, storage-design.md section 5): the VM automation/demo/azure-local/scripts/Invoke-ArcVmLifecycleDemo.ps1 creates, inspects and deletes (-Stage Create | Show | Remove; -Target Live | Rehearsal). No static IP and no NIC NSG: the NIC takes a pool address and the logical network's NSG applies. Local administrator comes from workload_vms.local_admin_*_secret.",
+      "required": [
+        "name",
+        "computer_name",
+        "image",
+        "logical_network",
+        "storage_path",
+        "vcpu",
+        "memory_mb",
+        "security_type",
+        "workload_tag"
+      ],
+      "dependentRequired": {
+        "rehearsal_vm": [
+          "rehearsal_computer_name"
+        ],
+        "rehearsal_computer_name": [
+          "rehearsal_vm"
+        ]
+      },
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^vm-[a-z0-9-]+$",
+          "description": "Live target: created and deleted on stage."
+        },
+        "computer_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,15}$"
+        },
+        "rehearsal_vm": {
+          "type": "string",
+          "pattern": "^vm-[a-z0-9-]+$",
+          "description": "Rehearsal target, kept running for the inspect step; -Target Rehearsal builds it."
+        },
+        "rehearsal_computer_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,15}$"
+        },
+        "rehearsal_purpose_tag": {
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+$",
+          "description": "purpose tag merged on the rehearsal VM, NIC and disks."
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^img-[a-z0-9-]+$"
+        },
+        "logical_network": {
+          "type": "string",
+          "pattern": "^lnet-[a-z0-9-]+$",
+          "description": "Must be one of logical_networks[].name (the script reads its NSG and pool from there)."
+        },
+        "storage_path": {
+          "type": "string",
+          "pattern": "^sp-[a-z0-9-]+$"
+        },
+        "vcpu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 1024
+        },
+        "security_type": {
+          "enum": [
+            "TrustedLaunch"
+          ],
+          "description": "The script always enables secure boot and vTPM, so only Trusted launch is consistent."
+        },
+        "workload_tag": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Value of the workload tag on the VM, NIC and disks."
         }
       }
     },
@@ -2159,6 +2358,88 @@
             },
             "private_ip": {
               "$ref": "#/$defs/ipv4"
+            }
+          }
+        },
+        "cloud_sync": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Microsoft Entra Cloud Sync on the sync server (D-050): cloud-only Hybrid Identity Administrator account, custom gMSA, provisioning agent, Graph configuration scoped to OU=<ou_root> with password hash sync. Read by Set-HybridIdentitySync.ps1.",
+          "required": [
+            "cloud_account_upn",
+            "cloud_account_username_secret",
+            "cloud_account_password_secret",
+            "hybrid_identity_admin_role_id",
+            "gmsa_name",
+            "agent_installer_url",
+            "agent_install_dir",
+            "application_template_id",
+            "configuration_name"
+          ],
+          "properties": {
+            "cloud_account_upn": {
+              "type": "string",
+              "pattern": "^[^@\\s]+@[^@\\s]+$",
+              "description": "Cloud-only member account (not a guest) used to register the agent."
+            },
+            "cloud_account_display_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cloud_account_usage_location": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            },
+            "cloud_account_username_secret": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Ops vault secret name holding the UPN."
+            },
+            "cloud_account_password_secret": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Ops vault secret name holding the password (generated when missing, never printed)."
+            },
+            "hybrid_identity_admin_role_id": {
+              "$ref": "#/$defs/guid",
+              "description": "Built-in Hybrid Identity Administrator role template ID."
+            },
+            "gmsa_name": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,15}$",
+              "description": "Custom gMSA name without the trailing $ (15 characters max)."
+            },
+            "agent_installer_url": {
+              "type": "string",
+              "pattern": "^https://"
+            },
+            "agent_version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Agent version last installed (reported, not pinned)."
+            },
+            "agent_install_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "application_template_id": {
+              "$ref": "#/$defs/guid",
+              "description": "AD2AAD application template (Learn: configure cloud sync with MS Graph)."
+            },
+            "configuration_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Display name of the AD2AAD service principal (the AD domain name by convention)."
+            },
+            "password_hash_sync": {
+              "type": "boolean"
+            },
+            "delete_threshold": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "notification_email_enabled": {
+              "type": "boolean"
             }
           }
         }

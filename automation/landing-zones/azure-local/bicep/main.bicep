@@ -53,6 +53,8 @@ param avd_spoke_vnet_id string = ''
 param identity_spoke_prefix string
 param management_spoke_prefix string
 param avd_spoke_prefix string = ''
+@description('D-056: private IPv4 /32 of the jump server; every NSG gets AllowJumpServerInbound (101, all protocols and ports) from it. Empty = no rule.')
+param jump_server_source_prefix string = ''
 @description('P-13: direct spoke<->identity peerings (one resource on the shared identity VNet; owner approval).')
 param enable_identity_peering bool = false
 @description('P-13: direct spoke<->management peerings (one resource on the shared management VNet; owner approval).')
@@ -252,6 +254,7 @@ module network 'modules/network.bicep' = if (s2) {
     identity_spoke_prefix: identity_spoke_prefix
     management_spoke_prefix: management_spoke_prefix
     avd_spoke_prefix: avd_spoke_prefix
+    jump_server_source_prefix: jump_server_source_prefix
     identity_spoke_vnet_id: identity_spoke_vnet_id
     avd_spoke_vnet_id: avd_spoke_vnet_id
     privatelink_vaultcore_zone_id: privatelink_vaultcore_zone_id

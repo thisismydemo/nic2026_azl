@@ -3,8 +3,8 @@
 .SYNOPSIS
 Enables Hyper-V-to-Azure replication for selected Azure Local VMs.
 .DESCRIPTION
-Run 'Prepare infrastructure' on the Azure Local resource in the portal first: that step creates the Hyper-V site and
-installs the ASR agent on the nodes. Trusted launch Azure Local VMs are NOT supported by Azure Site Recovery.
+Prepare the infrastructure first (Install-AsrInfrastructure.ps1, or Prepare infrastructure on the Azure Local resource
+in the portal): that step creates the Hyper-V site and installs the ASR agent on the nodes. Trusted launch Azure Local VMs are NOT supported by Azure Site Recovery.
 Without -Execute only the plan is printed. This script never starts a failover. The OS and the OS disk name come from the protectable item itself.
 Authored by gpt-6-sol via the HCS Foundry gateway; reviewed by non-Anthropic models (design/shared/verification-log.md).
 .PARAMETER SubscriptionId
@@ -27,6 +27,15 @@ Resource ID of the post-failover virtual network.
 Post-failover subnet name.
 .PARAMETER TestNetworkId
 Resource ID of the isolated test-failover virtual network.
+.PARAMETER TestSubnetName
+Optional test-failover subnet for the primary NIC. Needed when the test network is the recovery network itself (a
+separate, NSG-isolated subnet in the same VNet): without it Site Recovery picks the subnet with the recovery subnet's name.
+.PARAMETER LogStorageAccountId
+Cache (log) storage account for replication to managed disks (Learn: Hyper-V to Azure, managed disks).
+.PARAMETER Size
+Optional Azure VM size used at failover (for a Generation 2 source, a size that supports Generation 2).
+.PARAMETER Tag
+Optional tags written to the failed-over VM, its NICs and its disks (RecoveryVmTag, RecoveryNicTag, DiskTag).
 .PARAMETER Execute
 Enable replication; omit to preview.
 #>
@@ -42,6 +51,10 @@ param(
     [Parameter(Mandatory)][string]$RecoveryNetworkId,
     [Parameter(Mandatory)][string]$RecoverySubnetName,
     [Parameter(Mandatory)][string]$TestNetworkId,
+    [string]$TestSubnetName,
+    [string]$LogStorageAccountId,
+    [string]$Size,
+    [hashtable]$Tag,
     [switch]$Execute
 )
 
@@ -80,6 +93,30 @@ if (-not $mapping) {
     throw "No protection container mapping uses the replication policy '$PolicyName'."
 }
 
+function Get-TfoSubnet($ProtectedItem) {
+    # Test-failover subnet of the primary NIC, wherever this module version reports it; '' when not reported.
+    $nics = @(if ($ProtectedItem.PSObject.Properties['NicDetailsList']) { $ProtectedItem.NicDetailsList })
+    if ($nics.Count -eq 0 -or $null -eq $nics[0]) { return '' }
+    foreach ($p in 'TfoVMSubnetName', 'TfoSubnetName') { if ($nics[0].PSObject.Properties[$p] -and $nics[0].$p) { return [string]$nics[0].$p } }
+    if ($nics[0].PSObject.Properties['IpConfigs'] -and $nics[0].IpConfigs) {
+        $ip = @($nics[0].IpConfigs)[0]
+        if ($ip.PSObject.Properties['TfoSubnetName'] -and $ip.TfoSubnetName) { return [string]$ip.TfoSubnetName }
+    }
+    return ''
+}
+function Invoke-TestNetworkUpdate($ProtectedItem) {
+    $set = @{ InputObject = $ProtectedItem; TestNetworkId = $TestNetworkId }
+    if ($TestSubnetName) {
+        $nics = @(if ($ProtectedItem.PSObject.Properties['NicDetailsList']) { $ProtectedItem.NicDetailsList })
+        if ($nics.Count -eq 0 -or $null -eq $nics[0]) { throw "Protected item $($ProtectedItem.FriendlyName) reports no NIC; cannot set the test subnet." }
+        $set.UpdateNic = [string]$nics[0].NicId
+        $set.RecoveryNetworkId = $RecoveryNetworkId
+        $set.RecoveryNicSubnetName = $RecoverySubnetName
+        $set.TestNicSubnetName = $TestSubnetName
+    }
+    $null = Set-AzRecoveryServicesAsrReplicationProtectedItem @set
+}
+
 foreach ($vm in $VmName) {
     $item = Get-AzRecoveryServicesAsrProtectableItem -ProtectionContainer $selectedContainer -FriendlyName $vm
     if (-not $item) {
@@ -88,13 +125,14 @@ foreach ($vm in $VmName) {
 
     $existing = Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $selectedContainer -FriendlyName $vm
     if ($existing) {
-        # Reconcile the test network on a VM that is already replicating (a failed earlier run may have left it unset).
-        if ($existing.SelectedTfoAzureNetworkId -ne $TestNetworkId) {
+        # Reconcile the test network (and subnet) on a VM that is already replicating (a failed earlier run may have left it unset).
+        $subnetDiffers = $TestSubnetName -and ((Get-TfoSubnet $existing) -ne $TestSubnetName)
+        if ($existing.SelectedTfoAzureNetworkId -ne $TestNetworkId -or $subnetDiffers) {
             if (-not $Execute) {
                 Write-Output "Would set the test network of '$vm' (replication is already enabled)."
             }
             elseif ($PSCmdlet.ShouldProcess($vm, 'Set the test-failover network')) {
-                $null = Set-AzRecoveryServicesAsrReplicationProtectedItem -InputObject $existing -TestNetworkId $TestNetworkId
+                Invoke-TestNetworkUpdate $existing
             }
         }
         else {
@@ -130,12 +168,21 @@ foreach ($vm in $VmName) {
             OSDiskName                 = $item.OSDiskName
             WaitForCompletion          = $true
         }
+        if ($LogStorageAccountId) { $replication.LogStorageAccountId = $LogStorageAccountId }
+        if ($Size) { $replication.Size = $Size }
+        if ($Tag -and $Tag.Count -gt 0) {
+            $tags = [System.Collections.Generic.Dictionary[string, string]]::new()
+            foreach ($k in $Tag.Keys) { $tags[[string]$k] = [string]$Tag[$k] }
+            $replication.RecoveryVmTag = $tags
+            $replication.RecoveryNicTag = $tags
+            $replication.DiskTag = $tags
+        }
         $null = New-AzRecoveryServicesAsrReplicationProtectedItem @replication
         # The Hyper-V-to-Azure enable-replication parameter set has no test-network parameter: set it on the new item.
         $created = Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $selectedContainer -FriendlyName $vm
         if (-not $created) {
             throw "Replication of $vm was started but the protected item was not found afterwards."
         }
-        $null = Set-AzRecoveryServicesAsrReplicationProtectedItem -InputObject $created -TestNetworkId $TestNetworkId
+        Invoke-TestNetworkUpdate $created
     }
 }

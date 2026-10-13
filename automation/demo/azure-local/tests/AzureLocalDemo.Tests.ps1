@@ -461,3 +461,65 @@ Describe 'Show-ClusterState / Invoke-LcmReadiness / Test-DemoSmoke' {
         @($rows | Where-Object { $_.Check -like 'Get-Day2ControlState*' }).Status | Should -Be 'GREEN'   # the cluster-configure solutions now provide it
     }
 }
+
+Describe 'Invoke-ArcVmLifecycleDemo.ps1 (outline 4.4)' {
+    BeforeAll {
+        $script:LifecyclePath = Join-Path $script:ScriptsRoot 'Invoke-ArcVmLifecycleDemo.ps1'
+        $script:LifecycleText = Get-Content -LiteralPath $script:LifecyclePath -Raw
+    }
+    It 'parses and keeps lab values out of the code (no GUID, no IPv4 literal)' {
+        $errs = $null
+        $null = [System.Management.Automation.Language.Parser]::ParseFile($script:LifecyclePath, [ref]$null, [ref]$errs)
+        $errs | Should -BeNullOrEmpty
+        $script:LifecycleText | Should -Not -Match '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+        $script:LifecycleText | Should -Not -Match '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
+    }
+    It 'reads the demo VM from environment.yml (demo_vm_lifecycle) and gates every change behind -Execute' {
+        $script:LifecycleText | Should -Match 'demo_vm_lifecycle'
+        foreach ($case in @(@{ Fn = 'Invoke-Create'; Call = "'stack-hci-vm', 'create'" }, @{ Fn = 'Invoke-Remove'; Call = "'stack-hci-vm', 'delete'" })) {
+            $body = ($script:LifecycleText -split "function $($case.Fn)")[1]
+            $gate = $body.IndexOf('-not $Execute')
+            $gate | Should -BeGreaterThan -1
+            $gate | Should -BeLessThan $body.IndexOf($case.Call)
+        }
+    }
+    It 'never prints the administrator password' {
+        $script:LifecycleText | Should -Not -Match 'L\s+"[^"]*\$cred\.Pass'
+        $script:LifecycleText | Should -Match "-replace \[regex\]::Escape\(\`$cred\.Pass\), '\*\*\*'"
+    }
+}
+
+Describe 'Guest network: gateway from DHCP only, no in-guest route (owner, 12 Oct 2026)' {
+    BeforeAll {
+        $script:Iic = Get-Content -LiteralPath (Join-Path $script:ScriptsRoot 'New-IicWorkloadVm.ps1') -Raw
+        $script:Life = Get-Content -LiteralPath (Join-Path $script:ScriptsRoot 'Invoke-ArcVmLifecycleDemo.ps1') -Raw
+        $script:HelperPath = Join-Path $script:ScriptsRoot '..' '..' '..' 'shared' 'scripts' 'NIC26.GuestNetwork.ps1'
+        $script:Helper = Get-Content -LiteralPath $script:HelperPath -Raw
+        $repo = Join-Path $script:ScriptsRoot '..' '..' '..' '..'
+        $script:Others = @(
+            (Join-Path $repo 'automation' 'azure-local' 'workloads' 'sofs' 'scripts' 'New-SofsVm.ps1'),
+            (Join-Path $repo 'automation' 'avd' 'session-hosts-azure-local' 'scripts' 'Invoke-AzlSessionHostBuild.ps1')) | ForEach-Object { Get-Content -LiteralPath $_ -Raw }
+    }
+    It 'no VM build script or the helper adds a route' {
+        foreach ($t in @($script:Iic, $script:Life, $script:Helper) + $script:Others) { $t | Should -Not -Match 'New-NetRoute' }
+    }
+    It 'the scripts wait for the DHCP gateway and re-trigger guest management through the shared helper' {
+        foreach ($t in @($script:Iic, $script:Life) + $script:Others) {
+            $t | Should -Match 'NIC26\.GuestNetwork\.ps1'
+            $t | Should -Match 'Invoke-NIC26GuestManagementRetry'
+        }
+        $script:Helper | Should -Match "'--enable-agent', 'true'|--enable-agent true"
+        $script:Life | Should -Match 'rehearsal_computer_name'
+        $script:Life | Should -Match "ValidateSet\('Live', 'Rehearsal'\)"
+    }
+    It 'Wait-NIC26GuestDhcpGateway throws when DHCP supplies no gateway, and the route cleanup refuses without one' {
+        . $script:HelperPath
+        Mock Get-NIC26GuestNetworkState { [pscustomobject]@{ State = 'ok'; DhcpEnabled = 'Enabled'; DhcpGateway = ''; PersistentRoutes = 1; PersistentNextHops = '198.51.100.1'; Error = $null } }
+        Mock Start-Sleep { }
+        Mock Invoke-NIC26GuestDirect { throw 'must not run' }
+        $c = [pscredential]::new('u', (ConvertTo-SecureString 'x' -AsPlainText -Force))
+        { Wait-NIC26GuestDhcpGateway -NodeAddress 192.0.2.11 -NodeCredential $c -VmName vm-test -GuestCredential $c -TimeoutMinutes 1 -PollSeconds 5 } | Should -Throw '*no DHCP-supplied default gateway*'
+        (Remove-NIC26GuestPersistentDefaultRoute -NodeAddress 192.0.2.11 -NodeCredential $c -VmName vm-test -GuestCredential $c -Confirm:$false).Result | Should -Match 'kept'
+        Should -Invoke Invoke-NIC26GuestDirect -Times 0
+    }
+}

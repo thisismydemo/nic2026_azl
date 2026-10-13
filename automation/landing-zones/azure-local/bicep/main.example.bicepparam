@@ -47,6 +47,7 @@ param avd_spoke_vnet_id = ''
 param identity_spoke_prefix = '198.51.100.0/24'
 param management_spoke_prefix = '203.0.113.0/26'
 param avd_spoke_prefix = ''
+param jump_server_source_prefix = '192.0.2.10/32'
 param enable_identity_peering = false
 param enable_management_peering = false
 param enable_private_endpoints = false

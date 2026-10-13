@@ -42,7 +42,7 @@ The cluster nodes are updated by Lifecycle Manager, not by Azure Update Manager.
 | `Import` | 3 | Checks the XML signature of the discovery and inventory files (and with `-VerifyPayload` every payload file against the signed SHA-256 list), copies the three files to the import folder on the infrastructure volume (skips files with the same hash), `Add-SolutionUpdate -SourceFolder`, waits for `Ready` |
 | `Check` | 4 | `Start-SolutionUpdate -PrepareOnly`, waits for `ReadyToInstall`, prints any non-success readiness check with its remediation |
 | `Start` | 5, 6 | Drain mode on the AVD session host of every DDA GPU VM (`gpu.vms`), stop that VM (`az stack-hci-vm stop`; DDA VMs cannot live-migrate and would block the node drain), `Start-SolutionUpdate`, then monitors the update state and the deepest running step of `Get-SolutionUpdateRun` from the monitor node (falls back to the other node during reboots) until `Installed`; on failure prints the failing step and error and stops (resume after fixing the documented cause = run `Start` again, Learn step 7) |
-| `Post` | 8 | Secure Boot, BIOS and node state per node, starts the GPU VMs, checks the DDA device location path against `gpu.hosts`, re-enables new sessions and waits for `Available`, prints the new versions |
+| `Post` | 8 | Secure Boot, BIOS and node state per node, starts the GPU VMs (`az stack-hci-vm start --no-wait`, waits on the host; with `-HostStartFallback` starts the clustered VM role on the host when the Azure start does not arrive, as seen once after the 12 Oct run), checks the DDA device location path against `gpu.hosts`, re-enables new sessions and waits for `Available`, prints the new versions |
 
 Inputs: `solution_update` in `environment/azure-local/solution-update.yml` (package folder on the jump server, import folder, package type and version, monitor node, AVD host pool of the GPU VMs) plus `gpu.vms`, `nodes` and the node credential reference. Nothing changes without `-Execute`.
 
@@ -53,3 +53,5 @@ Inputs: `solution_update` in `environment/azure-local/solution-update.yml` (pack
 .\Invoke-SolutionUpdate.ps1 -Stage Start -Execute              # long-running: rolling reboot of every node
 .\Invoke-SolutionUpdate.ps1 -Stage Post -Execute
 ```
+
+As run on nic26-clus01, 12 Oct 2026 (R-387): import 13:05-13:10, readiness 13:13-13:27, install 13:32-15:25 UTC (1 h 53 min, both nodes rebooted once), post checks clean. `Start-SolutionUpdate` asks for confirmation; the script passes `-Confirm:$false` because nobody can answer a prompt over remoting (`-Execute` is the confirmation).

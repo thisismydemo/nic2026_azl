@@ -1,9 +1,16 @@
 <#
 .SYNOPSIS
-    Builds the Microsoft Entra Connect Sync server for the hybrid identities (D-050): an Azure VM in the nic26 management
-    subnet, AD-joined, with Entra Connect installed. Never on a domain controller (owner, 12 Oct 2026; Learn: member server,
-    Tier 0 asset).
+    Builds the sync server for the hybrid identities (D-050): an Azure VM in the nic26 management subnet, AD-joined. Never on
+    a domain controller (owner, 12 Oct 2026; Learn: member server, Tier 0 asset).
 .DESCRIPTION
+    Since 12 Oct 2026 this server runs Microsoft Entra Cloud Sync: the provisioning agent, its gMSA and the Graph
+    configuration (OU=<ou_root>, password hash sync) are built by Set-HybridIdentitySync.ps1, fully scripted. Entra Connect
+    Sync, installed by step 6 below, is left UNCONFIGURED: its wizard needs an interactive MFA sign-in and was blocked by
+    the tenant's pending directory-sync activation, and it must never be run against this tenant now that Cloud Sync owns
+    OU=<ou_root> (two sync engines for the same objects). Learn supports the agent and Connect Sync on one server; to
+    remove the unused install, uninstall "Microsoft Entra Connect Sync" from Programs and Features on the server (owner
+    approved as optional). Step 6 stays for the record of what is on the VM; a rebuild may skip it.
+
     Steps (each idempotent):
       1. Local admin secret in the ops vault (generated, never printed).
       2. NSG rules: identity NSG allows the AD ports Entra Connect needs from this VM only (Learn: Entra Connect ports);
@@ -12,8 +19,7 @@
       4. VM: Windows Server 2025 Datacenter Azure Edition, Standard_D2s_v6 (NVMe), Trusted Launch, static IP, no public IP.
       5. Domain join (JsonADDomainExtension) into OU=Sync.
       6. Entra Connect: TLS 1.2 for .NET, MSI from the Microsoft Download Center (signature checked), silent install.
-    The configuration wizard (Hybrid Identity Administrator + Enterprise Admin sign-in, OU filter OU=NIC26, password hash
-    sync) is the owner's interactive step on the VM; nothing is synchronized by this script.
+    Nothing is synchronized by this script; run Set-HybridIdentitySync.ps1 next (do not run the Entra Connect wizard).
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'Only a newly generated password and the operator-supplied admin name are converted, in memory, to write them to Key Vault; nothing is printed or persisted elsewhere.')]
 [CmdletBinding()]

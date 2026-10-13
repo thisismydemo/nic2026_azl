@@ -28,6 +28,8 @@ param avd_spoke_vnet_id string
 param privatelink_vaultcore_zone_id string
 param enable_private_endpoints bool = true
 param enable_monitor_private_link bool
+@description('Private IPv4 /32 of the jump server. Owner decision (D-056): the jump server is never blocked, so every NSG gets AllowJumpServerInbound (priority 101, all protocols and ports). Empty = no rule.')
+param jump_server_source_prefix string = ''
 
 // ---------------------------------------------------------------- helpers
 var diagLogs = [
@@ -50,9 +52,10 @@ func rule(name string, priority int, direction string, access string, protocol s
     access: access
     protocol: protocol
     sourcePortRange: '*'
-    // NSG validation rejects '*' inside a range list: a wildcard must use the single-value property.
-    destinationPortRange: contains(ports, '*') ? '*' : null
-    destinationPortRanges: contains(ports, '*') ? null : ports
+    // NSG validation rejects '*' inside a range list: a wildcard must use the single-value property. A single port also uses it,
+    // because Azure stores a one-element list as destinationPortRange and what-if would otherwise report a change on every run.
+    destinationPortRange: length(ports) == 1 ? ports[0] : null
+    destinationPortRanges: length(ports) == 1 ? null : ports
     // A wildcard or a service tag (VirtualNetwork, Internet) is only valid in the single-value properties.
     sourceAddressPrefix: length(sources) == 1 ? sources[0] : null
     sourceAddressPrefixes: length(sources) == 1 ? null : sources
@@ -60,6 +63,24 @@ func rule(name string, priority int, direction string, access string, protocol s
     destinationAddressPrefixes: length(destinations) == 1 ? null : destinations
   }
 }
+
+// D-056: the jump server is never blocked by any NSG: one allow-all inbound rule at 101, ahead of every other inbound rule but the 100 slot.
+var jumpServerRules = empty(jump_server_source_prefix) ? [] : [
+  {
+    name: 'AllowJumpServerInbound'
+    properties: {
+      priority: 101
+      direction: 'Inbound'
+      access: 'Allow'
+      protocol: '*'
+      sourcePortRange: '*'
+      destinationPortRange: '*'
+      sourceAddressPrefix: jump_server_source_prefix
+      destinationAddressPrefix: '*'
+      description: 'Jump server is never blocked (owner, 12 Oct 2026)'
+    }
+  }
+]
 
 // ---------------------------------------------------------------- NSGs (design §4.6)
 module nsgJump 'br/public:avm/res/network/network-security-group:0.5.3' = {
@@ -69,7 +90,7 @@ module nsgJump 'br/public:avm/res/network/network-security-group:0.5.3' = {
     location: location
     tags: tags
     diagnosticSettings: diagLogs
-    securityRules: [
+    securityRules: concat(jumpServerRules, [
       rule('AllowBastionRdpSshInbound', 100, 'Inbound', 'Allow', 'Tcp', ['3389', '22'], [bastion_subnet_prefix], [subnet_jump_prefix])
       rule('AllowP2sRdpSshInbound', 110, 'Inbound', 'Allow', 'Tcp', ['3389', '22'], [p2s_client_pool], [subnet_jump_prefix])
       rule('AllowP2sWinRmInbound', 120, 'Inbound', 'Allow', 'Tcp', ['5985', '5986'], [p2s_client_pool], [subnet_jump_prefix])
@@ -80,7 +101,7 @@ module nsgJump 'br/public:avm/res/network/network-security-group:0.5.3' = {
       rule('AllowInternetHttpsOutbound', 120, 'Outbound', 'Allow', 'Tcp', ['443'], ['*'], ['Internet'])
       rule('AllowAzureKmsActivationOutbound', 130, 'Outbound', 'Allow', 'Tcp', ['1688'], ['*'], ['Internet'])
       rule('DenyAllOutbound', 4096, 'Outbound', 'Deny', '*', ['*'], ['*'], ['*'])
-    ]
+    ])
   }
 }
 
@@ -91,10 +112,10 @@ module nsgPe 'br/public:avm/res/network/network-security-group:0.5.3' = {
     location: location
     tags: tags
     diagnosticSettings: diagLogs
-    securityRules: [
+    securityRules: concat(jumpServerRules, [
       rule('AllowHttpsFromConsumersInbound', 100, 'Inbound', 'Allow', 'Tcp', ['443'], peSources, [subnet_pe_prefix])
       rule('DenyAllInbound', 4096, 'Inbound', 'Deny', '*', ['*'], ['*'], ['*'])
-    ]
+    ])
   }
 }
 
@@ -105,7 +126,7 @@ module nsgMgmt 'br/public:avm/res/network/network-security-group:0.5.3' = {
     location: location
     tags: tags
     diagnosticSettings: diagLogs
-    securityRules: [
+    securityRules: concat(jumpServerRules, [
       rule('AllowBastionRdpSshInbound', 100, 'Inbound', 'Allow', 'Tcp', ['3389', '22'], [bastion_subnet_prefix], [subnet_mgmt_prefix])
       rule('AllowP2sSshWinRmInbound', 110, 'Inbound', 'Allow', 'Tcp', ['22', '5985', '5986'], [p2s_client_pool], [subnet_mgmt_prefix])
       rule('DenyAllInbound', 4096, 'Inbound', 'Deny', '*', ['*'], ['*'], ['*'])
@@ -114,7 +135,7 @@ module nsgMgmt 'br/public:avm/res/network/network-security-group:0.5.3' = {
       rule('AllowInternetHttpsOutbound', 120, 'Outbound', 'Allow', 'Tcp', ['443'], ['*'], ['Internet'])
       rule('AllowAzureKmsActivationOutbound', 130, 'Outbound', 'Allow', 'Tcp', ['1688'], ['*'], ['Internet'])
       rule('DenyAllOutbound', 4096, 'Outbound', 'Deny', '*', ['*'], ['*'], ['*'])
-    ]
+    ])
   }
 }
 
@@ -127,14 +148,14 @@ module nsgAsr 'br/public:avm/res/network/network-security-group:0.5.3' = {
     location: location
     tags: tags
     diagnosticSettings: diagLogs
-    securityRules: [
+    securityRules: concat(jumpServerRules, [
       rule('AllowJumpRdpSshInbound', 100, 'Inbound', 'Allow', 'Tcp', ['3389', '22'], [subnet_jump_prefix], [subnet_asr_prefix])
       rule('DenyAllInbound', 4096, 'Inbound', 'Deny', '*', ['*'], ['*'], ['*'])
       rule('AllowVnetOutbound', 100, 'Outbound', 'Allow', '*', ['*'], ['VirtualNetwork'], ['VirtualNetwork'])
       rule('AllowOnPremOutbound', 110, 'Outbound', 'Allow', '*', ['*'], ['*'], onprem_prefixes)
       rule('AllowAzureKmsActivationOutbound', 120, 'Outbound', 'Allow', 'Tcp', ['1688'], ['*'], ['Internet'])
       rule('DenyAllOutbound', 4096, 'Outbound', 'Deny', '*', ['*'], ['*'], ['*'])
-    ]
+    ])
   }
 }
 
@@ -146,7 +167,7 @@ module nsgAsrTest 'br/public:avm/res/network/network-security-group:0.5.3' = {
     location: location
     tags: tags
     diagnosticSettings: diagLogs
-    securityRules: concat([
+    securityRules: concat(jumpServerRules, [
       rule('AllowJumpInbound', 100, 'Inbound', 'Allow', '*', ['*'], [subnet_jump_prefix], [subnet_asr_test_prefix])
       rule('DenyAllInbound', 4096, 'Inbound', 'Deny', '*', ['*'], ['*'], ['*'])
       rule('AllowIntraSubnetOutbound', 100, 'Outbound', 'Allow', '*', ['*'], [subnet_asr_test_prefix], [subnet_asr_test_prefix])
