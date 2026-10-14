@@ -29,6 +29,18 @@ One vCenter, three ESXi hosts, two VMFS datastores, and Windows and Linux worklo
 
 These are inventory totals before growth, compute reserve, CPU overcommit, storage resiliency and rebuild deductions. They are not a statement that any hardware fits.
 
+## Second input: new workloads (AVD)
+
+An RVTools export describes what runs on VMware today, so it cannot contain workloads that do not exist yet. In the session the new workload is Azure Virtual Desktop. [IIC-new-workloads.csv](IIC-new-workloads.csv) lists its virtual machines as they are deployed on the session's two-node cluster: two session hosts, one GPU session host (one NVIDIA L4 by Discrete Device Assignment), two AVD Hybrid hosts (plain Hyper-V VMs) and the two-VM scale-out file server for FSLogix profiles. Add them to the same Surveyor project next to the RVTools import; they are not in the workbook, so they are not counted twice.
+
+| Planning demand | VMs | vCPU | Memory | Provisioned storage |
+|---|---:|---:|---:|---:|
+| VMware estate (this workbook) | 24 | 72 | 160 GiB | 5,888 GiB (5.75 TiB) |
+| New workloads (AVD, `IIC-new-workloads.csv`) | 7 | 32 | 112 GiB | 2,942 GiB (2.9 TiB) |
+| **Total demand** | **31** | **104** | **272 GiB** | **8,830 GiB (8.6 TiB)** |
+
+At full allocation 272 GiB does not fit one machine with 256 GiB, so on two machines the N+1 reserve is where right-sizing from measured memory, a migration wave or more memory per machine is decided.
+
 ## Route A: VMware Team Supplies RVTools
 
 1. Explain the collection route: the VMware team connects RVTools to the in-scope vCenter and supplies its all-tabs Excel export. For the demonstration, use the synthetic workbook instead.

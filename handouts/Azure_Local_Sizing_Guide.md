@@ -33,6 +33,16 @@ Define performance targets for normal demand, peak demand, maintenance and inten
 
 Templates and the vCLS placeholder are excluded from this example.
 
+New workloads are not in an inventory of what runs today. In the session example the AVD workload comes from the AVD design and is added to the same demand:
+
+| Session example demand (synthetic estate + AVD as deployed) | VMs | vCPU | Memory | Provisioned storage |
+|---|---:|---:|---:|---:|
+| VMware estate (RVTools) | 24 | 72 | 160 GiB | 5.8 TiB |
+| AVD: three session hosts (one with a GPU by DDA), two AVD Hybrid hosts, two scale-out file server nodes for FSLogix profiles | 7 | 32 | 112 GiB | 2.9 TiB |
+| **Total** | **31** | **104** | **272 GiB** | **8.6 TiB** |
+
+At full allocation 272 GiB does not fit one 256 GiB machine, so on two machines the N+1 reserve is where right-sizing from measured memory, a migration wave or more memory per machine is decided.
+
 ## Compute and memory
 
 Reserve at least one machine's worth of CPU and memory across the instance for N+1. This headroom lets solution updates drain and restart each node one at a time without workload downtime. Validate the failure state with CPU and memory overcommit taken into account.
