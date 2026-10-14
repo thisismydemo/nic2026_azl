@@ -60,7 +60,7 @@ Replace the placeholders in the commands with your own values:
    - You should see: The demand reads 31 VMs, 104 vCPU and 272 GiB.
 2. **Size it, then take a node away.** Open Fit & Recommendations with the maintenance reserve off, then turn it on.
    - You should see: Off: it fits across both nodes. On: memory is short, because 272 GiB does not fit one 256 GiB node.
-3. **Adjust it.** Try right-sizing (measured P95 instead of allocation), fewer VMs in the first wave, or more memory per node or a third node (Size from workloads). Then open Storage Design and change the storage basis (provisioned or consumed).
+3. **Adjust it.** Try right-sizing (measured P95 instead of allocation) or fewer VMs in the first wave. Then open Storage Design and change the storage basis (provisioned or consumed).
    - You should see: The plan fits with the reserve on; planned storage changes with the basis you choose (decimal TB versus TiB).
 
 **Clean up**
