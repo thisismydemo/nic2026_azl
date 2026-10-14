@@ -45,18 +45,23 @@ Replace the placeholders in the commands with your own values:
 
 **In the repo:** `src/assessment/README.md`, `src/assessment/IIC-RVTools-demo.xlsx`
 
-### Sizing and fit against two nodes
+### Sizing: it fits on paper, then take a node away
 
-**Goal:** Read the sizing result for the synthetic estate.
+**Goal:** Size the synthetic estate plus the new AVD workloads, then see what the node-loss reserve does to the answer.
 
 **You need**
 
 - The Surveyor project from the previous demo
+- The second input src/assessment/IIC-new-workloads.csv
 
 **Steps**
 
-1. **Open the fit and storage design.** Go to Fit & Recommendations, then Storage Design. Change the growth and the storage basis (provisioned or consumed) and observe the result.
-   - You should see: Planned storage changes with the basis you choose; note decimal TB versus TiB.
+1. **Add the new workloads.** Add the seven VMs from IIC-new-workloads.csv to the project next to the RVTools import (they are not in the workbook, so they are not counted twice).
+   - You should see: The demand reads 31 VMs, 104 vCPU and 272 GiB.
+2. **Size it, then take a node away.** Open Fit & Recommendations with the maintenance reserve off, then turn it on.
+   - You should see: Off: it fits across both nodes. On: memory is short, because 272 GiB does not fit one 256 GiB node.
+3. **Adjust it.** Try right-sizing (measured P95 instead of allocation), fewer VMs in the first wave, or more memory per node or a third node (Size from workloads). Then open Storage Design and change the storage basis (provisioned or consumed).
+   - You should see: The plan fits with the reserve on; planned storage changes with the basis you choose (decimal TB versus TiB).
 
 **Clean up**
 

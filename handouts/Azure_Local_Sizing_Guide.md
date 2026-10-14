@@ -41,7 +41,7 @@ New workloads are not in an inventory of what runs today. In the session example
 | AVD: three session hosts (one with a GPU by DDA), two AVD Hybrid hosts, two scale-out file server nodes for FSLogix profiles | 7 | 32 | 112 GiB | 2.9 TiB |
 | **Total** | **31** | **104** | **272 GiB** | **8.6 TiB** |
 
-At full allocation 272 GiB does not fit one 256 GiB machine, so on two machines the N+1 reserve is where right-sizing from measured memory, a migration wave or more memory per machine is decided.
+Across both machines (512 GiB) this fits on paper, and that is the trap. At full allocation 272 GiB does not fit one 256 GiB machine, so with one machine drained for an update or lost to a failure the VMs cannot fail over, and every update becomes an outage window. On two machines, everything must fit on one machine with its reserve. Adjust the plan instead: right-size from measured memory (P95, not allocation), move part of the estate to a later migration wave, or add memory per machine or a third machine.
 
 ## Compute and memory
 
