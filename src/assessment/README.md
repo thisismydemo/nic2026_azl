@@ -41,6 +41,10 @@ An RVTools export describes what runs on VMware today, so it cannot contain work
 
 At full allocation 272 GiB does not fit one machine with 256 GiB, so on two machines the N+1 reserve is where right-sizing from measured memory, a migration wave or more memory per machine is decided.
 
+## One-file workbook for the session: `IIC-RVTools-demo-with-AVD.xlsx`
+
+The session imports **one** workbook, [IIC-RVTools-demo-with-AVD.xlsx](IIC-RVTools-demo-with-AVD.xlsx): the same 24 VMware VMs as `IIC-RVTools-demo.xlsx` plus the 7 new AVD VMs from `IIC-new-workloads.csv` as extra `vInfo` rows (same synthetic provenance, same units). Importing it gives the whole planning demand in one step: **31 VMs, 104 vCPU, 272 GiB, 8,830 GiB (8.6 TiB) provisioned**, templates and the vCLS placeholder skipped, the two `iic-legacy-*` VMs powered off and included. Use it for the sizing exercise (fits on paper against 2 × 256 GiB; with a node away and Surveyor's default 8 GB system reserve per node only 248 GiB remain, 24 GiB short; the adjusted wave 1 of 19 VMs, 76 vCPU, 216 GiB fits with 32 GiB spare). Use the two-file route below only to practise adding new workloads by hand.
+
 ## Route A: VMware Team Supplies RVTools
 
 1. Explain the collection route: the VMware team connects RVTools to the in-scope vCenter and supplies its all-tabs Excel export. For the demonstration, use the synthetic workbook instead.

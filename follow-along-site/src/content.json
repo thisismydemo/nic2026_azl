@@ -27,38 +27,73 @@
   "sections": [
     {
       "id": "0",
-      "title": "Open — the voyage and the ship",
+      "title": "Open: the job and the Lifecycle Chart",
       "minutes": 3
     },
     {
       "id": "1",
-      "title": "Plan & Discover",
-      "minutes": 13
+      "title": "Engage",
+      "minutes": 1
     },
     {
       "id": "2",
-      "title": "Deploy",
-      "minutes": 11
+      "title": "Assess",
+      "minutes": 3
     },
     {
       "id": "3",
-      "title": "Day-2 Ready",
-      "minutes": 11
-    },
-    {
-      "id": "3B",
-      "title": "Migrate",
+      "title": "Discover",
       "minutes": 1.5
     },
     {
       "id": "4",
-      "title": "Day-2 Operations",
-      "minutes": 13.5
+      "title": "Plan",
+      "minutes": 6
     },
     {
       "id": "5",
-      "title": "Safe harbour",
-      "minutes": 5
+      "title": "Design",
+      "minutes": 2.5
+    },
+    {
+      "id": "6",
+      "title": "Document and hand off",
+      "minutes": 2.5
+    },
+    {
+      "id": "7",
+      "title": "Prepare the environment",
+      "minutes": 2.5
+    },
+    {
+      "id": "8",
+      "title": "Deploy: machines, cluster, platform",
+      "minutes": 9
+    },
+    {
+      "id": "9",
+      "title": "Validate",
+      "minutes": 2
+    },
+    {
+      "id": "10",
+      "title": "Day-2 ready",
+      "minutes": 9
+    },
+    {
+      "id": "11",
+      "title": "Migrate",
+      "minutes": 1.5
+    },
+    {
+      "id": "12",
+      "title": "Operate",
+      "minutes": 11.5
+    },
+    {
+      "id": "13",
+      "title": "Review and optimize, and the take-home",
+      "minutes": 3
     }
   ],
   "downloads": {
@@ -69,7 +104,7 @@
     {
       "id": "az-1-1-surveyor",
       "title": "Workload assessment in Surveyor (RVTools route)",
-      "section": "1.1",
+      "section": "2.2",
       "mode": "live+recorded",
       "minutes": 1.5,
       "followAlong": {
@@ -122,7 +157,7 @@
     {
       "id": "az-1-1-migrate-discovery",
       "title": "Azure Migrate discovery (animation)",
-      "section": "1.1",
+      "section": "2.1",
       "mode": "animation",
       "minutes": 0.5,
       "followAlong": {
@@ -152,22 +187,36 @@
     },
     {
       "id": "az-1-2-sizing",
-      "title": "Sizing and fit against two nodes",
-      "section": "1.2",
+      "title": "Sizing: it fits on paper, then take a node away",
+      "section": "4.1",
       "mode": "live",
-      "minutes": 1.5,
+      "minutes": 2,
       "followAlong": {
         "level": "full",
-        "goal": "Read the sizing result for the synthetic estate.",
+        "goal": "Size the synthetic estate plus the new AVD workloads, then see what the node-loss reserve does to the answer.",
         "needs": [
-          "The Surveyor project from the previous demo"
+          "A browser",
+          "The workbook IIC-RVTools-demo-with-AVD.xlsx from the repo (src/assessment): the VMware estate plus the 7 new AVD VMs in one file",
+          "No cluster required"
         ],
         "steps": [
           {
-            "title": "Open the fit and storage design",
-            "instructions": "Go to Fit & Recommendations, then Storage Design. Change the growth and the storage basis (provisioned or consumed) and observe the result.",
+            "title": "Import the one workbook",
+            "instructions": "Workloads > Import RVTools > IIC-RVTools-demo-with-AVD.xlsx (the 24 VMware VMs plus the 7 AVD VMs). Confirm Use this inventory.",
             "command": "",
-            "check": "Planned storage changes with the basis you choose; note decimal TB versus TiB."
+            "check": "The demand reads 31 VMs, 104 vCPU and 272 GiB."
+          },
+          {
+            "title": "Size it, then take a node away",
+            "instructions": "Open Fit & Recommendations with the maintenance reserve off, then turn it on.",
+            "command": "",
+            "check": "Off: it fits across both nodes. On: memory is short, because 272 GiB does not fit one 256 GiB node."
+          },
+          {
+            "title": "Adjust it",
+            "instructions": "Try right-sizing (measured P95 instead of allocation) or fewer VMs in the first wave. Then open Storage Design and change the storage basis (provisioned or consumed).",
+            "command": "",
+            "check": "The plan fits with the reserve on; planned storage changes with the basis you choose (decimal TB versus TiB)."
           }
         ],
         "troubleshooting": [],
@@ -182,9 +231,9 @@
     {
       "id": "az-1-7-intent-design",
       "title": "Whole-site fabric evidence and Network ATC intent design",
-      "section": "1.7",
+      "section": "4.3",
       "mode": "slide",
-      "minutes": 1.5,
+      "minutes": 1.25,
       "followAlong": {
         "level": "read",
         "goal": "Trace reviewed whole-site evidence into the approved intent design without overwriting decisions.",
@@ -201,9 +250,9 @@
     {
       "id": "az-1-12-trailwright",
       "title": "Trailwright: the design record becomes infrastructure.yml",
-      "section": "1.12",
+      "section": "6.1",
       "mode": "live+recorded",
-      "minutes": 1.5,
+      "minutes": 2,
       "followAlong": {
         "level": "full",
         "goal": "Open the IIC design record in Trailwright, let validation catch a bad value, fix it and export the infrastructure file.",
@@ -254,9 +303,9 @@
     {
       "id": "az-2-2-beacon",
       "title": "Beacon: the pre-deployment check before any OS (recorded)",
-      "section": "2.2",
+      "section": "8.a",
       "mode": "recorded",
-      "minutes": 0.5,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Understand what a pre-deployment check covers before any OS is installed.",
@@ -272,9 +321,9 @@
     {
       "id": "az-2-3-provisioning",
       "title": "Two routes: ZTP simplified provisioning (recorded) and the route B build plan (live)",
-      "section": "2.3",
+      "section": "8.a",
       "mode": "live+recorded",
-      "minutes": 1,
+      "minutes": 2,
       "followAlong": {
         "level": "read",
         "goal": "Compare the two provisioning routes and what each needs before the cloud deployment.",
@@ -290,9 +339,9 @@
     {
       "id": "az-2-4-whatif",
       "title": "Cloud-driven deployment: the what-if",
-      "section": "2.4",
+      "section": "8.b",
       "mode": "live+recorded",
-      "minutes": 3.5,
+      "minutes": 1.5,
       "followAlong": {
         "level": "full",
         "goal": "Generate and preview an Azure Local deployment without creating anything.",
@@ -352,9 +401,9 @@
     {
       "id": "az-2-4-sonar",
       "title": "Sonar: the recorded real deployment, replayed step by step beside the time-lapse",
-      "section": "2.4",
+      "section": "8.b",
       "mode": "live+recorded",
-      "minutes": 1,
+      "minutes": 1.5,
       "followAlong": {
         "level": "read",
         "goal": "See what a cloud deployment of Azure Local does step by step, replayed from a recording, and where its logs are.",
@@ -370,9 +419,9 @@
     {
       "id": "az-2-5-intents",
       "title": "Network ATC intents on the running cluster",
-      "section": "2.5",
+      "section": "8.b",
       "mode": "live",
-      "minutes": 1.5,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Know what to check on your own cluster.",
@@ -395,9 +444,9 @@
     {
       "id": "az-2-6-validate-red",
       "title": "Post-deployment validation, then the readiness gate in red",
-      "section": "2.6",
+      "section": "9.1",
       "mode": "live",
-      "minutes": 1.5,
+      "minutes": 1.75,
       "followAlong": {
         "level": "read",
         "goal": "Understand the two gates.",
@@ -414,7 +463,7 @@
     {
       "id": "az-3-1-insights",
       "title": "Monitoring: Insights and the cost-conscious DCR",
-      "section": "3.1",
+      "section": "10.1",
       "mode": "live+recorded",
       "minutes": 2,
       "followAlong": {
@@ -432,9 +481,9 @@
     {
       "id": "az-3-2-aum",
       "title": "Update management: the maintenance configuration",
-      "section": "3.2",
+      "section": "10.2",
       "mode": "live",
-      "minutes": 1.5,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Read the maintenance configuration templates.",
@@ -450,7 +499,7 @@
     {
       "id": "az-3-3-backup-dr",
       "title": "Backup and DR setup",
-      "section": "3.3",
+      "section": "10.3",
       "mode": "live",
       "minutes": 1.5,
       "followAlong": {
@@ -468,9 +517,9 @@
     {
       "id": "az-3-4-pim",
       "title": "RBAC with Entra PIM",
-      "section": "3.4",
+      "section": "10.4",
       "mode": "live+recorded",
-      "minutes": 1.5,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Read the PIM configuration.",
@@ -486,9 +535,9 @@
     {
       "id": "az-3-5-policy",
       "title": "Security baseline as production: Policy, Defender for Cloud and Sentinel",
-      "section": "3.5",
+      "section": "10.5",
       "mode": "live",
-      "minutes": 2,
+      "minutes": 1.25,
       "followAlong": {
         "level": "read",
         "goal": "Read the policy initiative.",
@@ -505,9 +554,9 @@
     {
       "id": "az-3-6-workload-platform",
       "title": "Workload platform: SDN enabled by Arc, six logical networks and their NSGs",
-      "section": "3.6",
+      "section": "8.c",
       "mode": "live",
-      "minutes": 1,
+      "minutes": 2,
       "followAlong": {
         "level": "read",
         "goal": "Read how logical networks and network security groups are defined for each workload tier on an Azure Local instance with SDN enabled by Azure Arc.",
@@ -523,7 +572,7 @@
     {
       "id": "az-3-7-readiness-green",
       "title": "Acceptance: the readiness gate, red to green",
-      "section": "3.7",
+      "section": "10.6",
       "mode": "live",
       "minutes": 1.5,
       "followAlong": {
@@ -541,7 +590,7 @@
     {
       "id": "az-3b-migrate",
       "title": "Azure Migrate: VMware to Azure Local (animation)",
-      "section": "3B",
+      "section": "11.1",
       "mode": "animation",
       "minutes": 1,
       "followAlong": {
@@ -578,9 +627,9 @@
     {
       "id": "az-4-1-lcm",
       "title": "Lifecycle Manager: readiness and history",
-      "section": "4.1",
+      "section": "12.2",
       "mode": "live+recorded",
-      "minutes": 2,
+      "minutes": 1.75,
       "followAlong": {
         "level": "read",
         "goal": "Understand the update flow.",
@@ -596,9 +645,9 @@
     {
       "id": "az-4-2-drive",
       "title": "Fault 1: drive failure (software-induced, live)",
-      "section": "4.2",
+      "section": "12.3",
       "mode": "live+recorded",
-      "minutes": 2.5,
+      "minutes": 1.5,
       "followAlong": {
         "level": "none",
         "goal": "Faults are run only on the lab cluster.",
@@ -614,9 +663,9 @@
     {
       "id": "az-4-2-agent",
       "title": "Signal to diagnosis: the Observability Agent investigates the drive fault (preview)",
-      "section": "4.2",
+      "section": "12.3",
       "mode": "live+recorded",
-      "minutes": 0.5,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Investigate an Azure Monitor alert with the Azure Copilot Observability Agent (preview) in your own subscription.",
@@ -653,9 +702,9 @@
     {
       "id": "az-4-2-drift",
       "title": "Fault 2: Network ATC intent drift (live)",
-      "section": "4.2",
+      "section": "12.4",
       "mode": "live+recorded",
-      "minutes": 1.5,
+      "minutes": 1.25,
       "followAlong": {
         "level": "none",
         "goal": "Faults are run only on the lab cluster.",
@@ -671,9 +720,9 @@
     {
       "id": "az-4-2-node",
       "title": "Fault 3: node failure (animation)",
-      "section": "4.2",
+      "section": "12.5",
       "mode": "animation",
-      "minutes": 1.5,
+      "minutes": 1,
       "followAlong": {
         "level": "read",
         "goal": "Read what a node failure does on a two-node instance and how to prove recovery.",
@@ -708,7 +757,7 @@
     {
       "id": "az-4-3-capacity",
       "title": "Capacity: a decision, not a chart",
-      "section": "4.3",
+      "section": "12.6",
       "mode": "live",
       "minutes": 1,
       "followAlong": {
@@ -726,9 +775,9 @@
     {
       "id": "az-4-4-arc-vm",
       "title": "VM lifecycle through Arc",
-      "section": "4.4",
+      "section": "12.7",
       "mode": "live+recorded",
-      "minutes": 2,
+      "minutes": 1.5,
       "followAlong": {
         "level": "read",
         "goal": "Read the VM lifecycle steps.",
@@ -744,7 +793,7 @@
     {
       "id": "az-4-5-asr",
       "title": "Planned ASR failover to Azure: start and result",
-      "section": "4.5",
+      "section": "12.1",
       "mode": "live",
       "minutes": 1.5,
       "followAlong": {

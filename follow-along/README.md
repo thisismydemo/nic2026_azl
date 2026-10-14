@@ -51,12 +51,13 @@ Replace the placeholders in the commands with your own values:
 
 **You need**
 
-- The Surveyor project from the previous demo
-- The second input src/assessment/IIC-new-workloads.csv
+- A browser
+- The workbook IIC-RVTools-demo-with-AVD.xlsx from the repo (src/assessment): the VMware estate plus the 7 new AVD VMs in one file
+- No cluster required
 
 **Steps**
 
-1. **Add the new workloads.** Add the seven VMs from IIC-new-workloads.csv to the project next to the RVTools import (they are not in the workbook, so they are not counted twice).
+1. **Import the one workbook.** Workloads > Import RVTools > IIC-RVTools-demo-with-AVD.xlsx (the 24 VMware VMs plus the 7 AVD VMs). Confirm Use this inventory.
    - You should see: The demand reads 31 VMs, 104 vCPU and 272 GiB.
 2. **Size it, then take a node away.** Open Fit & Recommendations with the maintenance reserve off, then turn it on.
    - You should see: Off: it fits across both nodes. On: memory is short, because 272 GiB does not fit one 256 GiB node.
