@@ -11,9 +11,15 @@ BeforeAll {
     $script:solutionRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
     . (Join-Path $script:solutionRoot 'scripts\ClusterDeploy.Common.ps1')
     $script:gateScript = Join-Path $script:solutionRoot 'scripts\Test-ClusterDeployArcNameGate.ps1'
-    # The CI runner has no Posh-SSH: Pester can only mock commands that exist, so the absent ones get inert stubs.
-    foreach ($cmd in 'New-SSHSession', 'Remove-SSHSession', 'Invoke-SSHCommand', 'Add-SSHTrustedHost', 'New-SSHMemoryTrustedHostStore') {
-        if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { Set-Item -Path "Function:\global:$cmd" -Value { throw "$cmd stub: Posh-SSH is not installed here" } }
+    # The CI runner has no Posh-SSH: Pester can only mock commands that exist, so the absent ones get stubs with the real
+    # parameter names (the ParameterFilters below bind to them); the in-memory trusted-host store is a plain list.
+    if (-not (Get-Command New-SSHSession -ErrorAction SilentlyContinue)) {
+        function global:New-SSHSession { param($ComputerName, [pscredential]$Credential, $ConnectionTimeout, [switch]$AcceptKey, [switch]$ErrorOnUntrusted, $TrustedHostStore, $Port, $KeyFile, [switch]$Force) throw 'New-SSHSession stub: Posh-SSH is not installed here' }
+        function global:Remove-SSHSession { param($SessionId, $SSHSession) throw 'Remove-SSHSession stub: Posh-SSH is not installed here' }
+        function global:Invoke-SSHCommand { param($SessionId, $SSHSession, $Command, $TimeOut, [switch]$EnsureConnection) throw 'Invoke-SSHCommand stub: Posh-SSH is not installed here' }
+        function global:New-SSHMemoryTrustedHostStore { [pscustomobject]@{ Hosts = [System.Collections.Generic.List[object]]::new() } }
+        function global:Add-SSHTrustedHost { param($HostName, $HostKeyName, $Fingerprint, $TrustedHostStore) if ($null -eq $TrustedHostStore) { throw 'persistent store' }; $TrustedHostStore.Hosts.Add([pscustomobject]@{ HostName = $HostName; HostKeyName = $HostKeyName; Fingerprint = $Fingerprint }); $true }
+        function global:Get-SSHTrustedHost { param($HostName, $TrustedHostStore) @($TrustedHostStore.Hosts | Where-Object { -not $HostName -or $_.HostName -eq $HostName }) }
     }
 
     $script:buggy = @'
