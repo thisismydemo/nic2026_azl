@@ -48,7 +48,7 @@
     {
       "id": "4",
       "title": "Plan",
-      "minutes": 6
+      "minutes": 7
     },
     {
       "id": "5",
@@ -68,7 +68,7 @@
     {
       "id": "8",
       "title": "Deploy: machines, cluster, platform",
-      "minutes": 9
+      "minutes": 10
     },
     {
       "id": "9",
@@ -78,7 +78,7 @@
     {
       "id": "10",
       "title": "Day-2 ready",
-      "minutes": 9
+      "minutes": 10
     },
     {
       "id": "11",
@@ -88,12 +88,12 @@
     {
       "id": "12",
       "title": "Operate",
-      "minutes": 11.5
+      "minutes": 7.5
     },
     {
       "id": "13",
       "title": "Review and optimize, and the take-home",
-      "minutes": 3
+      "minutes": 4
     }
   ],
   "downloads": {
@@ -259,12 +259,12 @@
         "needs": [
           "A browser",
           "No cluster and no Azure subscription required",
-          "The IIC Trailwright project from the repo (src/design/trailwright-iic-example.trailwright.json), the same file the presenter opens; or your own design values"
+          "The IIC Trailwright project from the repo (src/design/trailwright-iic.example.trailwright.json), the same file the presenter opens; or your own design values"
         ],
         "steps": [
           {
             "title": "Open Trailwright and the IIC project",
-            "instructions": "Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and open the IIC project file from the repo (src/design/trailwright-iic-example.trailwright.json). To use your own design instead, start a new project with a connected, hyperconverged deployment of two machines.",
+            "instructions": "Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and open the IIC project file from the repo (src/design/trailwright-iic.example.trailwright.json). To use your own design instead, start a new project with a connected, hyperconverged deployment of two machines.",
             "command": "",
             "check": "The project summary shows the IIC answers: nodes, storage, intents, identity, connectivity and landing zone."
           },
@@ -394,7 +394,7 @@
         ],
         "repoPaths": [
           "automation/azure-local/cluster-deploy/README.md",
-          "automation/azure-local/cluster-deploy/bicep"
+          "automation/azure-local/cluster-deploy"
         ]
       }
     },
@@ -474,7 +474,8 @@
         "troubleshooting": [],
         "cleanup": [],
         "repoPaths": [
-          "automation/azure-local/cluster-configure/monitoring"
+          "automation/azure-local/cluster-configure/monitoring",
+          "handouts/Day2_Readiness_Checklist.md"
         ]
       }
     },
@@ -647,7 +648,7 @@
       "title": "Fault 1: drive failure (software-induced, live)",
       "section": "12.3",
       "mode": "live+recorded",
-      "minutes": 1.5,
+      "minutes": 0.1,
       "followAlong": {
         "level": "none",
         "goal": "Faults are run only on the lab cluster.",
@@ -665,7 +666,7 @@
       "title": "Signal to diagnosis: the Observability Agent investigates the drive fault (preview)",
       "section": "12.3",
       "mode": "live+recorded",
-      "minutes": 1,
+      "minutes": 0.1,
       "followAlong": {
         "level": "read",
         "goal": "Investigate an Azure Monitor alert with the Azure Copilot Observability Agent (preview) in your own subscription.",
@@ -696,7 +697,9 @@
         "cleanup": [
           "Close or delete test issues; chat and investigations are billed per use."
         ],
-        "repoPaths": []
+        "repoPaths": [
+          "handouts/Day2_Operations_Runbook.md"
+        ]
       }
     },
     {
@@ -704,7 +707,7 @@
       "title": "Fault 2: Network ATC intent drift (live)",
       "section": "12.4",
       "mode": "live+recorded",
-      "minutes": 1.25,
+      "minutes": 0.1,
       "followAlong": {
         "level": "none",
         "goal": "Faults are run only on the lab cluster.",

@@ -122,7 +122,7 @@ IP count for a two-node switched pattern without SDN: 7 management IPs required 
 | | |
 |---|---|
 | **Question** | What does the cluster trust, and what breaks when that service is down? |
-| **Options** | Local Identity with Azure Key Vault; Active Directory; hybrid |
+| **Options** | Local Identity with Azure Key Vault; Active Directory (domain-joined) |
 | **Decision (IIC)** | Local Identity with Key Vault |
 
 What Local Identity requires (Microsoft Learn): a non-built-in local administrator with identical credentials on every node, static IP addresses (no DHCP for the nodes), a DNS server with a correctly configured zone (an internal DNS option is available as a **preview**), SSH enabled on each node for portal access, and one Key Vault per cluster for BitLocker keys and the recovery administrator. No OU, pre-created objects or domain join. Windows Admin Center is not supported with this model; use PowerShell, the portal and Azure Monitor.

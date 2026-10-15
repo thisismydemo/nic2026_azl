@@ -78,11 +78,11 @@ Replace the placeholders in the commands with your own values:
 
 - A browser
 - No cluster and no Azure subscription required
-- The IIC Trailwright project from the repo (src/design/trailwright-iic-example.trailwright.json), the same file the presenter opens; or your own design values
+- The IIC Trailwright project from the repo (src/design/trailwright-iic.example.trailwright.json), the same file the presenter opens; or your own design values
 
 **Steps**
 
-1. **Open Trailwright and the IIC project.** Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and open the IIC project file from the repo (src/design/trailwright-iic-example.trailwright.json). To use your own design instead, start a new project with a connected, hyperconverged deployment of two machines.
+1. **Open Trailwright and the IIC project.** Open Azure Local Trailwright (labs.hybridsolutions.cloud/azurelocal-trailwright) and open the IIC project file from the repo (src/design/trailwright-iic.example.trailwright.json). To use your own design instead, start a new project with a connected, hyperconverged deployment of two machines.
    - You should see: The project summary shows the IIC answers: nodes, storage, intents, identity, connectivity and landing zone.
 2. **Shorten the management pool to five addresses.** In the management network step, change the end address so the IP pool holds only five addresses.
    - You should see: Validation reports that the pool needs at least six contiguous addresses and links the Microsoft Learn source.
@@ -162,7 +162,7 @@ Replace the placeholders in the commands with your own values:
 
 - None; nothing was created.
 
-**In the repo:** `automation/azure-local/cluster-deploy/README.md`, `automation/azure-local/cluster-deploy/bicep`
+**In the repo:** `automation/azure-local/cluster-deploy/README.md`, `automation/azure-local/cluster-deploy`
 
 ## Read along
 
@@ -229,7 +229,7 @@ Replace the placeholders in the commands with your own values:
 
 **Goal:** Read the monitoring artefacts.
 
-**In the repo:** `automation/azure-local/cluster-configure/monitoring`
+**In the repo:** `automation/azure-local/cluster-configure/monitoring`, `handouts/Day2_Readiness_Checklist.md`
 
 ### Update management: the maintenance configuration
 
@@ -314,6 +314,8 @@ Replace the placeholders in the commands with your own values:
 **Clean up**
 
 - Close or delete test issues; chat and investigations are billed per use.
+
+**In the repo:** `handouts/Day2_Operations_Runbook.md`
 
 ### Fault 3: node failure (animation)
 

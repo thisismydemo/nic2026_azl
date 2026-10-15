@@ -27,6 +27,7 @@ The session and this repository target the current Azure Local release, the 2609
 |---|---|
 | `presentation/Azure_Local_Discovery_to_Day2_NIC2026.pptx` | The deck |
 | `handouts/` | Each handout as PDF and Word (`.pdf`, `.docx`) with its Markdown source: `Azure_Local_Sizing_Guide.md`, `Planning_and_Design_Decisions.md`, `Network_ATC_Design.md`, `Deployment_Guide.md`, `Day2_Readiness_Checklist.md`, `Day2_Operations_Runbook.md`, `ASR_Failover_Procedures.md`, `Azure_Migrate_to_Azure_Local.md`, `Troubleshooting_Guide.md`, `Azure_Local_Lifecycle_Guide.md` |
+| `src/design/` | `trailwright-iic.example.trailwright.json`, the IIC design record for Azure Local Trailwright with neutral example values (open it in Trailwright, let validation catch a bad value, export `infrastructure.yml`) |
 | `src/assessment/` | `IIC-RVTools-demo.xlsx`, a synthetic RVTools workbook; `IIC-RVTools-demo-with-AVD.xlsx`, the same estate plus the seven new AVD VMs in one file (the workbook the session imports); `IIC-new-workloads.csv`; and the README |
 | `follow-along/` | The attendee guide: `Azure_Local_Follow_Along_Guide.pdf`, `Azure_Local_Follow_Along_Guide.docx` and `README.md` (Markdown) |
 | `follow-along-site/` | Source of the follow-along site |

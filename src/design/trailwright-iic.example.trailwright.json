@@ -1,0 +1,392 @@
+{
+  "meta": {
+    "schema": 1,
+    "name": "IIC NIC 2026 Azure Local",
+    "createdAt": "2026-10-07T00:00:00.000Z"
+  },
+  "release": {
+    "version": "2609"
+  },
+  "deployment": {
+    "mode": "connected",
+    "architecture": "hyperconverged",
+    "sanType": "fibre-channel",
+    "cloud": "public"
+  },
+  "infrastructure": {
+    "useDhcp": false,
+    "subnetMask": "255.255.255.0",
+    "gateway": "192.168.100.1",
+    "startIp": "192.168.100.20",
+    "endIp": "192.168.100.29",
+    "dnsServers": [
+      "10.100.4.36",
+      "10.100.4.37"
+    ],
+    "managementVlan": 0
+  },
+  "security": {
+    "level": "Recommended",
+    "driftControl": true,
+    "credentialGuard": true,
+    "smbSigning": true,
+    "smbClusterEncryption": true,
+    "bitlockerBootVolume": true,
+    "bitlockerDataVolumes": true,
+    "wdac": true,
+    "backupKeyVaultName": "",
+    "streamingData": true,
+    "euLocation": false,
+    "episodicData": true
+  },
+  "sdn": {
+    "enabled": true,
+    "prefix": "nic26",
+    "dnsRecords": "static",
+    "defaultAccessPolicy": false,
+    "logicalNetworks": [
+      {
+        "name": "lnet-iic-nic26-compute-vlan2204-eus",
+        "vlan": 110,
+        "addressPrefix": "10.100.204.0/24",
+        "gateway": "10.100.204.1",
+        "dnsServers": [
+          "10.100.4.36",
+          "10.100.4.37"
+        ],
+        "poolStart": "10.100.204.20",
+        "poolEnd": "10.100.204.99"
+      },
+      {
+        "name": "lnet-iic-nic26-avd-vlan2215-eus",
+        "vlan": 120,
+        "addressPrefix": "10.100.215.0/24",
+        "gateway": "10.100.215.1",
+        "dnsServers": [
+          "10.100.4.36",
+          "10.100.4.37"
+        ],
+        "poolStart": "10.100.215.20",
+        "poolEnd": "10.100.215.99"
+      },
+      {
+        "name": "lnet-iic-nic26-sofs-vlan2216-eus",
+        "vlan": 130,
+        "addressPrefix": "10.100.216.0/24",
+        "gateway": "10.100.216.1",
+        "dnsServers": [
+          "10.100.4.36",
+          "10.100.4.37"
+        ],
+        "poolStart": "10.100.216.20",
+        "poolEnd": "10.100.216.99"
+      },
+      {
+        "name": "lnet-iic-nic26-app-vlan2217-eus",
+        "vlan": 131,
+        "addressPrefix": "10.100.217.0/24",
+        "gateway": "10.100.217.1",
+        "dnsServers": [
+          "10.100.4.36",
+          "10.100.4.37"
+        ],
+        "poolStart": "10.100.217.20",
+        "poolEnd": "10.100.217.99"
+      },
+      {
+        "name": "lnet-iic-nic26-data-vlan2218-eus",
+        "vlan": 132,
+        "addressPrefix": "10.100.218.0/24",
+        "gateway": "10.100.218.1",
+        "dnsServers": [
+          "10.100.4.36",
+          "10.100.4.37"
+        ],
+        "poolStart": "10.100.218.20",
+        "poolEnd": "10.100.218.99"
+      },
+      {
+        "name": "lnet-iic-nic26-isolated-vlan2219-eus",
+        "vlan": 133,
+        "addressPrefix": "10.100.219.0/24",
+        "gateway": "10.100.219.1",
+        "dnsServers": [
+          "10.100.4.36",
+          "10.100.4.37"
+        ],
+        "poolStart": "10.100.219.20",
+        "poolEnd": "10.100.219.99"
+      }
+    ]
+  },
+  "disconnected": {
+    "role": "management",
+    "basePath": "C:\\AzureLocalDisconnectedOperations",
+    "domainSuffix": "",
+    "ingressIp": "",
+    "ingressGateway": "",
+    "ingressPrefixLength": 24,
+    "dnsServer": "",
+    "managementIp": "",
+    "managementPrefixLength": 24,
+    "timeServers": "",
+    "authority": "",
+    "clientId": "",
+    "rootOperatorUpn": "",
+    "ldapServer": "",
+    "ldaps": true,
+    "syncGroupIdentifier": "",
+    "operatorSubscriptionName": "Operator subscription",
+    "resourceGroup": "azurelocal-management-cluster",
+    "internalCa": false
+  },
+  "provisioning": {
+    "osInstall": "iso",
+    "hardwareSku": "",
+    "timeZone": "",
+    "timeServer": "",
+    "siteName": "",
+    "siteResourceGroup": "",
+    "proxyServer": "",
+    "adminKeyVaultName": "",
+    "osVersion": "",
+    "deployMethod": "arm"
+  },
+  "confirmed": [],
+  "project": {
+    "customer": "IIC",
+    "owner": "Kristopher Turner",
+    "notes": "The lab design used by the NIC 2026 sessions, as the private automation declares it. IP addresses, DNS servers and GUIDs in this file are sanitized example values, not the deployment inputs: 192.168.100.0/24 stands in for the management subnet (gateway .1, nodes .11/.12, infrastructure pool .20-.29; management is untagged on the hosts), 10.100.4.36/.37 for the two DNS servers in Azure reached over the site-to-site VPN, and 172.30.71.0/24 and 172.30.72.0/24 for the storage subnets on Port4 (VLAN 711) and Port6 (VLAN 712). Storage VLANs, adapter names, intents, QoS and hardware match the deployment. Logical networks (SDN enabled by Arc, prefix nic26): the six names and VLAN IDs match the deployment (compute 110, AVD 120, SOFS 130, app 131, data 132, isolated 133); their 10.100.x.0/24 subnets, gateways and pools are sanitized example values (owner, 14 Oct 2026: the design matches the as-built cluster)."
+  },
+  "hardware": {
+    "topology": "standard",
+    "rackAwareUplink": "dedicated-storage",
+    "racks": 1,
+    "nodes": [
+      {
+        "name": "nic26-01-n01",
+        "ip": "192.168.100.11",
+        "serial": "8T6GDB4",
+        "cores": 64,
+        "memoryGiB": 256,
+        "drives": 4,
+        "storageIps": [
+          "172.30.71.11",
+          "172.30.72.11"
+        ]
+      },
+      {
+        "name": "nic26-01-n02",
+        "ip": "192.168.100.12",
+        "serial": "9T6GDB4",
+        "cores": 64,
+        "memoryGiB": 256,
+        "drives": 4,
+        "storageIps": [
+          "172.30.71.12",
+          "172.30.72.12"
+        ]
+      }
+    ],
+    "witness": "cloud",
+    "witnessPath": ""
+  },
+  "identity": {
+    "mode": "local-identity-key-vault",
+    "keyVaultName": "kv-iic-nic26-azl-eus-01",
+    "ouPath": "",
+    "lcmUsername": "",
+    "localAdminUsername": "nic26admin",
+    "dnsServerConfig": "UseDnsServer",
+    "dnsZoneName": "nic26.iic.local",
+    "dnsForwarders": []
+  },
+  "networking": {
+    "storage": "switched",
+    "torSwitches": 2,
+    "clusterSubnets": [],
+    "storageLayout": "dedicated",
+    "switchlessLinks": "dual",
+    "portsPerNode": 6,
+    "intentGrouping": "custom",
+    "backupNetwork": false,
+    "cards": [],
+    "fcHbaPorts": 2,
+    "storageAutoIp": false,
+    "storageSubnets": [
+      "172.30.71.0/24",
+      "172.30.72.0/24"
+    ],
+    "storageVlans": [
+      711,
+      712
+    ],
+    "vlans": [
+      {
+        "name": "lnet-iic-nic26-compute-vlan2204-eus",
+        "id": 110
+      },
+      {
+        "name": "lnet-iic-nic26-avd-vlan2215-eus",
+        "id": 120
+      },
+      {
+        "name": "lnet-iic-nic26-sofs-vlan2216-eus",
+        "id": 130
+      },
+      {
+        "name": "lnet-iic-nic26-app-vlan2217-eus",
+        "id": 131
+      },
+      {
+        "name": "lnet-iic-nic26-data-vlan2218-eus",
+        "id": 132
+      },
+      {
+        "name": "lnet-iic-nic26-isolated-vlan2219-eus",
+        "id": 133
+      }
+    ],
+    "intents": [
+      {
+        "name": "Management",
+        "traffic": [
+          "management"
+        ],
+        "adapters": [
+          "Port1",
+          "Port2"
+        ],
+        "overrideQos": false,
+        "qosClusterPriority": "5",
+        "qosSmbPriority": "3",
+        "qosSmbBandwidth": "50",
+        "overrideAdapter": true,
+        "jumboPacket": "1514",
+        "networkDirect": "Disabled",
+        "networkDirectTechnology": "",
+        "overrideVSwitch": false,
+        "enableIov": "true",
+        "loadBalancingAlgorithm": "Dynamic"
+      },
+      {
+        "name": "Compute",
+        "traffic": [
+          "compute"
+        ],
+        "adapters": [
+          "Port3",
+          "Port5"
+        ],
+        "overrideQos": false,
+        "qosClusterPriority": "5",
+        "qosSmbPriority": "3",
+        "qosSmbBandwidth": "50",
+        "overrideAdapter": true,
+        "jumboPacket": "1514",
+        "networkDirect": "Disabled",
+        "networkDirectTechnology": "",
+        "overrideVSwitch": false,
+        "enableIov": "true",
+        "loadBalancingAlgorithm": "Dynamic"
+      },
+      {
+        "name": "Storage",
+        "traffic": [
+          "storage"
+        ],
+        "adapters": [
+          "Port4",
+          "Port6"
+        ],
+        "overrideQos": true,
+        "qosClusterPriority": "5",
+        "qosSmbPriority": "3",
+        "qosSmbBandwidth": "50",
+        "overrideAdapter": true,
+        "jumboPacket": "9014",
+        "networkDirect": "Enabled",
+        "networkDirectTechnology": "iWARP",
+        "overrideVSwitch": false,
+        "enableIov": "true",
+        "loadBalancingAlgorithm": "Dynamic"
+      }
+    ],
+    "ipPlan": [
+      {
+        "name": "Management",
+        "cidr": "192.168.100.0/24"
+      }
+    ]
+  },
+  "connectivity": {
+    "path": "direct",
+    "arcGatewayName": "",
+    "privatePath": {
+      "transport": "",
+      "virtualNetwork": "",
+      "workloadSubnet": "",
+      "firewallSubnet": "",
+      "firewallPrivateIp": "",
+      "firewallPort": "",
+      "arcPrivateLinkScopeOnNetwork": false,
+      "proxyBypass": ""
+    }
+  },
+  "landingZone": {
+    "subscriptionName": "IIC Azure Local landing zone",
+    "resourceGroup": "rg-iic-nic26-azl-eus-01",
+    "keyVaultName": "kv-iic-nic26-azl-eus-01",
+    "witnessStorageAccount": "stiicnic26witeus01",
+    "customLocation": "cl-iic-nic26-azl-eus-01",
+    "region": "eastus",
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "tenantId": "00000000-0000-0000-0000-000000000000",
+    "instanceName": "nic26-clus01",
+    "namingPrefix": "nic26",
+    "keyVaultRetentionDays": 30,
+    "diagnosticStorageAccountName": "stiicnic26diageus01",
+    "logsRetentionDays": 30,
+    "hciResourceProviderObjectId": "00000000-0000-0000-0000-000000000000"
+  },
+  "storage": {
+    "architecture": "s2d",
+    "volumes": [],
+    "sanLuns": [],
+    "infraVolLunId": "",
+    "infraPerfLunId": "",
+    "driveLayout": {
+      "capacity": {
+        "media": "nvme",
+        "count": 4,
+        "sizeTB": 3.84
+      },
+      "cache": {
+        "media": "nvme",
+        "count": 0,
+        "sizeTB": 0
+      }
+    },
+    "configurationMode": "InfraOnly"
+  },
+  "operations": {
+    "monitoring": false,
+    "updateManager": true,
+    "updateMethod": "portal",
+    "backup": false,
+    "disasterRecovery": false,
+    "backupApproach": "both",
+    "backupSolution": "",
+    "drMethod": "none",
+    "workspaceName": "",
+    "workspaceResourceGroup": "",
+    "useExistingDcr": false,
+    "dcrName": "",
+    "agentPrivateLinks": false,
+    "dceName": "",
+    "refsDedupMonitoring": false,
+    "healthAlerts": true,
+    "alertEmail": ""
+  },
+  "findings": []
+}
