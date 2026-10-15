@@ -2,7 +2,7 @@
 
 > **12 Oct 2026, D-055:** the production policy set for both landing-zone subscriptions is [`automation/shared/security`](../../../shared/security/README.md) (allowed locations audit, tag inheritance, require-tag audit, activity log and Windows Security Events to the Sentinel workspace, AMA). The management-group initiative this solution assigns was never deployed (D-038), so `Invoke-PolicyBaseline.ps1` has nothing to assign until the platform owner publishes it; the two Insights policies here belong to the Day-2 monitoring track. Do not assign periodic update assessment to Azure Local machines (Learn: Manage system security with Defender for Cloud, exclusions).
 
-Design §2.3 / §7.4: the initiative `init-iic-nic26-hybrid-baseline` is **defined** by `lz-azure-local` (`bicep/initiative.bicep`, management-group scope) and **assigned here** at subscription scope as `asg-iic-nic26-hybrid-baseline` with a system-assigned remediation identity (Log Analytics Contributor, Monitoring Contributor, Guest Configuration Resource Contributor, Security Admin, Contributor — the roles the member DeployIfNotExists definitions need). The three definitions the landing zone left out are created and assigned here:
+Design §2.3 / §7.4: the initiative `init-iic-nic26-hybrid-baseline` is **defined** by `lz-azure-local` (`automation/landing-zones/azure-local/bicep/initiative.bicep`, management-group scope) and **assigned here** at subscription scope as `asg-iic-nic26-hybrid-baseline` with a system-assigned remediation identity (Log Analytics Contributor, Monitoring Contributor, Guest Configuration Resource Contributor, Security Admin, Contributor — the roles the member DeployIfNotExists definitions need). The three definitions the landing zone left out are created and assigned here:
 
 | Definition (subscription scope) | Source | Effect |
 |---|---|---|
@@ -23,7 +23,7 @@ cd .\automation\azure-local\cluster-configure\policy\scripts
 .\Invoke-PolicyBaseline.ps1 -Remove -Execute        # before the session; Apply again live
 ```
 
-State: `..\..\scripts\Get-Day2ControlState.ps1` → control `policy` (Applied = all four assignments exist; evidence includes the compliance summary when available).
+State: `..\scripts\Get-Day2ControlState.ps1` → control `policy` (Applied = all four assignments exist; evidence includes the compliance summary when available).
 
 ## Interplay with the Defender control (review R-38)
 

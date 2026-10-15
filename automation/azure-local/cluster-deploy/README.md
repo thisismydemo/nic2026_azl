@@ -1,6 +1,6 @@
 # cluster-deploy — Validate and Deploy `nic26-clus01` from Azure (Local Identity + Key Vault)
 
-Implements outline §2.4–2.6, landing-zone design §5.3 / §5.5 / §9.2, network design §4 / §6 (review R-03) and decisions D-008, D-019, D-024, D-025. Contract: automation/CONTRACT.md.
+Implements outline §2.4–2.6, landing-zone design §5.3 / §5.5 / §9.2, network design §4 / §6 (review R-03) and decisions D-008, D-019, D-024, D-025. Contract: the automation contract.
 
 **What it does.** Two passes of one template at resource-group scope (`rg-iic-nic26-azl-eus-01`):
 

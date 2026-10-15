@@ -100,7 +100,7 @@ Replace the placeholders in the commands with your own values:
 
 - Save the project file locally or discard it; nothing is stored in Azure.
 
-**In the repo:** `src/design/trailwright-iic-example.trailwright.json`, `handouts/Planning_and_Design_Decisions.md`
+**In the repo:** `src/design/trailwright-iic.example.trailwright.json`, `handouts/Planning_and_Design_Decisions.md`
 
 ### Cloud-driven deployment: the what-if
 

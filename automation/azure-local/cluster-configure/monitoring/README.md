@@ -27,7 +27,7 @@ cd .\automation\azure-local\cluster-configure\monitoring\scripts
 # live replay: .\Enable-ClusterInsights.ps1 -Action Disable -Execute  →  on stage: -Action Enable -Execute
 ```
 
-State: `..\..\scripts\Get-Day2ControlState.ps1` → control `monitoring` (Applied = AMA extension Succeeded, every node associated, all alert rules present).
+State: `..\scripts\Get-Day2ControlState.ps1` → control `monitoring` (Applied = AMA extension Succeeded, every node associated, all alert rules present).
 
 ## Node-down window (review R-35)
 

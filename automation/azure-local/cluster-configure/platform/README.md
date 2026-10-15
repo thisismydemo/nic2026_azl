@@ -40,7 +40,7 @@ cd .\automation\azure-local\cluster-configure\platform\scripts
 # parity: -Tool Terraform -BackendConfig <environment\azure-local\backend.cluster-configure-platform.hcl>
 ```
 
-State for the demo script: `..\..\scripts\Get-Day2ControlState.ps1` → control `platform` (Applied when every logical network, image and storage path exists and the images report `Available`; Partial while an image is still downloading).
+State for the demo script: `..\scripts\Get-Day2ControlState.ps1` → control `platform` (Applied when every logical network, image and storage path exists and the images report `Available`; Partial while an image is still downloading).
 
 Inputs added beyond the schema: `vm_switch_name` (**(verify)** with `Get-VMSwitch` on the cluster — Network ATC names the compute switch `ConvergedSwitch(compute)` for a dedicated Compute intent), `marketplace_images` (safe catalogue default), `enable_network_security_group`. Parity gap: Bicep uses the AVM image module, Terraform azapi (same resource shape). The `ipPools` item shape (`name`, `ipPoolType: vm`, `start`, `end`) follows the AVM module type `poolType`.
 

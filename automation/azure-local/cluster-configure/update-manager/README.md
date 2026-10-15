@@ -26,7 +26,7 @@ cd .\automation\azure-local\cluster-configure\update-manager\scripts
 .\Invoke-UpdateManagerConfigure.ps1 -Action Remove -Execute  # live replay: delete, then Apply on stage; AUM machines view shows the scope
 ```
 
-State: `..\..\scripts\Get-Day2ControlState.ps1` → control `update-manager` (Applied = configuration and dynamic scope exist and point at each other).
+State: `..\scripts\Get-Day2ControlState.ps1` → control `update-manager` (Applied = configuration and dynamic scope exist and point at each other).
 
 ## Start date (review R-35)
 

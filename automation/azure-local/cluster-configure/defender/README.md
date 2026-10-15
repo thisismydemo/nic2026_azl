@@ -15,4 +15,4 @@ cd .\automation\azure-local\cluster-configure\defender\scripts
 .\Set-DefenderServersPlan.ps1 -Action Remove -Execute    # Free — before the session; Apply again on stage
 ```
 
-State: `..\..\scripts\Get-Day2ControlState.ps1` → control `defender` (Applied = VirtualMachines tier Standard with the configured sub plan). Compliance/secure score is not instant (outline §3.5).
+State: `..\scripts\Get-Day2ControlState.ps1` → control `defender` (Applied = VirtualMachines tier Standard with the configured sub plan). Compliance/secure score is not instant (outline §3.5).

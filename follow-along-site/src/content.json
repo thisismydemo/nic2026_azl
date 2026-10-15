@@ -295,7 +295,7 @@
           "Save the project file locally or discard it; nothing is stored in Azure."
         ],
         "repoPaths": [
-          "src/design/trailwright-iic-example.trailwright.json",
+          "src/design/trailwright-iic.example.trailwright.json",
           "handouts/Planning_and_Design_Decisions.md"
         ]
       }

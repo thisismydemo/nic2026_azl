@@ -34,6 +34,11 @@ ConvertTo-NIC26TfVars     -Solution <solution folder or name> -Config $cfg -Exec
 # then the solution's own README: what-if or plan, review, deploy with -Execute, run its tests
 ```
 
+Two things to know about the loop:
+
+- **Tuning inputs.** Optional inputs that are not keys of the environment schema (for example the monitoring alert thresholds, the policy `enforcement_mode` and the PIM assignment list) keep the default in the solution's `solution.yml`; change them there. Everything an environment file can set is in `shared/schemas`.
+- **Entry points outside the loop.** `azure-local/cluster-configure/gpu`, `azure-local/cluster-configure/sdn-network` and `shared/security` have their own README and scripts and no `solution.yml`; follow the README of each.
+
 ## Your configuration
 
 Copy the files in `shared/examples/` to `environment/shared/environment.yml` and `environment/azure-local/environment.yml` and replace every value (tenant, subscriptions, address plan, node names and addresses, VLANs, intents). Secret values never go in a file: fields that need one hold `keyvault://<vault>/<secret>` references that are resolved in memory. The naming defaults (organisation, token, region) come from `shared/powershell/NIC26.Automation/NamingDefaults.psd1`, the `NIC26_ORG`, `NIC26_TOKEN` and `NIC26_REGION` variables, or your environment file; set your own. `landing-zones/azure-local/README.md` and `azure-local/cluster-deploy/README.md` have the full configuration references.

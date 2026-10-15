@@ -1,6 +1,6 @@
 # lz-azure-local — Azure Local landing zone
 
-Implements design/azure-local/landing-zone.md §10 (stages S-1..S9) under the rules of automation/CONTRACT.md. Bicep is the demo path; Terraform is the parity path (D-025). Nothing in this folder deploys by itself: every script defaults to **what-if** and needs `-Execute` (owner approval) to change anything.
+Implements design/azure-local/landing-zone.md §10 (stages S-1..S9) under the rules of the automation contract. Bicep is the demo path; Terraform is the parity path (D-025). Nothing in this folder deploys by itself: every script defaults to **what-if** and needs `-Execute` (owner approval) to change anything.
 
 ## What it deploys
 

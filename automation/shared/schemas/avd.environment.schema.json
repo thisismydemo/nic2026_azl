@@ -142,6 +142,10 @@
       "$ref": "#/$defs/resourceIdOrEmpty",
       "description": "Supplied central monitoring workspace resource ID."
     },
+    "avd_service_principal_object_id": {
+      "$ref": "#/$defs/guidOrEmpty",
+      "description": "Object id of the Azure Virtual Desktop first-party service principal in your tenant (Get-AzADServicePrincipal -DisplayName 'Azure Virtual Desktop'). It receives Desktop Virtualization Power On Off Contributor for the scaling plan; empty skips that role assignment."
+    },
     "key_vault_id": {
       "$ref": "#/$defs/resourceIdOrEmpty",
       "description": "Operations vault id (Azure Local LZ output)."

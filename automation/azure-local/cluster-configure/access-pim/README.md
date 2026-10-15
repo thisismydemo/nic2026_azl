@@ -22,4 +22,4 @@ cd .\automation\azure-local\cluster-configure\access-pim\scripts
 .\Request-PimActivation.ps1 -SubscriptionId <id> -Role 'Azure Stack HCI Administrator' -Justification 'NIC 2026: node repair' -Execute   # as the demo user
 ```
 
-State: `..\..\scripts\Get-Day2ControlState.ps1` → control `access-pim` (Applied = an eligibility schedule exists for every row).
+State: `..\scripts\Get-Day2ControlState.ps1` → control `access-pim` (Applied = an eligibility schedule exists for every row).

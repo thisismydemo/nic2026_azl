@@ -26,6 +26,7 @@ enable_dns_private_resolver: false    # only used when enable_private_endpoints 
 link_privatelink_zone_to_hub: false
 secondary_dns_ip: 10.100.4.36
 log_analytics_workspace_id: ""
+avd_service_principal_object_id: ""   # object id of the "Azure Virtual Desktop" first-party service principal in your tenant; empty skips the scaling-plan power on/off role assignment
 key_vault_id: ""
 action_group_id: ""
 avd_budget_monthly: 1500
