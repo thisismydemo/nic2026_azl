@@ -569,7 +569,7 @@ function Get-DemoAvdNameSet {
 function Get-DemoAzlNameSet {
     <#
     .SYNOPSIS
-        Resolves the Azure Local lab names the demo scripts need from the naming standard and the config.
+        Resolves the Azure Local environment names the demo scripts need from the naming standard and the config.
     .PARAMETER Config
         azure-local config (merged with shared).
     .OUTPUTS
@@ -1173,7 +1173,7 @@ function Get-DemoArbState {
 function Invoke-DemoLogQuery {
     <#
     .SYNOPSIS
-        Runs a KQL query against the lab workspace (Invoke-AzOperationalInsightsQuery) and returns the rows.
+        Runs a KQL query against the Log Analytics workspace (Invoke-AzOperationalInsightsQuery) and returns the rows.
     .PARAMETER WorkspaceId
         Workspace customer ID (GUID) or resource ID; a resource ID is resolved to the customer ID.
     .PARAMETER Query

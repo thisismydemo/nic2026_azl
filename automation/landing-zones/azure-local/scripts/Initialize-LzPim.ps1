@@ -74,7 +74,7 @@ function Get-LzPimPlan {
     $rgAzl = "$subScope/resourceGroups/$($names.rg_azl)"
     # design section 6.2 - eligible rows only
     @(
-        @{ Group = 'grp_lab_operators'; Role = 'Owner'; Scope = $subScope }
+        @{ Group = 'grp_platform_operators'; Role = 'Owner'; Scope = $subScope }
         @{ Group = 'grp_azl_admins'; Role = 'Azure Stack HCI Administrator'; Scope = $subScope }
         @{ Group = 'grp_azl_admins'; Role = 'Reader'; Scope = $subScope }
         @{ Group = 'grp_azl_operators'; Role = 'Azure Stack HCI VM Contributor'; Scope = $subScope }

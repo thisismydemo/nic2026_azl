@@ -124,7 +124,7 @@ function Read-Secret($ref) {
     }
 }
 function Get-AdminCredential {
-    # Pin the Az context of THIS process to the lab tenant and subscription: other sessions on the machine may switch the
+    # Pin the Az context of THIS process to the configured tenant and subscription: other sessions on the machine may switch the
     # saved default context (a vault rejects tokens from another tenant with AKV10032).
     $null = Set-AzContext -Tenant ([string]$shared.tenant_id) -Subscription $sub -Scope Process -WhatIf:$false
     $u = Split-SecretRef $envy.workload_vms.local_admin_username_secret

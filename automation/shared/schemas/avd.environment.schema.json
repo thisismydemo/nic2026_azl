@@ -111,7 +111,7 @@
     },
     "link_privatelink_zone_to_hub": {
       "type": "boolean",
-      "description": "Also link the lab's privatelink.file zone to the hub VNet (default false)."
+      "description": "Also link the privatelink.file zone to the hub VNet (default false)."
     },
     "enable_backup": {
       "type": "boolean",
@@ -233,7 +233,7 @@
         "avd_users",
         "avd_admins",
         "avd_devices",
-        "lab_operators"
+        "platform_operators"
       ],
       "properties": {
         "avd_azure": {
@@ -254,7 +254,7 @@
         "avd_devices": {
           "$ref": "#/$defs/groupName"
         },
-        "lab_operators": {
+        "platform_operators": {
           "$ref": "#/$defs/groupName"
         },
         "avd_apps": {
@@ -272,7 +272,7 @@
         "avd_users",
         "avd_admins",
         "avd_devices",
-        "lab_operators"
+        "platform_operators"
       ],
       "properties": {
         "avd_azure": {
@@ -293,7 +293,7 @@
         "avd_devices": {
           "$ref": "#/$defs/guid"
         },
-        "lab_operators": {
+        "platform_operators": {
           "$ref": "#/$defs/guid"
         },
         "avd_apps": {
@@ -1064,7 +1064,7 @@
     "tenant_id": {
       "type": "string",
       "pattern": "^[0-9a-fA-F-]{36}$",
-      "description": "The lab tenant; the live-deploy commands pin it (owner, 14 Oct)."
+      "description": "The tenant; the live-deploy commands pin it (owner, 14 Oct)."
     },
     "workspace_friendly_name": {
       "type": "string",

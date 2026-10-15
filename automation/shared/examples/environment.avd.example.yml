@@ -1,4 +1,4 @@
-# NIC 2026 lab - AVD environment EXAMPLE (IIC values from the designs, all-zero GUIDs).
+# NIC 2026 - AVD environment EXAMPLE (IIC values from the designs, all-zero GUIDs).
 # Copy to environment/avd/environment.yml and replace values. Shared values live in environment/shared/*.yml.
 # Schema: automation/shared/schemas/avd.environment.schema.json
 # Sources: design/avd/landing-zone.md section 11.5, design/avd/hybrid-hyperv-hosts.md section 16.1.
@@ -91,7 +91,7 @@ entra_groups:
   avd_users: grp-iic-nic26-avd-users
   avd_admins: grp-iic-nic26-avd-admins
   avd_devices: grp-iic-nic26-avd-devices
-  lab_operators: grp-iic-nic26-lab-operators
+  platform_operators: grp-iic-nic26-platform-operators
 group_object_ids:
   avd_azure: 00000000-0000-0000-0000-000000000000
   avd_azl: 00000000-0000-0000-0000-000000000000
@@ -99,7 +99,7 @@ group_object_ids:
   avd_users: 00000000-0000-0000-0000-000000000000
   avd_admins: 00000000-0000-0000-0000-000000000000
   avd_devices: 00000000-0000-0000-0000-000000000000
-  lab_operators: 00000000-0000-0000-0000-000000000000
+  platform_operators: 00000000-0000-0000-0000-000000000000
 demo_users:
   - { upn: user1@contoso.com, display_name: Demo User 1, realm: azure }
   - { upn: user2@contoso.com, display_name: Demo User 2, realm: azl }

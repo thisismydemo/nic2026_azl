@@ -51,9 +51,9 @@ inputs:
   - { name: enable_management_peering, type: bool, description: "added (P-13 / LZ-04 / MP-05): create the direct spoke<->management VNet peerings (one resource lives on the shared management VNet - owner change approval). false until approved", required: false, default: false, source: environment }
   - { name: enable_private_endpoints, type: bool, description: "Owner decision D-029: false (default) = no private endpoints; both vaults on their public endpoint (RBAC only); no privatelink zones, links or monitor private link. true restores the private-endpoint design.", required: false, default: false, source: environment }
   - { name: enable_monitor_private_link, type: bool, description: "Deploy the DCE and the four Azure Monitor private DNS zones (design §4.5, §7.2)", required: false, default: false, source: environment }
-  - { name: privatelink_vaultcore_zone_id, type: string, description: "Existing shared privatelink.vaultcore.azure.net zone to reuse; empty creates the lab's own zone (decision P-11)", required: false, default: "", source: environment }
+  - { name: privatelink_vaultcore_zone_id, type: string, description: "Existing shared privatelink.vaultcore.azure.net zone to reuse; empty creates its own zone (decision P-11)", required: false, default: "", source: environment }
   # --- identity / security --------------------------------------------------------------------
-  - { name: group_object_ids,       type: map,    description: "Object IDs of the Entra groups keyed by catalog key (grp_lab_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers); written by S0 (New-LzEntraGroups.ps1)", required: true, default: null, source: environment }
+  - { name: group_object_ids,       type: map,    description: "Object IDs of the Entra groups keyed by catalog key (grp_platform_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers); written by S0 (New-LzEntraGroups.ps1)", required: true, default: null, source: environment }
   - { name: pim_max_activation_hours, type: int,  description: "PIM role-setting maximum activation (design §6.3)", required: false, default: 8, source: environment }
   - { name: manage_pim_in_iac,      type: bool,   description: "added: create PIM eligible assignments from Bicep/Terraform instead of Initialize-LzPim.ps1 (roleEligibilityScheduleRequests are not re-runnable; default false)", required: false, default: false, source: environment }
   - { name: kv_soft_delete_days,    type: int,    description: "Soft-delete retention for both vaults (K-5)", required: false, default: 7, source: environment }
@@ -67,7 +67,7 @@ inputs:
   - { name: law_daily_cap_gb,       type: int,    description: "Log Analytics daily cap in GB (design §7.1)", required: false, default: 2, source: environment }
   # --- cluster prerequisites / BC-DR ----------------------------------------------------------
   - { name: enable_voucher_storage, type: bool,   description: "Deploy the ownership-voucher storage account (design §9.2, O4)", required: false, default: false, source: environment }
-  - { name: rsv_storage_redundancy, type: string, description: "Recovery Services vault redundancy (LocallyRedundant for the lab)", required: false, default: LocallyRedundant, source: environment }
+  - { name: rsv_storage_redundancy, type: string, description: "Recovery Services vault redundancy (LocallyRedundant for a short-lived deployment)", required: false, default: LocallyRedundant, source: environment }
   # --- management (jump server) ---------------------------------------------------------------
   - { name: enable_jump_server,     type: bool,   description: "Deploy stage S7 (the secret copy runs on the jump server, K-8)", required: false, default: true, source: environment }
   - { name: jump_vm_size,           type: string, description: "Jump server VM size (design §10.6 / management-plane MP-02 - Standard_D4s_v4)", required: false, default: Standard_D4s_v4, source: environment }
@@ -165,12 +165,12 @@ names:
   kv_ops:         { type: kv,   purpose: ops }
   kv_azl:         { type: kv,   purpose: azl }
   id_deploy:      { type: id,   purpose: deploy }
-  grp_lab_operators: { type: grp, purpose: lab-operators }
+  grp_platform_operators: { type: grp, purpose: platform-operators }
   grp_azl_admins:    { type: grp, purpose: azl-admins }
   grp_azl_operators: { type: grp, purpose: azl-operators }
   grp_azl_readers:   { type: grp, purpose: azl-readers }
   # monitoring (design §7)
-  law:            { type: law,  purpose: "" }                          # lab-wide singleton: law-<org>-<token>-<region>-01
+  law:            { type: law,  purpose: "" }                          # environment-wide singleton: law-<org>-<token>-<region>-01
   ag_ops:         { type: ag,   purpose: ops }
   dce_azl:        { type: dce,  purpose: azl }
   # governance (design §2.4, §2.5, §7.4)

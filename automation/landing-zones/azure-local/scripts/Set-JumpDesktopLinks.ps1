@@ -5,7 +5,7 @@
     Puts the sessions' web tools on the jump server's desktop (owner, 13 Oct): a folder of .url shortcuts per group and
     one index page, on the Public desktop so every account on the server sees them. Default is a plan; -Execute writes.
 .DESCRIPTION
-    Inputs (G5, nothing lab-specific in this file):
+    Inputs (G5, nothing environment-specific in this file):
       environment/azure-local/jump-desktop-links.psd1   JumpVmName, FolderName, Groups[].Links[] (Url or Resource)
     Resource links are resolved by Azure Resource Graph (name + type) in the current tenant and become portal URLs
     (https://portal.azure.com/#@<tenant>/resource<id><blade>); {tenant} in a Url is replaced by the tenant id.

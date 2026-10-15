@@ -9,7 +9,7 @@ function Resolve-NIC26SolutionInputs {
         - a missing required input fails the conversion (all missing names are reported at once);
         - optional inputs use 'default' when present, otherwise they are omitted;
         - source: generated inputs (tokens, resolved secrets, the names object) are never emitted and never fail;
-        - a short alias table (Get-NIC26InputAliasMap) maps design synonyms (region_short, lab_token, p2s_pool, ...)
+        - a short alias table (Get-NIC26InputAliasMap) maps design synonyms (region_short, naming_token, p2s_pool, ...)
           to the schema key when the input has no 'path';
         - type secret-ref values must be keyvault://<vault>/<secret> strings; anything else is refused;
         - values are type-checked against the declared type (string, int, bool, list, map, secret-ref).

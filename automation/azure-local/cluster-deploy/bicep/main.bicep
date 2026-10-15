@@ -18,7 +18,7 @@ param tenant_id string
 param subscription_id string
 @description('Region of the cluster resource (D-010).')
 param location string
-@description('Lab token; used as the deployment namingPrefix (max 8 chars).')
+@description('Naming token; used as the deployment namingPrefix (max 8 chars).')
 @maxLength(8)
 param token string
 param tags object

@@ -65,7 +65,7 @@ module kvOps 'br/public:avm/res/key-vault/vault:0.14.2' = {
     diagnosticSettings: kvDiagnostics
     privateEndpoints: enable_private_endpoints ? [privateEndpoint(names.pep_kv_ops, pe_subnet_id, vaultcore_zone_id, tags)] : []
     roleAssignments: [
-      { principalId: group_object_ids.grp_lab_operators, principalType: 'Group', roleDefinitionIdOrName: 'Key Vault Secrets Officer' }
+      { principalId: group_object_ids.grp_platform_operators, principalType: 'Group', roleDefinitionIdOrName: 'Key Vault Secrets Officer' }
       { principalId: deployIdentity.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionIdOrName: 'Key Vault Secrets User' }
     ]
   }
@@ -91,7 +91,7 @@ module kvAzl 'br/public:avm/res/key-vault/vault:0.14.2' = {
     diagnosticSettings: kvDiagnostics
     privateEndpoints: enable_private_endpoints ? [privateEndpoint(names.pep_kv_azl, pe_subnet_id, vaultcore_zone_id, tags)] : []
     roleAssignments: [
-      { principalId: group_object_ids.grp_lab_operators, principalType: 'Group', roleDefinitionIdOrName: 'Key Vault Secrets User' }
+      { principalId: group_object_ids.grp_platform_operators, principalType: 'Group', roleDefinitionIdOrName: 'Key Vault Secrets User' }
       { principalId: group_object_ids.grp_azl_admins, principalType: 'Group', roleDefinitionIdOrName: 'Key Vault Secrets User' }
       // Node Arc identities (Secrets Officer + Certificates Officer) are assigned by the cluster deployment, not here (design §5.4).
     ]

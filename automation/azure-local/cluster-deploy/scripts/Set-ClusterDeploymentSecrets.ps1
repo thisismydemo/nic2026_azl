@@ -61,7 +61,7 @@ foreach ($required in 'owner', 'project') {
     if ($null -eq $sharedTags -or -not ($sharedTags.PSObject.Properties.Name -contains $required) -or [string]::IsNullOrWhiteSpace([string]$sharedTags.$required)) { throw "Input tag '$required' is missing; it is required on every Key Vault secret." }
 }
 $tags = @{ owner = [string]$sharedTags.owner; project = [string]$sharedTags.project; 'rotation-days' = '90'; 'managed-by' = 'script'; lifecycle = 'temporary'; purpose = 'azure-local-deployment'; source = 'Set-ClusterDeploymentSecrets' }
-$expires = (Get-Date).ToUniversalTime().AddDays(90)   # lab lifetime (keyvault-and-secrets.md §6)
+$expires = (Get-Date).ToUniversalTime().AddDays(90)   # deployment lifetime (keyvault-and-secrets.md §6)
 
 function Get-ClusterDeploySecretOrNull {
     # Fail closed: only a confirmed not-found counts as absent. Throttling, 403, firewall or transport errors stop the run instead of authorising a write.

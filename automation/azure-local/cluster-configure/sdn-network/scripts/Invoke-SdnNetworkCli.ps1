@@ -16,7 +16,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     # Environment folder for Get-NIC26Config (default: <repo>\environment\azure-local). Subscription, resource group,
-    # custom location and region come from it (subscription_id, vm_management, location) - no lab value here (G5).
+    # custom location and region come from it (subscription_id, vm_management, location) - no environment value here (G5).
     [string]$EnvironmentPath,
     [string]$LogFile
 )

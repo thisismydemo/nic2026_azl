@@ -125,14 +125,14 @@ variable "enable_monitor_private_link" {
 }
 variable "privatelink_vaultcore_zone_id" {
   type        = string
-  description = "Existing shared privatelink.vaultcore.azure.net zone to reuse; empty creates the lab's own zone (P-11)."
+  description = "Existing shared privatelink.vaultcore.azure.net zone to reuse; empty creates its own zone (P-11)."
   default     = ""
 }
 
 # --- identity / security --------------------------------------------------------------------------
 variable "group_object_ids" {
   type        = map(string)
-  description = "Object IDs keyed by catalog key: grp_lab_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers."
+  description = "Object IDs keyed by catalog key: grp_platform_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers."
 }
 variable "pim_max_activation_hours" {
   type    = number

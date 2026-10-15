@@ -1,4 +1,4 @@
-# NIC 2026 lab - shared environment EXAMPLE (IIC values, all-zero GUIDs, placeholder shared-resource names).
+# NIC 2026 - shared environment EXAMPLE (IIC values, all-zero GUIDs, placeholder shared-resource names).
 # Copy to environment/shared/environment.yml and replace every value with the live ones from your private inventory.
 # Schema: automation/shared/schemas/shared.environment.schema.json  (validated by Get-NIC26Config)
 # Secrets are never written here: only keyvault://<vault>/<secret> references appear in environment files.
@@ -18,8 +18,8 @@ location: eastus
 location_short: eus
 org: iic
 token: nic26
-owner_email: lab-owner@contoso.com
-cost_center: iic-nic26-lab
+owner_email: owner@contoso.com
+cost_center: iic-nic26-demo
 # Key Vault secret-name prefix <org>-<env-name>- (HCS standard). IIC placeholder here; the registered
 # org/env prefix goes only in the PRIVATE environment file (design/shared/keyvault-and-secrets.md section 3).
 secret_name_prefix: iic-nic26-
@@ -27,8 +27,8 @@ secret_name_prefix: iic-nic26-
 tags:
   project: nic26
   environment: demo
-  owner: lab-owner@contoso.com
-  cost-center: iic-nic26-lab
+  owner: owner@contoso.com
+  cost-center: iic-nic26-demo
   lifecycle: temporary
 
 # --- existing shared resources (reused as-is, never renamed; names come only from here) -------------------------------
@@ -69,7 +69,7 @@ onprem_prefixes:
   - 10.101.64.0/24
 
 
-# Empty string = the lab creates its own zone (decision P-11).
+# Empty string = the deployment creates its own zone (decision P-11).
 privatelink_vaultcore_zone_id: ""
 privatelink_file_zone_id: ""
 privatelink_blob_zone_id: ""

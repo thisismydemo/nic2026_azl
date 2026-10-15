@@ -10,7 +10,7 @@ param log_analytics_workspace_id string
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param rsv_storage_redundancy string
 
-// Literal objects per value so the AVM discriminated union type-checks (lab: LocallyRedundant, design §8.2).
+// Literal objects per value so the AVM discriminated union type-checks (demo: LocallyRedundant, design §8.2).
 var redundancy = rsv_storage_redundancy == 'GeoRedundant'
   ? { standardTierStorageRedundancy: 'GeoRedundant', crossRegionRestore: 'Disabled' }
   : rsv_storage_redundancy == 'ZoneRedundant'

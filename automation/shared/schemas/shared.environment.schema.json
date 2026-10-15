@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nic26.contoso.com/schemas/shared.environment.schema.json",
   "title": "NIC 2026 shared environment (environment/shared/*.yml)",
-  "description": "Tenant, subscriptions, region and naming tokens, plus references to the pre-existing shared resources the lab reuses (hub VNet, VPN gateway, identity spoke, DCs, Bastion, P2S pool). Values only; secrets are keyvault:// references. Canonical names from design/azure-local/landing-zone.md section 10.6 and design/avd/landing-zone.md section 11.5. Unknown keys are rejected.",
+  "description": "Tenant, subscriptions, region and naming tokens, plus references to the pre-existing shared resources the deployment reuses (hub VNet, VPN gateway, identity spoke, DCs, Bastion, P2S pool). Values only; secrets are keyvault:// references. Canonical names from design/azure-local/landing-zone.md section 10.6 and design/avd/landing-zone.md section 11.5. Unknown keys are rejected.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -99,7 +99,7 @@
     "token": {
       "type": "string",
       "pattern": "^[a-z0-9]{3,8}$",
-      "description": "Lab token present in every name (nic26, D-005)."
+      "description": "Naming token present in every name (nic26, D-005)."
     },
     "owner_email": {
       "$ref": "#/$defs/email"
@@ -140,7 +140,6 @@
           "type": "string",
           "enum": [
             "demo",
-            "lab",
             "dev",
             "test",
             "prod"
@@ -241,7 +240,7 @@
       "items": {
         "$ref": "#/$defs/ipv4"
       },
-      "description": "Custom DNS servers for the lab VNets (normally the DCs)."
+      "description": "Custom DNS servers for the VNets (normally the DCs)."
     },
     "ad_domain_fqdn": {
       "$ref": "#/$defs/hostname",

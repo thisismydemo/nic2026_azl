@@ -651,7 +651,7 @@
       "minutes": 0.1,
       "followAlong": {
         "level": "none",
-        "goal": "Faults are run only on the lab cluster.",
+        "goal": "Faults are run only on a non-production cluster.",
         "needs": [],
         "steps": [],
         "troubleshooting": [],
@@ -710,7 +710,7 @@
       "minutes": 0.1,
       "followAlong": {
         "level": "none",
-        "goal": "Faults are run only on the lab cluster.",
+        "goal": "Faults are run only on a non-production cluster.",
         "needs": [],
         "steps": [],
         "troubleshooting": [],

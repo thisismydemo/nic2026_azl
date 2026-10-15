@@ -3,7 +3,7 @@
 .SYNOPSIS
     Read-only Site Recovery view for outline §3.3 / §4.5: protected items, replication health, recovery plans, recent jobs.
 .DESCRIPTION
-    Reads the lab Recovery Services vault (Az.RecoveryServices) and prints through the screen-hygiene filter. Changes nothing.
+    Reads the Recovery Services vault (Az.RecoveryServices) and prints through the screen-hygiene filter. Changes nothing.
 .PARAMETER ResourceGroupName
     Vault resource group (default: rg-<org>-<token>-azl-bcdr-<region>-01).
 .PARAMETER VaultName

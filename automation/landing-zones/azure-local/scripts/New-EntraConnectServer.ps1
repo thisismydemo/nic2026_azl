@@ -27,8 +27,8 @@
 .PARAMETER AdminUserName
     Local administrator name for the sync server, needed only on the first run (when the vault has no username secret yet).
 .PARAMETER EnvironmentPath
-    Environment folder for Get-NIC26Config (default: <repo>\environment\azure-local). All lab values come from
-    hybrid_identity in that file and from the shared file (G5): no lab value is written in this script.
+    Environment folder for Get-NIC26Config (default: <repo>\environment\azure-local). All environment values come from
+    hybrid_identity in that file and from the shared file (G5): no environment value is written in this script.
 .PARAMETER Execute
     Apply the changes. Without it the script only reports what it would do.
 #>

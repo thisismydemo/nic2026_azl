@@ -328,14 +328,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "lab_operators",
+        "platform_operators",
         "azl_admins",
         "azl_operators",
         "azl_readers"
       ],
       "description": "Entra group display names (naming standard section 5).",
       "properties": {
-        "lab_operators": {
+        "platform_operators": {
           "$ref": "#/$defs/groupName"
         },
         "azl_admins": {
@@ -353,14 +353,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "grp_lab_operators",
+        "grp_platform_operators",
         "grp_azl_admins",
         "grp_azl_operators",
         "grp_azl_readers"
       ],
       "description": "Object IDs written by the group-creation script (S0), keyed by the lz-azure-local names-catalog keys.",
       "properties": {
-        "grp_lab_operators": {
+        "grp_platform_operators": {
           "$ref": "#/$defs/guid"
         },
         "grp_azl_admins": {
@@ -464,7 +464,7 @@
     },
     "create_workspace": {
       "type": "boolean",
-      "description": "cluster-configure/monitoring: create the lab workspace names.law (D-054)."
+      "description": "cluster-configure/monitoring: create the Log Analytics workspace names.law (D-054)."
     },
     "manage_insights_dcr_in_iac": {
       "type": "boolean",
@@ -2016,7 +2016,7 @@
       "properties": {
         "package_folder": {
           "type": "string",
-          "description": "Folder on the machine that runs the script with the SBE discovery xml, inventory xml and payload zip (lab-only)."
+          "description": "Folder on the machine that runs the script with the SBE discovery xml, inventory xml and payload zip."
         },
         "import_folder": {
           "type": "string",

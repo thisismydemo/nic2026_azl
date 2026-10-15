@@ -29,7 +29,7 @@ BeforeAll {
         org = 'iic'; token = 'nic26'; location_short = 'eus'; location = 'eastus'
         tenant_domain = 'contoso.com'; tenant_id = '00000000-0000-0000-0000-000000000000'
         subscriptions = @{ azure_local = '00000000-0000-0000-0000-000000000000' }
-        owner_email = 'lab-owner@contoso.com'
+        owner_email = 'owner@contoso.com'
         cluster_name = 'nic26-clus01'
         identity = @{ dns_zone = 'nic26.iic.local' }
         log_analytics_workspace_id = ''
@@ -467,7 +467,7 @@ Describe 'Invoke-ArcVmLifecycleDemo.ps1 (outline 4.4)' {
         $script:LifecyclePath = Join-Path $script:ScriptsRoot 'Invoke-ArcVmLifecycleDemo.ps1'
         $script:LifecycleText = Get-Content -LiteralPath $script:LifecyclePath -Raw
     }
-    It 'parses and keeps lab values out of the code (no GUID, no IPv4 literal)' {
+    It 'parses and keeps environment values out of the code (no GUID, no IPv4 literal)' {
         $errs = $null
         $null = [System.Management.Automation.Language.Parser]::ParseFile($script:LifecyclePath, [ref]$null, [ref]$errs)
         $errs | Should -BeNullOrEmpty

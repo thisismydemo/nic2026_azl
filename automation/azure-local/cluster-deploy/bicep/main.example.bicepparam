@@ -11,9 +11,9 @@ param tags = {
   project: 'nic26'
   workload: 'azure-local'
   environment: 'demo'
-  owner: 'lab-owner@contoso.com'
+  owner: 'owner@contoso.com'
   'managed-by': 'bicep'
-  'cost-center': 'iic-nic26-lab'
+  'cost-center': 'iic-nic26-demo'
   lifecycle: 'temporary'
 }
 
@@ -67,7 +67,7 @@ param vlans = {
 }
 param qos = {
   storage_priority: 3
-  cluster_priority: 7              // must equal the ToR heartbeat class (the lab as built uses 5)
+  cluster_priority: 7              // must equal the ToR heartbeat class
   storage_bandwidth_percent: 50
   cluster_bandwidth_percent: 2
   jumbo_frame_size: 9014

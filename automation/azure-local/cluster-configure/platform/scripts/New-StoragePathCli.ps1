@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module powershell-yaml
 $azExe = (Get-Command az.cmd, az -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
 $envy = Get-Content -LiteralPath $EnvironmentFile -Raw | ConvertFrom-Yaml
-# Lab values come only from environment/** (plan rule G5); parameters override.
+# Environment values come only from environment/** (plan rule G5); parameters override.
 if (-not $SubscriptionId) { $SubscriptionId = [string]$envy.subscription_id }
 if (-not $ResourceGroupName) { $ResourceGroupName = [string]$envy.vm_management.resource_group }
 if (-not $CustomLocationName) { $CustomLocationName = [string]$envy.vm_management.custom_location }

@@ -18,10 +18,10 @@ inputs:
   - { name: tenant_id,        type: string, description: "Entra tenant ID (GUID)", required: true, default: null, source: environment }
   - { name: subscription_id,  type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
   - { name: location,         type: string, description: "Region of the cluster resource (D-010); never assumed in code", required: true, default: null, source: environment }
-  - { name: token,            type: string, description: "Lab token; also the deployment namingPrefix (max 8 chars)", required: true, default: null, source: environment }
+  - { name: token,            type: string, description: "Naming token; also the deployment namingPrefix (max 8 chars)", required: true, default: null, source: environment }
   - { name: tags,             type: map,    description: "The seven required tags (naming standard §3a)", required: true, default: null, source: environment }
   # --- cluster identity and secrets (D-008) ---------------------------------------------------
-  - { name: cluster_name,     type: string, description: "Cluster / CNO name (for example <lab>-clus01); must differ from every node name", required: true, default: null, source: environment }
+  - { name: cluster_name,     type: string, description: "Cluster / CNO name (for example <token>-clus01); must differ from every node name", required: true, default: null, source: environment }
   - { name: identity,         type: map,    description: "identity block: model (local-identity-keyvault), dns_zone, deployment_identity_name, local_admin_*_secret refs (names only)", required: true, default: null, source: environment }
   - { name: kv_azl_name,      type: string, description: "Cluster vault name (landing-zone output kv_azl; design §5.1). The template receives only the name.", required: true, default: null, source: environment }
   - { name: witness,          type: map,    description: "witness block: type (cloud), storage_account_name (landing-zone output), storage_key_secret ref (name only)", required: true, default: null, source: environment }

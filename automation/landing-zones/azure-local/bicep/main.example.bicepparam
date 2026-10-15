@@ -55,7 +55,7 @@ param enable_monitor_private_link = false
 param privatelink_vaultcore_zone_id = ''
 
 param group_object_ids = {
-  grp_lab_operators: '00000000-0000-0000-0000-000000000000'
+  grp_platform_operators: '00000000-0000-0000-0000-000000000000'
   grp_azl_admins: '00000000-0000-0000-0000-000000000000'
   grp_azl_operators: '00000000-0000-0000-0000-000000000000'
   grp_azl_readers: '00000000-0000-0000-0000-000000000000'
@@ -131,7 +131,7 @@ param names = {
   kv_ops: 'kv-iic-nic26-ops-eus-01'
   kv_azl: 'kv-iic-nic26-azl-eus-01'
   id_deploy: 'id-iic-nic26-deploy-eus-01'
-  grp_lab_operators: 'grp-iic-nic26-lab-operators'
+  grp_platform_operators: 'grp-iic-nic26-platform-operators'
   grp_azl_admins: 'grp-iic-nic26-azl-admins'
   grp_azl_operators: 'grp-iic-nic26-azl-operators'
   grp_azl_readers: 'grp-iic-nic26-azl-readers'

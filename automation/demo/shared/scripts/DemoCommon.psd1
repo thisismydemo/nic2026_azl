@@ -2,9 +2,9 @@
     RootModule        = 'DemoCommon.psm1'
     ModuleVersion     = '0.1.0'
     GUID              = '7f3b2c1e-5a4d-4e8f-9c0b-1d2e3f4a5b6c'
-    Author            = 'NIC 2026 lab'
+    Author            = 'NIC 2026'
     CompanyName       = 'IIC'
-    Copyright         = '(c) 2026 NIC 2026 lab. MIT.'
+    Copyright         = '(c) 2026 NIC 2026. MIT.'
     Description       = 'NIC 2026 demo support: screen-hygiene filter, safety guards, fault locks and mockable wrappers for the demo scripts (automation/demo).'
     PowerShellVersion = '7.0'
     FunctionsToExport = @(

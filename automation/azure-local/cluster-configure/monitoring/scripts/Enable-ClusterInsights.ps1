@@ -8,7 +8,7 @@
     Disable = delete the associations (exactly what the portal's "Disable Insights" does; data is kept).
 .DESCRIPTION
     The Insights DCR (names.dcr_insights, resource group rg_mon) comes from Invoke-MonitoringConfigure.ps1 when
-    manage_insights_dcr_in_iac is true (the lab, D-054: same shape as the dialog's DCR) or once from the Insights dialog;
+    manage_insights_dcr_in_iac is true (D-054: same shape as the dialog's DCR) or once from the Insights dialog;
     this script refuses to Enable while it does not exist.
     -ExtraEventChannels adds channels the fault demos need (for example Microsoft-Windows-Networking-NetworkATC/Operational)
     to the DCR's Microsoft-Event data source; -RemoveExtraEventChannels takes them out again (reversible, D-014).

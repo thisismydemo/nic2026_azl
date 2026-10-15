@@ -1,6 +1,6 @@
 # cluster-configure/update-manager — Azure Update Manager for the guest OS (outline §3.2)
 
-Two update planes, two owners: Lifecycle Manager updates the cluster (outline §4.1, recorded); **Azure Update Manager patches the guest OS of the Azure Local VMs**, which are Arc machines. This solution creates the maintenance configuration `mc-iic-nic26-azl-eus-01` (InGuestPatch, window from outline §1.11, user-managed patch mode) and a **subscription-level dynamic scope** `mc-iic-nic26-azl-dynscope-eus-01` that selects machines by tag (`dynamic_scope_tags`; the lab: `workload` in `iic`, `sofs-fslogix`, operator All) so new VMs are covered automatically. Periodic assessment is set by `scripts/Set-PeriodicAssessment.ps1` (and enforced by the policy initiative where the security track assigns it).
+Two update planes, two owners: Lifecycle Manager updates the cluster (outline §4.1, recorded); **Azure Update Manager patches the guest OS of the Azure Local VMs**, which are Arc machines. This solution creates the maintenance configuration `mc-iic-nic26-azl-eus-01` (InGuestPatch, window from outline §1.11, user-managed patch mode) and a **subscription-level dynamic scope** `mc-iic-nic26-azl-dynscope-eus-01` that selects machines by tag (`dynamic_scope_tags`; for example `workload` in `iic`, `sofs-fslogix`, operator All) so new VMs are covered automatically. Periodic assessment is set by `scripts/Set-PeriodicAssessment.ps1` (and enforced by the policy initiative where the security track assigns it).
 
 | Track | Maintenance configuration | Dynamic scope |
 |---|---|---|

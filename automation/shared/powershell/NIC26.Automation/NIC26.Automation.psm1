@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    NIC 2026 lab automation - shared PowerShell module (config loader, naming, converters, Key Vault resolver, logging).
+    NIC 2026 automation - shared PowerShell module (config loader, naming, converters, Key Vault resolver, logging).
 .DESCRIPTION
     Root module. Dot-sources every function under Private\ and Public\ (one function per file) and exports the
     public ones. See automation\shared\README.md and automation\CONTRACT.md.

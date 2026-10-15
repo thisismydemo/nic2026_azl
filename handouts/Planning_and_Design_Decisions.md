@@ -99,9 +99,9 @@ Why it is not chosen for IIC: it needs two rooms or racks with the required late
 
 Constraints that shape the decision (Microsoft Learn): HTTP traffic is never tunneled through the Arc gateway; OEM and third-party endpoints are not covered by it; Azure Arc Private Link is not supported for Azure Local infrastructure, so Arc registration uses public Arc endpoints; private endpoint addresses must stay outside `10.96.0.0/12` and `10.244.0.0/16`; keep Key Vault and the witness storage account publicly reachable until deployment completes, then restrict them. Firewall rules must be in place before Arc registration; validate them with the Environment Checker.
 
-**Keep three things apart in your design document:** the production recommendation (Arc gateway or proxy plus Arc gateway), any constraint of a preview feature you use, and any lab workaround.
+**Keep three things apart in your design document:** the production recommendation (Arc gateway or proxy plus Arc gateway), any constraint of a preview feature you use, and any workaround.
 
-**Decision (IIC):** direct egress with the full allow-list and no Arc gateway, because the lab used the simplified machine provisioning preview, which was checked not to work with the Arc gateway at the version used. The lesson: choose the Arc gateway during planning, because it cannot be added later.
+**Decision (IIC):** direct egress with the full allow-list and no Arc gateway, because the demo cluster used the simplified machine provisioning preview, which was checked not to work with the Arc gateway at the version used. The lesson: choose the Arc gateway during planning, because it cannot be added later.
 
 Also decide here: DNS zone and NTP; a management IP pool of at least six consecutive addresses; static node addressing; and the endpoint allow-list for every service the design uses later (Monitor, Update, Backup, Site Recovery, Migrate, Key Vault, witness storage).
 

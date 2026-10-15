@@ -6,7 +6,7 @@
     the Azure Monitor workspace that holds Azure Monitor issues, Issue Contributor on it, and each listed subscription's
     defaultAzureMonitorWorkspace association. Default is a plan (what-if); -Execute changes Azure. Rerunnable.
 .DESCRIPTION
-    Inputs (G5, nothing lab-specific in this file):
+    Inputs (G5, nothing environment-specific in this file):
       environment/shared/environment.yml        subscriptions map, location, tags
       environment/azure-local/environment.yml   observability_agent { amw_name, resource_group, associate_subscriptions,
                                                 issue_contributors[] } (schema: automation/shared/schemas/

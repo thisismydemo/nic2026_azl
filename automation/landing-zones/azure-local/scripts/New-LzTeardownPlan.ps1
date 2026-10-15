@@ -28,7 +28,7 @@
     Contact: kris@hybridsolutions.cloud
     Version: 1.3.0
     Requires Az.Accounts, Az.Resources, Az.Network, Az.KeyVault, Az.RecoveryServices. Rotate copied credentials in their
-    source systems at lab close (keyvault-and-secrets.md §6) - a manual step listed in the plan.
+    source systems at teardown (keyvault-and-secrets.md §6) - a manual step listed in the plan.
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(

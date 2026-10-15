@@ -31,7 +31,7 @@ destroy: supported
 
 names:
   rg_mon:                { type: rg,   purpose: azl-mon }
-  law:                   { type: law,  purpose: "" }         # lab-wide singleton, same name as the landing zone
+  law:                   { type: law,  purpose: "" }         # environment-wide singleton, same name as the landing zone
   init_hybrid_baseline:  { type: init, purpose: hybrid-baseline }
   asg_hybrid_baseline:   { type: asg,  purpose: hybrid-baseline }
   pol_insights_ama:      { type: pol,  purpose: azl-insights-ama }

@@ -1,8 +1,8 @@
-# NIC 2026 lab - Azure Local environment EXAMPLE (IIC values from the designs, all-zero GUIDs).
+# NIC 2026 - Azure Local environment EXAMPLE (IIC values from the designs, all-zero GUIDs).
 # Copy to environment/azure-local/environment.yml and replace values. Shared values live in environment/shared/*.yml.
 # Schema: automation/shared/schemas/azure-local.environment.schema.json
 # Sources: design/azure-local/landing-zone.md section 10.6, design/azure-local/network-design.md sections 4, 6, 8.
-# Secrets are keyvault://<vault>/<secret> references only. The lab's registered secret org/env prefix goes in the
+# Secrets are keyvault://<vault>/<secret> references only. Your registered secret org/env prefix goes in the
 # private file; this example uses the IIC placeholder prefix 'iic-nic26-'.
 
 subscription_id: 00000000-0000-0000-0000-000000000000
@@ -23,11 +23,11 @@ enable_management_peering: true  # P-13: direct spoke<->management peering
 # --- governance -------------------------------------------------------------------------------------------------------
 budget_monthly_amount: 2500
 budget_contact_emails:
-  - lab-owner@contoso.com
+  - owner@contoso.com
 pim_max_activation_hours: 8
 # Central Log Analytics workspace of the platform management subscription (empty = create a workload workspace)
 central_log_analytics_workspace_id: ""
-# Policy, Defender, activity-log export and peerings on platform VNets are delivered by their owners; true only for a standalone lab
+# Policy, Defender, activity-log export and peerings on platform VNets are delivered by their owners; true only for a standalone environment
 deploy_platform_scope_items: false
 law_retention_days: 30
 law_daily_cap_gb: 2
@@ -53,12 +53,12 @@ jump_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-lo
 
 # --- identity and groups (section 6.1) --------------------------------------------------------------------------------
 entra_groups:
-  lab_operators: grp-iic-nic26-lab-operators
+  platform_operators: grp-iic-nic26-platform-operators
   azl_admins: grp-iic-nic26-azl-admins
   azl_operators: grp-iic-nic26-azl-operators
   azl_readers: grp-iic-nic26-azl-readers
 group_object_ids:                  # keyed by the lz-azure-local names-catalog keys (written by S0)
-  grp_lab_operators: 00000000-0000-0000-0000-000000000000
+  grp_platform_operators: 00000000-0000-0000-0000-000000000000
   grp_azl_admins: 00000000-0000-0000-0000-000000000000
   grp_azl_operators: 00000000-0000-0000-0000-000000000000
   grp_azl_readers: 00000000-0000-0000-0000-000000000000
@@ -179,7 +179,7 @@ ip_plan:
 
 qos:
   storage_priority: 3
-  cluster_priority: 7            # Network ATC default; must equal the ToR heartbeat class (the NIC 2026 lab as built uses 5 to match its existing ToRs, network-design §6.2, §12 #9)
+  cluster_priority: 7            # Network ATC default; must equal the ToR heartbeat class (the NIC 2026 as built uses 5 to match its existing ToRs, network-design §6.2, §12 #9)
   storage_bandwidth_percent: 50
   cluster_bandwidth_percent: 2   # 10 GbE links (S4112F-ON is SFP+); 1 only for 25 GbE
   jumbo_frame_size: 9014

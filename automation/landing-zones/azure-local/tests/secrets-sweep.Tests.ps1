@@ -7,13 +7,6 @@
 # IP ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24); the Azure DNS virtual IP 168.63.129.16 (a platform constant
 # named in the design).
 BeforeAll {
-    function Test-SweepPublicPublisherGuid {
-        param([string] $FileName, [string] $Line, [string] $Value)
-        # Verified official OpenAI MSIX certificate subject, not a tenant/subscription identifier.
-        return ($FileName -eq 'jump-tools.versions.psd1' -and
-            $Value -ieq '50BDFD77-8903-4850-9FFE-6E8522F64D5B' -and
-            $Line -match "^\s*Publisher\s*=\s*'CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B'\s*$")
-    }
     function Test-SweepPublicInstallerGuid {
         param([string] $FileName, [string] $Line, [string] $Value)
         # Installer identities published by the vendors of the pinned public installers (MSI ProductCode, Inno Setup
@@ -43,21 +36,12 @@ Describe 'Secrets and tenant-data sweep' -Tag 'Gate', 'Secrets' {
                     if ($m.Value -match '^([0-9a-f])\1{7}-([0-9a-f])\2{3}-([0-9a-f])\3{3}-([0-9a-f])\4{3}-([0-9a-f])\5{11}$') { continue }   # synthetic single-digit test fixtures
                     if ($f.Name -in $script:GuidAllowFiles) { continue }
                     if ($m.Value -in $script:GuidAllowValues) { continue }
-                    if (Test-SweepPublicPublisherGuid -FileName $f.Name -Line $_.Line -Value $m.Value) { continue }
                     if (Test-SweepPublicInstallerGuid -FileName $f.Name -Line $_.Line -Value $m.Value) { continue }
                     "$($f.Name):$($_.LineNumber) $($m.Value)"
                 }
             }
         }
         @($hits) | Should -BeNullOrEmpty
-    }
-    It 'allows the verified public certificate only in its exact pin-file publisher field' {
-        $guid = '50BDFD77-8903-4850-9FFE-6E8522F64D5B'
-        Test-SweepPublicPublisherGuid -FileName 'jump-tools.versions.psd1' -Line "Publisher = 'CN=$guid'" -Value $guid | Should -BeTrue
-        Test-SweepPublicPublisherGuid -FileName 'other.psd1' -Line "Publisher = 'CN=$guid'" -Value $guid | Should -BeFalse
-        Test-SweepPublicPublisherGuid -FileName 'jump-tools.versions.psd1' -Line "TenantId = '$guid'" -Value $guid | Should -BeFalse
-        $random = [guid]::NewGuid().ToString()
-        Test-SweepPublicPublisherGuid -FileName 'jump-tools.versions.psd1' -Line "Publisher = 'CN=$random'" -Value $random | Should -BeFalse
     }
     It 'allows public installer identities only as ProductCode/UninstallKey/SystemAppId values in the pin file' {
         $guid = [guid]::NewGuid().ToString().ToUpperInvariant()

@@ -189,7 +189,7 @@ Describe 'script hygiene (contract §7)' {
         { & (Join-Path $script:solutionRoot 'scripts/Test-ClusterPostDeployment.ps1') -InputFile $path -SkipNodeChecks } | Should -Throw '*node*'
         Should -Invoke Get-AzContext -Times 0 -Exactly
     }
-    It 'accepts a nonempty generic node list without imposing the lab node count' {
+    It 'accepts a nonempty generic node list without imposing a fixed node count' {
         $inputData = Get-Content (Join-Path $script:solutionRoot 'terraform/terraform.example.tfvars.json') -Raw | ConvertFrom-Json -AsHashtable
         $inputData.nodes = @(@{ name = 'example-node' })
         $path = Join-Path $TestDrive 'one-node.json'

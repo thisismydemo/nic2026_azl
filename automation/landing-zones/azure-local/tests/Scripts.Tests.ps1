@@ -435,7 +435,7 @@ Describe 'Initialize-LzPim.ps1 (S3)' -Tag 'Scripts' {
         Should -Invoke Invoke-AzRestMethod -Times 9 -Exactly -ParameterFilter {
             $body = $Payload | ConvertFrom-Json
             $Method -eq 'PUT' -and $Path.StartsWith("/subscriptions/$global:LzTestSub/") -and
-            $body.properties.principalId -in @($script:Config.group_object_ids.grp_lab_operators, $script:Config.group_object_ids.grp_azl_admins, $script:Config.group_object_ids.grp_azl_operators) -and
+            $body.properties.principalId -in @($script:Config.group_object_ids.grp_platform_operators, $script:Config.group_object_ids.grp_azl_admins, $script:Config.group_object_ids.grp_azl_operators) -and
             $body.properties.roleDefinitionId.StartsWith("/subscriptions/$global:LzTestSub/providers/Microsoft.Authorization/roleDefinitions/")
         }
     }

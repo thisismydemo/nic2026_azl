@@ -332,8 +332,8 @@ Invoke-LzCheck 'kv-rbac' {
     $problems = @()
     $opsRa = @(Get-AzRoleAssignment -Scope $ops); $azlRa = @(Get-AzRoleAssignment -Scope $azl)
     $g = $Config.group_object_ids
-    if (-not ($opsRa | Where-Object { $_.ObjectId -eq $g.grp_lab_operators -and $_.RoleDefinitionName -eq 'Key Vault Secrets Officer' })) { $problems += 'lab-operators not Secrets Officer on ops' }
-    if (-not ($azlRa | Where-Object { $_.ObjectId -eq $g.grp_lab_operators -and $_.RoleDefinitionName -eq 'Key Vault Secrets User' })) { $problems += 'lab-operators not Secrets User on azl' }
+    if (-not ($opsRa | Where-Object { $_.ObjectId -eq $g.grp_platform_operators -and $_.RoleDefinitionName -eq 'Key Vault Secrets Officer' })) { $problems += 'platform-operators not Secrets Officer on ops' }
+    if (-not ($azlRa | Where-Object { $_.ObjectId -eq $g.grp_platform_operators -and $_.RoleDefinitionName -eq 'Key Vault Secrets User' })) { $problems += 'platform-operators not Secrets User on azl' }
     $id = Get-AzUserAssignedIdentity -Name $n.id_deploy -ResourceGroupName $n.rg_sec -ErrorAction SilentlyContinue
     if (-not ($opsRa | Where-Object { $_.ObjectId -eq $id.PrincipalId -and $_.RoleDefinitionName -eq 'Key Vault Secrets User' })) { $problems += 'deploy identity not Secrets User on ops' }
     $admins = @($opsRa + $azlRa | Where-Object RoleDefinitionName -EQ 'Key Vault Administrator')
@@ -356,7 +356,7 @@ Invoke-LzCheck 'rp-app-role' {
 }
 Invoke-LzCheck 'pim' {
     $g = $Config.group_object_ids
-    $missing = foreach ($pair in @(@{ G = 'grp_lab_operators'; R = 'Owner' }, @{ G = 'grp_azl_admins'; R = 'Azure Stack HCI Administrator' }, @{ G = 'grp_azl_operators'; R = 'Azure Stack HCI VM Contributor' })) {
+    $missing = foreach ($pair in @(@{ G = 'grp_platform_operators'; R = 'Owner' }, @{ G = 'grp_azl_admins'; R = 'Azure Stack HCI Administrator' }, @{ G = 'grp_azl_operators'; R = 'Azure Stack HCI VM Contributor' })) {
         $e = Get-AzRoleEligibilitySchedule -Scope $subScope -Filter "principalId eq '$($g.($pair.G))'" -ErrorAction SilentlyContinue | Where-Object { $_.RoleDefinitionDisplayName -eq $pair.R }
         if (-not $e) { "$($pair.G):$($pair.R)" }
     }

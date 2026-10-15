@@ -21,7 +21,7 @@ Describe 'cluster-configure/gpu scripts' {
             $text[$s.Name] | Should -Match "\`$ErrorActionPreference = 'Stop'" -Because $s.Name
         }
     }
-    It 'holds no lab values (G5): no IPs, GUIDs, vault names or lab resource names' {
+    It 'holds no environment values (G5): no IPs, GUIDs, vault names or environment resource names' {
         foreach ($s in $scripts) {
             $t = $text[$s.Name]
             $t | Should -Not -Match '\b(?:\d{1,3}\.){3}\d{1,3}\b' -Because $s.Name

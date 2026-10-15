@@ -11,7 +11,7 @@ function Get-NIC26NameRegistry {
             Description          what the type is
             MinLength/MaxLength  Azure or NetBIOS limits
             Regex                allowed characters for the whole name (default: lowercase alnum + hyphen, no leading/trailing hyphen)
-            PurposeOptional      lab-wide singletons may omit the purpose (law, gal, vdws)
+            PurposeOptional      environment-wide singletons may omit the purpose (law, gal, vdws)
             PurposeAllowed       $false for types whose template has no {purpose}
             PurposeCompact       hyphens are stripped from the purpose (storage, gallery)
             PurposeRegex         purpose character rule (default lowercase alnum + single hyphens)
@@ -20,7 +20,7 @@ function Get-NIC26NameRegistry {
             PurposeIsParentName  the purpose is the parent resource's full name (nic, osdisk, datadisk, vhd, bmc, peer)
             SuffixMeaning        what -Suffix means when the template has {suffix}
             NoConsecutiveHyphens Key Vault rule
-            RequireToken         name must contain the lab token (exempt types set $false)
+            RequireToken         name must contain the naming token (exempt types set $false)
             Generated            $false for fixed/exempt names: Test-NIC26ResourceName only
             FixedNames           allowed values for fixed-name types
             Global               no {region} in the template (Entra objects, policy, image definitions, site names)
@@ -42,7 +42,7 @@ function Get-NIC26NameRegistry {
         # --- Azure resources: standard pattern <type>-iic-nic26-<purpose>-eus-<##> -------------------------------
         @{ Type = 'rg'; Template = $std; Description = 'Resource group'; MaxLength = 90; Example = 'rg-iic-nic26-azl-eus-01' }
         @{ Type = 'vnet'; Template = $std; Description = 'Virtual network'; MaxLength = 64; Example = 'vnet-iic-nic26-avd-eus-01' }
-        @{ Type = 'snet'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Subnet (lab spokes; Azure-fixed subnets use type fixedsubnet)'; MaxLength = 80; Global = $true; Example = 'snet-iic-nic26-hosts' }
+        @{ Type = 'snet'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Subnet (spokes; Azure-fixed subnets use type fixedsubnet)'; MaxLength = 80; Global = $true; Example = 'snet-iic-nic26-hosts' }
         @{ Type = 'peer'; Template = 'peer-{purpose}-to-{suffix}'; Description = 'VNet peering; -Purpose is the source VNet name, -Suffix the target'; MaxLength = 80; Global = $true; PurposeIsParentName = $true; SuffixMeaning = 'target VNet short name'; Example = 'peer-vnet-iic-nic26-avd-eus-01-to-hub' }
         @{ Type = 'nsg'; Template = $std; Description = 'Network security group'; MaxLength = 80; Example = 'nsg-iic-nic26-jump-eus-01' }
         @{ Type = 'rt'; Template = $std; Description = 'Route table'; MaxLength = 80; Example = 'rt-iic-nic26-avd-eus-01' }
@@ -53,7 +53,7 @@ function Get-NIC26NameRegistry {
         @{ Type = 'link'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Private DNS zone virtual network link'; MaxLength = 80; Global = $true; Example = 'link-iic-nic26-avd' }
         @{ Type = 'kv'; Template = $std; Description = 'Key Vault (3-24, no consecutive hyphens, globally unique)'; MinLength = 3; MaxLength = 24; NoConsecutiveHyphens = $true; Example = 'kv-iic-nic26-ops-eus-01' }
         @{ Type = 'st'; Template = $compact; Description = 'Storage account (3-24 lowercase alphanumeric, globally unique)'; MinLength = 3; MaxLength = 24; Regex = $alnum; PurposeCompact = $true; PurposeRegex = $alnum; Example = 'stiicnic26fslogixeus01' }
-        @{ Type = 'law'; Template = $std; Description = 'Log Analytics workspace (lab-wide singleton; purpose optional)'; MinLength = 4; MaxLength = 63; PurposeOptional = $true; Example = 'law-iic-nic26-eus-01' }
+        @{ Type = 'law'; Template = $std; Description = 'Log Analytics workspace (environment-wide singleton; purpose optional)'; MinLength = 4; MaxLength = 63; PurposeOptional = $true; Example = 'law-iic-nic26-eus-01' }
         @{ Type = 'dcr'; Template = $std; Description = 'Data collection rule; purpose = <scope>-<purpose>'; MaxLength = 64; Example = 'dcr-iic-nic26-azl-insights-eus-01' }
         @{ Type = 'dce'; Template = $std; Description = 'Data collection endpoint'; MaxLength = 44; Example = 'dce-iic-nic26-azl-eus-01' }
         @{ Type = 'dcra'; Template = '{type}-{org}-{token}-{purpose}-{instance}'; Description = 'Data collection rule association (local convention, no region)'; MaxLength = 64; Global = $true; Example = 'dcra-iic-nic26-azl-01' }
@@ -67,10 +67,10 @@ function Get-NIC26NameRegistry {
         @{ Type = 'pol'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Azure Policy definition'; MaxLength = 64; Global = $true; Example = 'pol-iic-nic26-akv-backup-ext' }
         @{ Type = 'asg'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Azure Policy assignment (64 at subscription scope; 24 at management-group scope)'; MaxLength = 64; Global = $true; Example = 'asg-iic-nic26-hybrid-baseline' }
         @{ Type = 'mc'; Template = $std; Description = 'Maintenance configuration'; MaxLength = 64; Example = 'mc-iic-nic26-azl-eus-01' }
-        @{ Type = 'gal'; Template = $compact; Description = 'Compute gallery (no hyphens; lab-wide singleton, purpose optional)'; MaxLength = 80; Regex = $alnum; PurposeCompact = $true; PurposeOptional = $true; PurposeRegex = $alnum; Example = 'galiicnic26eus01' }
+        @{ Type = 'gal'; Template = $compact; Description = 'Compute gallery (no hyphens; environment-wide singleton, purpose optional)'; MaxLength = 80; Regex = $alnum; PurposeCompact = $true; PurposeOptional = $true; PurposeRegex = $alnum; Example = 'galiicnic26eus01' }
         @{ Type = 'imgdef'; Template = '{type}-{org}-{token}-{purpose}'; Description = 'Gallery image definition; purpose = os'; MaxLength = 80; Global = $true; Example = 'imgdef-iic-nic26-win11-avd' }
         @{ Type = 'it'; Template = $std; Description = 'Image Builder template; purpose = target'; MaxLength = 64; Example = 'it-iic-nic26-azure-eus-01' }
-        @{ Type = 'vdws'; Template = $std; Description = 'AVD workspace (lab-wide singleton, purpose optional)'; MaxLength = 64; PurposeOptional = $true; Example = 'vdws-iic-nic26-eus-01' }
+        @{ Type = 'vdws'; Template = $std; Description = 'AVD workspace (environment-wide singleton, purpose optional)'; MaxLength = 64; PurposeOptional = $true; Example = 'vdws-iic-nic26-eus-01' }
         @{ Type = 'vdpool'; Template = $std; Description = 'AVD host pool; purpose = realm'; MaxLength = 64; Example = 'vdpool-iic-nic26-azure-eus-01' }
         @{ Type = 'vdag'; Template = $std; Description = 'AVD application group; purpose = realm'; MaxLength = 64; Example = 'vdag-iic-nic26-azure-eus-01' }
         @{ Type = 'vdscaling'; Template = $std; Description = 'AVD scaling plan; purpose = realm'; MaxLength = 64; Example = 'vdscaling-iic-nic26-azure-eus-01' }
@@ -104,7 +104,7 @@ function Get-NIC26NameRegistry {
         @{ Type = 'netbios'; Template = '{token}-{purpose}-{instance}'; Description = 'Generic computer / NetBIOS name <= 15 (jump server, appliances); session hosts use type sessionhost'; MaxLength = 15; Global = $true; Example = 'nic26-jmp-01' }
         @{ Type = 'sessionhost'; Template = '{token}-avd-{purpose}{instance}'; Description = 'AVD session host computer name; -Purpose = az | al | hv'; MaxLength = 15; Global = $true; PurposeValidSet = @('az', 'al', 'hv'); Example = 'nic26-avd-az01' }
         @{ Type = 'vlan'; Template = '{token}-{purpose}-{suffix}'; Description = 'VLAN name; -Suffix is the VLAN id'; MaxLength = 32; Global = $true; SuffixMeaning = 'VLAN id'; Example = 'nic26-mgmt-100' }
-        @{ Type = 'vsw'; Template = '{token}-vsw-{purpose}'; Description = 'Manually created Hyper-V virtual switch'; MaxLength = 64; Global = $true; Example = 'nic26-vsw-lab' }
+        @{ Type = 'vsw'; Template = '{token}-vsw-{purpose}'; Description = 'Manually created Hyper-V virtual switch'; MaxLength = 64; Global = $true; Example = 'nic26-vsw-demo' }
         @{ Type = 'sp'; Template = '{type}-{token}-{purpose}-{instance}'; Description = 'Azure Local storage path; purpose = <mirror>-<purpose>'; MaxLength = 64; Global = $true; Example = 'sp-nic26-m2-vmstore-01' }
         @{ Type = 'csv'; Template = '{type}-{token}-{purpose}-{instance}'; Description = 'Cluster shared volume; purpose = <mirror>-<purpose>'; MaxLength = 64; Global = $true; Example = 'csv-nic26-m2-vmstore-01' }
         @{ Type = 'share'; Template = '{token}-{purpose}'; Description = 'Azure Files share (3-63, lowercase, digits, hyphens)'; MinLength = 3; MaxLength = 63; Global = $true; Example = 'nic26-fslogix-profiles' }

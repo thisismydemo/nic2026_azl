@@ -13,7 +13,7 @@ function New-NIC26ResourceName {
         gal, imgdef, it, vdws, vdpool, vdag, vdscaling, vm, vmazl, cl, arb, lnet, img, budget, rp, dnspr, spn, grp,
         clus, node, bmc, sw, fw, og, jmp, sessionhost, vlan, sp, csv, share, ...).
     .PARAMETER Purpose
-        Short lowercase purpose segment (hyphen-separated). Optional only for lab-wide singletons (law, gal, vdws).
+        Short lowercase purpose segment (hyphen-separated). Optional only for environment-wide singletons (law, gal, vdws).
         For derived names (nic, osdisk, datadisk, vhd, bmc, peer) it is the parent resource name.
     .PARAMETER Instance
         Two-digit instance, 1-99 (padded to 01).
@@ -22,7 +22,7 @@ function New-NIC26ResourceName {
     .PARAMETER Org
         Organization token (default from NamingDefaults.psd1 or NIC26_ORG).
     .PARAMETER Token
-        Lab token present in every name (default from NamingDefaults.psd1 or NIC26_TOKEN).
+        Naming token present in every name (default from NamingDefaults.psd1 or NIC26_TOKEN).
     .PARAMETER Suffix
         Extra trailing segment for templates that need one (peer target, VLAN id, secret field).
     .EXAMPLE

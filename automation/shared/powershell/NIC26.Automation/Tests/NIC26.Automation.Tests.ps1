@@ -149,7 +149,7 @@ Describe 'Naming standard - registry types' {
     }
 
     It 'honours -Org, -Token and -Region' {
-        New-NIC26ResourceName -Type vnet -Purpose hub -Org acme -Token lab7 -Region weu | Should -Be 'vnet-acme-lab7-hub-weu-01'
+        New-NIC26ResourceName -Type vnet -Purpose hub -Org acme -Token env7 -Region weu | Should -Be 'vnet-acme-env7-hub-weu-01'
     }
 
     It 'throws with the computed length when a Key Vault name is too long' {
@@ -196,7 +196,7 @@ Describe 'Test-NIC26ResourceName' {
     It 'returns false with reasons when nic26 is missing' {
         $result = Test-NIC26ResourceName -Name 'rg-iic-demo-eus-01' -Type rg -Detailed
         $result.IsValid | Should -BeFalse
-        $result.Reasons | Should -Contain "does not contain the lab token 'nic26' (naming standard section 1)"
+        $result.Reasons | Should -Contain "does not contain the naming token 'nic26' (naming standard section 1)"
         Test-NIC26ResourceName -Name 'rg-iic-demo-eus-01' -Type rg | Should -BeFalse
     }
 
@@ -359,7 +359,7 @@ Describe 'Converters' {
             $text | Should -Not -Match 'optional_without_default'
             $text | Should -Match "(?m)^param enable_example_feature = false$"
             $text | Should -Match "(?m)^param shortpath_managed_port = 3390$"
-            $text | Should -Match "  'cost-center': 'iic-nic26-lab'"
+            $text | Should -Match "  'cost-center': 'iic-nic26-demo'"
             $text | Should -Match "  fslogix_sa: 'stiicnic26fslogixeus01'"
             $text | Should -Match "  gateway_subnet: 'GatewaySubnet'"
             $text | Should -Match "  sh_azure_01: 'nic26-avd-az01'"
@@ -669,10 +669,10 @@ Describe 'Naming defaults (no organisation, token or region in code)' {
         New-NIC26ResourceName -Type rg -Purpose demo | Should -Be 'rg-iic-nic26-demo-eus-01'
     }
     It 'lets environment variables replace organisation, token and region, read on every call' {
-        $env:NIC26_ORG = 'acme'; $env:NIC26_TOKEN = 'lab9'; $env:NIC26_REGION = 'weu'
-        New-NIC26ResourceName -Type rg -Purpose demo | Should -Be 'rg-acme-lab9-demo-weu-01'
+        $env:NIC26_ORG = 'acme'; $env:NIC26_TOKEN = 'env9'; $env:NIC26_REGION = 'weu'
+        New-NIC26ResourceName -Type rg -Purpose demo | Should -Be 'rg-acme-env9-demo-weu-01'
         $env:NIC26_REGION = 'neu'
-        New-NIC26ResourceName -Type rg -Purpose demo | Should -Be 'rg-acme-lab9-demo-neu-01'
+        New-NIC26ResourceName -Type rg -Purpose demo | Should -Be 'rg-acme-env9-demo-neu-01'
     }
     It 'prefers an explicit parameter over every default' {
         $env:NIC26_ORG = 'acme'
@@ -685,8 +685,8 @@ Describe 'Naming defaults (no organisation, token or region in code)' {
     It 'the name catalog takes org, token and location_short from the config values, whatever the defaults say' {
         $env:NIC26_ORG = $null
         $catalog = [ordered]@{ rg_demo = [ordered]@{ type = 'rg'; purpose = 'demo' } }
-        $values = [ordered]@{ org = 'acme'; token = 'lab9'; location_short = 'weu' }
+        $values = [ordered]@{ org = 'acme'; token = 'env9'; location_short = 'weu' }
         $names = & (Get-Module NIC26.Automation) { param($c, $v) Resolve-NIC26NameCatalog -Catalog $c -Values $v } $catalog $values
-        $names['rg_demo'] | Should -Be 'rg-acme-lab9-demo-weu-01'
+        $names['rg_demo'] | Should -Be 'rg-acme-env9-demo-weu-01'
     }
 }

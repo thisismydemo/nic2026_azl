@@ -12,7 +12,7 @@ depends_on: [cluster-deploy, lz-azure-local]
 
 inputs:
   - { name: subscription_id,  type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
-  - { name: group_object_ids, type: map,    description: "Object IDs keyed azl_admins, azl_operators, azl_readers, lab_operators (written by the landing-zone S0 script)", required: true, default: null, source: environment }
+  - { name: group_object_ids, type: map,    description: "Object IDs keyed azl_admins, azl_operators, azl_readers, platform_operators (written by the landing-zone S0 script)", required: true, default: null, source: environment }
   - { name: pim_max_activation_hours, type: int, description: "Maximum activation (role setting; informational here)", required: false, default: 8, source: environment }
   - { name: pim_assignments,  type: list,   description: "added: eligible rows {group, role} at subscription scope (design §6.2); built-in role NAMES only", required: false, default: [ { group: azl_admins, role: Azure Stack HCI Administrator }, { group: azl_admins, role: Reader }, { group: azl_operators, role: Azure Stack HCI VM Contributor }, { group: azl_operators, role: Reader } ], source: environment }
   - { name: names,            type: map,    description: "Resolved name catalog", required: true, default: null, source: generated }

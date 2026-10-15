@@ -1,7 +1,7 @@
 function Get-NIC26NamingDefault {
     <#
     .SYNOPSIS
-        Returns the default organisation, lab token or region short code used when a caller does not pass one.
+        Returns the default organisation, naming token or region short code used when a caller does not pass one.
     .DESCRIPTION
         Order: environment variable (NIC26_ORG, NIC26_TOKEN, NIC26_REGION; read on every call), then NamingDefaults.psd1
         next to the module (read once per session; reload the module to pick up an edit). The environment file values

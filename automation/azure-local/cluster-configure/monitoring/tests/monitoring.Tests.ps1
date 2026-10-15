@@ -28,7 +28,7 @@ Describe 'monitoring specifics' {
 }
 
 Describe 'Day-2 build 12 Oct (D-054): workspace, Insights DCR shape, recommended and health alerts' {
-    It 'Bicep and Terraform create the lab workspace only behind create_workspace and author the Insights DCR in the dialog shape' {
+    It 'Bicep and Terraform create the Log Analytics workspace only behind create_workspace and author the Insights DCR in the dialog shape' {
         $b = Get-Content (Join-Path $PSScriptRoot '..\bicep\main.bicep') -Raw
         $t = Get-Content (Join-Path $PSScriptRoot '..\terraform\main.tf') -Raw
         $b | Should -Match "Microsoft.OperationalInsights/workspaces@[0-9-]+' = if \(create_workspace\)"

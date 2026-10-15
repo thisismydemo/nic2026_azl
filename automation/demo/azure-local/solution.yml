@@ -14,7 +14,7 @@ inputs:
   - { name: identity,                  type: map,    description: "identity.dns_zone for the cluster FQDN", required: true, default: null, source: environment }
   - { name: nodes,                     type: list,   description: "Nodes with name and management_ip (WinRM targets)", required: true, default: null, source: environment }
   - { name: intents,                   type: list,   description: "Network ATC intents; the Compute intent's first adapter is the default drift target", required: true, default: null, source: environment }
-  - { name: log_analytics_workspace_id, type: string, description: "Lab workspace (lz-azure-local output) queried for Insights heartbeats", required: true, default: null, source: environment }
+  - { name: log_analytics_workspace_id, type: string, description: "Log Analytics workspace (lz-azure-local output) queried for Insights heartbeats", required: true, default: null, source: environment }
   - { name: secret_name_prefix,        type: string, description: "Key Vault secret-name prefix (CONTRACT §12)", required: true, default: null, source: environment }
   - { name: tenant_domain,             type: string, description: "Masked by the screen-hygiene filter", required: true, default: null, source: environment }
   - { name: subscriptions,             type: map,    description: "Masked by the screen-hygiene filter", required: true, default: null, source: environment }

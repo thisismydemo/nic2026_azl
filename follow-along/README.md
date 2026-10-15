@@ -354,13 +354,13 @@ Replace the placeholders in the commands with your own values:
 
 ### Fault 1: drive failure (software-induced, live)
 
-**Goal:** Faults are run only on the lab cluster.
+**Goal:** Faults are run only on a non-production cluster.
 
 **In the repo:** `automation/demo/azure-local/scripts/Invoke-DriveFault.ps1`
 
 ### Fault 2: Network ATC intent drift (live)
 
-**Goal:** Faults are run only on the lab cluster.
+**Goal:** Faults are run only on a non-production cluster.
 
 **In the repo:** `automation/demo/azure-local/scripts/Invoke-IntentDrift.ps1`
 

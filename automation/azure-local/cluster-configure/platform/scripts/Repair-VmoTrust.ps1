@@ -20,7 +20,7 @@
                   Arc resource bridge; same method as 11 Oct)
       Verify      bridge logs free of x509 / invalid token; dispatcher nodes online
     Nothing changes without -Execute. Secrets (cluster admin, token, keys) stay in memory; only metadata is printed.
-    Lab values come from environment/azure-local (Get-NIC26Config); the expected root thumbprint and signing kid are
+    Environment values come from environment/azure-local (Get-NIC26Config); the expected root thumbprint and signing kid are
     parameters (read them from the PreCheck output / the incident record).
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Private helpers inside a script that is gated as a whole (-Execute); they never run on their own.')]

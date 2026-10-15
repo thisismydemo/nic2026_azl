@@ -89,7 +89,7 @@ Write-NIC26Log -Message <string> [-Level Debug|Verbose|Info|Warning|Error] [-Sen
 
 `New-NIC26ResourceName` is the only place a name is built. The registry (`Private\Get-NIC26NameRegistry.ps1`) is a table; add a type by adding one entry.
 
-**Organisation, lab token and region.** No code carries them. A caller passes `-Org`, `-Token`, `-Region`; the name catalog takes them from `org`, `token`, `location_short` in the environment file; anything still missing comes from the `NIC26_ORG`, `NIC26_TOKEN` and `NIC26_REGION` environment variables, then from `powershell\NIC26.Automation\NamingDefaults.psd1` (example values `iic`, `nic26`, `eus`; edit it for your own environment). The examples below use those example values. Examples:
+**Organisation, naming token and region.** No code carries them. A caller passes `-Org`, `-Token`, `-Region`; the name catalog takes them from `org`, `token`, `location_short` in the environment file; anything still missing comes from the `NIC26_ORG`, `NIC26_TOKEN` and `NIC26_REGION` environment variables, then from `powershell\NIC26.Automation\NamingDefaults.psd1` (example values `iic`, `nic26`, `eus`; edit it for your own environment). The examples below use those example values. Examples:
 
 | Call | Result |
 |---|---|
@@ -134,14 +134,14 @@ az deployment sub what-if --location $cfg.values.location --template-file .\bice
 terraform init -backend=false; terraform plan -var-file=terraform.generated.tfvars.json
 ```
 
-Lookup rules: an input is read from the top-level key of the merged config with the same name; a manifest input may carry `path: secret_refs.jump_admin_password` to pick a nested key. Optional inputs use `default` or are omitted; `source: generated` inputs (registration tokens, run-time secrets, the `names` object) are **never emitted** and never fail. A short alias table (`Private\Get-NIC26InputAliasMap.ps1`) maps design synonyms to the schema key when no `path` is given: `region_short -> location_short`, `lab_token -> token`, `p2s_pool -> p2s_client_pool`, `identity_spoke_prefix -> identity_spoke_address_space`, `management_spoke_prefix -> management_spoke_address_space`, `avd_spoke_prefix -> avd_vnet_prefix`, `key_vault_ops_name -> kv_ops_name`.
+Lookup rules: an input is read from the top-level key of the merged config with the same name; a manifest input may carry `path: secret_refs.jump_admin_password` to pick a nested key. Optional inputs use `default` or are omitted; `source: generated` inputs (registration tokens, run-time secrets, the `names` object) are **never emitted** and never fail. A short alias table (`Private\Get-NIC26InputAliasMap.ps1`) maps design synonyms to the schema key when no `path` is given: `region_short -> location_short`, `naming_token -> token`, `p2s_pool -> p2s_client_pool`, `identity_spoke_prefix -> identity_spoke_address_space`, `management_spoke_prefix -> management_spoke_address_space`, `avd_spoke_prefix -> avd_vnet_prefix`, `key_vault_ops_name -> kv_ops_name`.
 
 Names-catalog entry shapes (`solution.schema.json` `nameSpec`):
 
 | Shape | Result |
 |---|---|
 | `{ type: rg, purpose: azl-net }` (+ `instance`, `region`, `suffix`, `org`) | generated, e.g. `rg-iic-nic26-azl-net-eus-01` |
-| `{ type: law, purpose: "" }` or `{ type: gal }` | lab-wide singleton: `law-iic-nic26-eus-01`, `galiicnic26eus01` |
+| `{ type: law, purpose: "" }` or `{ type: gal }` | environment-wide singleton: `law-iic-nic26-eus-01`, `galiicnic26eus01` |
 | `{ type: peer, from: spoke_vnet, to: hub }` (`vnetpeering`/`peering` accepted) | `peer-<resolved from>-to-<resolved to>`; `from`/`to` are catalog keys or literals |
 | `{ type: nic, parent: vm_jump }` / `osdisk` / `datadisk` / `vhd` / `bmc` | `nic-vm-iic-nic26-jump-eus-01-01`, `osdisk-vm-...`; `parent` is the VM/node catalog key |
 | `{ type: netbios, purpose: jmp }` | computer name `nic26-jmp-01` (<= 15); session hosts use `sessionhost` |
@@ -169,11 +169,11 @@ foreach ($s in 'shared','azure-local','avd') {
 
 | Convention | Rule |
 |---|---|
-| Canonical names | snake_case, taken from the design variables tables; the schemas are the authority. Chosen where the designs disagree: `location_short` (not `region_short`), `token` (not `lab_token`), `p2s_client_pool` (not `p2s_pool`), `identity_dc_ips` + `dns_servers` |
+| Canonical names | snake_case, taken from the design variables tables; the schemas are the authority. Chosen where the designs disagree: `location_short` (not `region_short`), `token` (not `naming_token`), `p2s_client_pool` (not `p2s_pool`), `identity_dc_ips` + `dns_servers` |
 | Secrets | `keyvault://<vault>/<secret>` strings only; values resolved at run time in memory; `Start-Transcript` forbidden around resolution. `secret_name_prefix` (shared) holds the HCS `<org>-<env>-` prefix: examples carry the IIC placeholder `iic-nic26-`, the registered prefix lives only in the private environment file |
 | Generated files | `*.generated.*` (git-ignored in `automation/.gitignore`), header comment / `_generated` key, UTF-8 without BOM, LF |
 | Scripts | PowerShell 7, `Set-StrictMode -Version Latest`, `$ErrorActionPreference = 'Stop'`, comment-based help, `SupportsShouldProcess` where state changes, `-Execute` to write/deploy |
 | Logging | `Write-NIC26Log` (Information stream, no `Write-Host`); names, IDs and counts only |
 | Retry | `Invoke-NIC26WithRetry` after role assignments; bounded exponential backoff ≤ 5 min |
 | Names | `New-NIC26ResourceName` only; every generated name contains `nic26` unless the type is exempt (`pdnszone`, `fixedsubnet`, `imgver`); pre-existing shared resources keep their names and arrive as inputs |
-| Examples | IIC values, all-zero GUIDs, RFC 1918 lab plan, no identifiers from the reference environment (tested by the Pester hygiene sweep) |
+| Examples | IIC values, all-zero GUIDs, RFC 1918 address plan, no identifiers from the reference environment (tested by the Pester hygiene sweep) |

@@ -57,8 +57,8 @@ module "kv_ops" {
   }
 
   role_assignments = {
-    lab_operators_secrets_officer = { role_definition_id_or_name = "Key Vault Secrets Officer", principal_id = var.group_object_ids["grp_lab_operators"], principal_type = "Group" }
-    deploy_identity_secrets_user  = { role_definition_id_or_name = "Key Vault Secrets User", principal_id = azurerm_user_assigned_identity.deploy[0].principal_id, principal_type = "ServicePrincipal" }
+    platform_operators_secrets_officer = { role_definition_id_or_name = "Key Vault Secrets Officer", principal_id = var.group_object_ids["grp_platform_operators"], principal_type = "Group" }
+    deploy_identity_secrets_user       = { role_definition_id_or_name = "Key Vault Secrets User", principal_id = azurerm_user_assigned_identity.deploy[0].principal_id, principal_type = "ServicePrincipal" }
   }
   depends_on = [azurerm_resource_group.this, module.vnet, azurerm_private_dns_zone.vaultcore, module.law]
 }
@@ -96,8 +96,8 @@ module "kv_azl" {
   }
 
   role_assignments = {
-    lab_operators_secrets_user = { role_definition_id_or_name = "Key Vault Secrets User", principal_id = var.group_object_ids["grp_lab_operators"], principal_type = "Group" }
-    azl_admins_secrets_user    = { role_definition_id_or_name = "Key Vault Secrets User", principal_id = var.group_object_ids["grp_azl_admins"], principal_type = "Group" }
+    platform_operators_secrets_user = { role_definition_id_or_name = "Key Vault Secrets User", principal_id = var.group_object_ids["grp_platform_operators"], principal_type = "Group" }
+    azl_admins_secrets_user         = { role_definition_id_or_name = "Key Vault Secrets User", principal_id = var.group_object_ids["grp_azl_admins"], principal_type = "Group" }
     # Node Arc identities (Secrets Officer + Certificates Officer) are assigned by the cluster deployment (design §5.4).
   }
   depends_on = [azurerm_resource_group.this, module.vnet, azurerm_private_dns_zone.vaultcore, module.law]
@@ -149,7 +149,7 @@ resource "azurerm_role_assignment" "readers" {
 # ---------------------------------------------------------------- PIM-eligible assignments (design §6.3) - default path is Initialize-LzPim.ps1
 locals {
   pim_subscription = {
-    lab_operators_owner      = { group = "grp_lab_operators", role = "Owner" }
+    platform_operators_owner = { group = "grp_platform_operators", role = "Owner" }
     azl_admins_hci_admin     = { group = "grp_azl_admins", role = "Azure Stack HCI Administrator" }
     azl_admins_reader        = { group = "grp_azl_admins", role = "Reader" }
     azl_operators_vm_contrib = { group = "grp_azl_operators", role = "Azure Stack HCI VM Contributor" }

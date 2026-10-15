@@ -1,6 +1,6 @@
 # cluster-configure/access-pim — RBAC with Entra PIM (outline §3.4)
 
-Design §6.2 / §6.3: eligible, not standing, privileged access. This solution owns the **Azure Local role eligibilities** for the IIC groups at the landing-zone subscription (the landing zone's `Initialize-LzPim.ps1` owns the lab-operators Owner row and the deployment-user Key Vault/Storage rows; both scripts are idempotent, so the overlap on the Azure Local rows is harmless):
+Design §6.2 / §6.3: eligible, not standing, privileged access. This solution owns the **Azure Local role eligibilities** for the IIC groups at the landing-zone subscription (the landing zone's `Initialize-LzPim.ps1` owns the platform-operators Owner row and the deployment-user Key Vault/Storage rows; both scripts are idempotent, so the overlap on the Azure Local rows is harmless):
 
 | Group | Eligible roles |
 |---|---|

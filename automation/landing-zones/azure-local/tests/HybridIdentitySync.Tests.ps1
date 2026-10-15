@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 # Pester 5 static tests for scripts/Set-HybridIdentitySync.ps1 (Microsoft Entra Cloud Sync, D-050): conventions, stages,
 # plan-by-default (every write sits inside an Invoke-Change block), protected Run Command parameters, no secret output,
-# no lab literals (G5), and every cloud_sync key the script reads exists in the environment schema. Nothing calls Azure.
+# no environment literals (G5), and every cloud_sync key the script reads exists in the environment schema. Nothing calls Azure.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'BeforeAll variables are consumed inside It blocks.')]
 param()
 
@@ -103,14 +103,14 @@ Describe 'Set-HybridIdentitySync.ps1 safety' -Tag 'Scripts', 'Identity' {
     It 'checks the agent installer signature before installing' { $script:Text | Should -Match "Get-AuthenticodeSignature(?s).*O=Microsoft Corporation(?s).*'/quiet'" }
 }
 
-Describe 'Set-HybridIdentitySync.ps1 has no lab literals (G5)' -Tag 'Scripts', 'Identity' {
+Describe 'Set-HybridIdentitySync.ps1 has no environment literals (G5)' -Tag 'Scripts', 'Identity' {
     It 'contains no GUID, IPv4 address, tenant domain, vault, VM or account name' {
         $code = $script:Text
         [regex]::Matches($code, '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') | ForEach-Object Value |
             Should -BeNullOrEmpty -Because 'GUIDs come from the environment file; AD extended rights are looked up by name'
         $code | Should -Not -Match '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
-        # generic shapes here; the lab's own names (domain, UPN suffix, accounts, gMSA, server, secret prefix) are checked by
-        # the next test, which reads them from the environment file, so this public test carries no lab literal
+        # generic shapes here; your own names (domain, UPN suffix, accounts, gMSA, server, secret prefix) are checked by
+        # the next test, which reads them from the environment file, so this public test carries no environment literal
         # (owner approved 13 Oct)
         $code | Should -Not -Match '(?i)\.onmicrosoft\.com|msappproxy\.net'
         $code | Should -Not -Match '(?i)\bkv-[a-z0-9-]+|\bvm-[a-z]+-[a-z0-9-]+|(?<![\w/#-])gmsa-[a-z0-9-]+\$?'   # a gMSA name, not a Learn URL fragment

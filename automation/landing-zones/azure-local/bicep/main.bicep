@@ -65,7 +65,7 @@ param enable_private_endpoints bool = false
 param enable_monitor_private_link bool = false
 param privatelink_vaultcore_zone_id string = ''
 
-@description('Object IDs keyed by catalog key: grp_lab_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers.')
+@description('Object IDs keyed by catalog key: grp_platform_operators, grp_azl_admins, grp_azl_operators, grp_azl_readers.')
 param group_object_ids object
 #disable-next-line no-unused-params
 param pim_max_activation_hours int = 8
@@ -79,7 +79,7 @@ param automation_identity object = {}
 
 @description('Resource ID of the centrally managed Log Analytics workspace (platform management subscription). When set, no workload workspace is created and every diagnostic and collection setting points at it.')
 param central_log_analytics_workspace_id string = ''
-@description('Platform and management-group items (subscription policy and Defender, the activity-log export, and the peerings written into platform-owned VNets) are delivered by their owners. Set true only for a standalone lab where this template owns them.')
+@description('Platform and management-group items (subscription policy and Defender, the activity-log export, and the peerings written into platform-owned VNets) are delivered by their owners. Set true only for a standalone environment where this template owns them.')
 param deploy_platform_scope_items bool = false
 param law_retention_days int = 30
 param law_daily_cap_gb int = 2
@@ -453,7 +453,7 @@ module pimSubscription 'modules/pim-eligibility.bicep' = if (s3 && manage_pim_in
   name: 'pim-subscription'
   params: {
     eligibilities: [
-      { principalId: group_object_ids.grp_lab_operators, role: 'Owner' }
+      { principalId: group_object_ids.grp_platform_operators, role: 'Owner' }
       { principalId: group_object_ids.grp_azl_admins, role: 'AzureStackHCIAdministrator' }
       { principalId: group_object_ids.grp_azl_admins, role: 'Reader' }
       { principalId: group_object_ids.grp_azl_operators, role: 'AzureStackHCIVMContributor' }

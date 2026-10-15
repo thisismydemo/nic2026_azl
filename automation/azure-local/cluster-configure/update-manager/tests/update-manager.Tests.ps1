@@ -62,7 +62,7 @@ Describe 'solution update with additional content (Invoke-SolutionUpdate.ps1, T-
         $su | Should -Match '\[switch\]\$Execute'
         $su | Should -Match 'if \(-not \$Execute\)'
     }
-    It 'holds no lab values (G5)' {
+    It 'holds no environment values (G5)' {
         $su | Should -Not -Match '\b(?:\d{1,3}\.){3}\d{1,3}\b'
         $su | Should -Not -Match '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
         $su | Should -Not -Match 'kv-iic|nic26-01-n0|rg-iic|vdpool-iic|D:\D[e]ll'

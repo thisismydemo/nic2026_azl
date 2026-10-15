@@ -67,7 +67,7 @@ module rgRbac 'role-assignment-rg.bicep' = {
   name: 'rbac-rg-azl'
   params: {
     assignments: [
-      { principalId: group_object_ids.grp_lab_operators, principalType: 'Group', role: 'Owner', description: 'Build window: simplified provisioning and Arc onboarding need Owner on the provisioning resource group; convert to eligible after Day-2 Ready' }
+      { principalId: group_object_ids.grp_platform_operators, principalType: 'Group', role: 'Owner', description: 'Build window: simplified provisioning and Arc onboarding need Owner on the provisioning resource group; convert to eligible after Day-2 Ready' }
       { principalId: group_object_ids.grp_azl_admins, principalType: 'Group', role: 'AzureConnectedMachineOnboarding' }
       { principalId: group_object_ids.grp_azl_admins, principalType: 'Group', role: 'AzureConnectedMachineResourceAdministrator' }
       { principalId: azl_rp_app_object_id, principalType: 'ServicePrincipal', role: 'AzureConnectedMachineResourceManager', description: 'Azure Local resource provider first-party application (Marketplace image download)' }

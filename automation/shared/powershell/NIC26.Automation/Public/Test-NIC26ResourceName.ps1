@@ -4,7 +4,7 @@ function Test-NIC26ResourceName {
         Validates a name against the naming-standard rules for a registry type.
     .DESCRIPTION
         Checks length, allowed characters, the structural pattern of the type, Key Vault's no-consecutive-hyphens rule,
-        fixed-name membership, and that the name contains the lab token (nic26) unless the registry marks the type
+        fixed-name membership, and that the name contains the naming token (nic26) unless the registry marks the type
         exempt (fixed subnets, private DNS zones, image versions). Returns $true/$false; with -Detailed returns an object
         with the reasons.
     .PARAMETER Name
@@ -12,7 +12,7 @@ function Test-NIC26ResourceName {
     .PARAMETER Type
         Registry type abbreviation (see New-NIC26ResourceName).
     .PARAMETER Token
-        Lab token that must be present (default nic26).
+        Naming token that must be present (default nic26).
     .PARAMETER Detailed
         Return [pscustomobject] { Name, Type, IsValid, Length, Reasons } instead of a boolean.
     .EXAMPLE
@@ -68,7 +68,7 @@ function Test-NIC26ResourceName {
                 $reasons.Add('contains consecutive hyphens')
             }
             if ($entry.RequireToken -and ($Name.ToLowerInvariant() -notlike "*$($Token.ToLowerInvariant())*")) {
-                $reasons.Add("does not contain the lab token '$Token' (naming standard section 1)")
+                $reasons.Add("does not contain the naming token '$Token' (naming standard section 1)")
             }
             if ($entry.FixedNames -and ($Name -cnotin $entry.FixedNames)) {
                 $reasons.Add("is not one of the fixed names: $($entry.FixedNames -join ', ')")

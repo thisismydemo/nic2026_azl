@@ -30,7 +30,7 @@
       Verify        read-only Graph read-back: account and role, agent, job, schema, tenant sync state, the expected users
                     and groups. Returns one row per check; sets exit code 1 when a check fails.
     Every value comes from hybrid_identity (and its cloud_sync block) in environment/azure-local/environment.yml and from
-    the shared environment file (G5); no lab value is written in this script. No secret is printed: passwords are read
+    the shared environment file (G5); no environment value is written in this script. No secret is printed: passwords are read
     from Key Vault into memory, sent to the VM only as a protected Run Command parameter, and the Run Command resource is
     removed afterwards. Graph calls use the Azure CLI (az rest) signed in to the tenant in the environment file; the
     Run Command and Key Vault calls use Az PowerShell with a process-scoped context.
@@ -43,7 +43,7 @@
     Make the changes. Without it the script only reads and prints what it would do (plan).
 .PARAMETER AllowKdsRootKeyCreation
     Allow AdObjects to create a KDS root key when the forest has none (forest-level change: back-dated 10 h as in Learn's
-    lab method, then repadmin /syncall). Without it a missing key stops the stage.
+    method, then repadmin /syncall). Without it a missing key stops the stage.
 .PARAMETER ForceAgent
     Run Agent and Register even when Graph lists the agent as active.
 .PARAMETER EnvironmentPath
@@ -220,7 +220,7 @@ $dom = Get-ADDomain; $root = $dom.DistinguishedName; $ou = "OU=$OuRoot,$root"; $
 $k = Get-KdsRootKey
 if (-not $k) {
     if ($AllowKdsCreate -ne 'true') { throw 'The forest has no KDS root key. Rerun with -AllowKdsRootKeyCreation (forest-level change) or create it per Learn first.' }
-    # two DCs: key back-dated per Learn's lab method, then forced replication so both DCs have it now
+    # two DCs: key back-dated per Learn's method, then forced replication so both DCs have it now
     $null = Add-KdsRootKey -EffectiveTime ((Get-Date).AddHours(-10))
     $null = repadmin /syncall /AdeP 2>&1
     'KDS root key created (back-dated) and replication forced'

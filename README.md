@@ -41,7 +41,7 @@ Bicep and Terraform are kept in parity; PowerShell orchestrates.
 
 ## What is tested and what is not
 
-The code is tested with Pester (using mocks), by compiling the Bicep and by validating the Terraform. It has not yet been run end to end against a tenant or cluster from this repository: treat the first deployment as a test and use a lab. Site Recovery for Azure Local is a preview integration in some releases. The fault helpers change a live cluster; use a lab. Everything is variable-driven, and the example files hold neutral placeholder values that you replace with your own.
+The code is tested with Pester (using mocks), by compiling the Bicep and by validating the Terraform. It has not yet been run end to end against a tenant or cluster from this repository: treat the first deployment as a test and use a test environment. Site Recovery for Azure Local is a preview integration in some releases. The fault helpers change a live cluster; use a test environment. Everything is variable-driven, and the example files hold neutral placeholder values that you replace with your own.
 
 ## Prerequisites
 

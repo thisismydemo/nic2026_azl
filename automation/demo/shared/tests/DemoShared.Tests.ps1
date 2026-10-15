@@ -86,7 +86,7 @@ Describe 'Screen-hygiene filter (Hide-DemoSensitiveText / Write-DemoScreen)' {
         $out | Should -Not -Match 'contoso-real'
         $out | Should -Not -Match 'secretcorp'
     }
-    It 'leaves IIC lab names untouched' {
+    It 'leaves IIC environment names untouched' {
         $text = 'rg-iic-nic26-azl-eus-01 nic26-clus01 vdpool-iic-nic26-hybrid-eus-01 user1@contoso.com'
         (Hide-DemoSensitiveText -InputObject $text) | Should -Be $text
     }

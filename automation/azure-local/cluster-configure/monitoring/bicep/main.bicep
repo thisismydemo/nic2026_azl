@@ -6,7 +6,7 @@
 // dialog creates (perfCounterDataSource, five counters at 10 s; eventLogsDataSource with the health and SDDC 3000-3004
 // channels; Learn: Monitor a single Azure Local system with Insights), plus insights_extra_event_channels. The node
 // associations, the AMA and health-alert extensions are scripts/Enable-ClusterInsights.ps1 (12 Oct, D-054).
-// create_workspace=true creates the nic26 lab workspace names.law (design §7.1; D-054) instead of using
+// create_workspace=true creates the nic26 workspace names.law (design §7.1; D-054) instead of using
 // log_analytics_workspace_id.
 targetScope = 'resourceGroup'
 
@@ -26,7 +26,7 @@ param alert_window_size string = 'PT15M'
 param node_heartbeat_minutes int = 10
 param enable_vm_insights_dcr bool = true
 param manage_insights_dcr_in_iac bool = false
-@description('Create the lab workspace names.law in rg_mon (D-054). When false, log_analytics_workspace_id (or the derived ID) is used.')
+@description('Create the Log Analytics workspace names.law in rg_mon (D-054). When false, log_analytics_workspace_id (or the derived ID) is used.')
 param create_workspace bool = false
 param law_retention_days int = 30
 param law_daily_cap_gb int = 2
@@ -51,7 +51,7 @@ var clusterRgId = resourceId(subscription_id, 'Microsoft.Resources/resourceGroup
 var allTags = union(tags, { 'managed-by': 'bicep' })
 var insightsDcrId = resourceId(subscription_id, names.rg_mon, 'Microsoft.Insights/dataCollectionRules', names.dcr_insights)
 
-// ---------------------------------------------------------------- nic26 lab workspace (optional, D-054)
+// ---------------------------------------------------------------- nic26 workspace (optional, D-054)
 resource law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = if (create_workspace) {
   name: names.law
   location: location

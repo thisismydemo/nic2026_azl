@@ -2,7 +2,7 @@
 
 Replicating Azure Local virtual machines to Azure with Azure Site Recovery, and running the planned failover, test failover, commit, re-protect and failback procedures.
 
-**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family); lab-tested 2026-10-13 (replication, test failover, cleanup). **Important:** the Azure Site Recovery extension for Azure Local that automates deployment is documented as a **preview** and applicable to test environments. For production, configure Site Recovery manually with the **Hyper-V to Azure disaster recovery** option on the cluster. Confirm the current status when you design, and state it in your design record.
+**Status:** prepared 2026-10-06 against Microsoft Learn (2609 release family); tested end to end 2026-10-13 (replication, test failover, cleanup). **Important:** the Azure Site Recovery extension for Azure Local that automates deployment is documented as a **preview** and applicable to test environments. For production, configure Site Recovery manually with the **Hyper-V to Azure disaster recovery** option on the cluster. Confirm the current status when you design, and state it in your design record.
 
 ## When to use it
 
@@ -45,7 +45,7 @@ Evidence: the Hyper-V site shows the nodes registered and connected in the vault
 
 - give the **Azure Local cluster resource's** managed identity *Site Recovery Contributor* on the vault: the extension fetches the vault registration key with that identity, not with the machines' identities;
 - give the **vault's** managed identity *Contributor* and *Storage Blob Data Contributor* on the cache storage account (Standard account) before you enable replication to managed disks;
-- install the extension (it installs on every machine; no restart was needed in our lab), wait until every machine reports success, then associate the replication policy with the site;
+- install the extension (it installs on every machine; no restart was needed on the test cluster), wait until every machine reports success, then associate the replication policy with the site;
 - if a machine reports a failed registration, uninstall the extension and install it again (the documented route); a force-update tag is not honoured for this extension.
 
 ## Procedure 2: Enable replication
@@ -91,7 +91,7 @@ Failover duration varies with VM size and the hydration process; allow for it in
 
 If the original cluster is unavailable, register another Azure Local cluster to the Site Recovery Hyper-V site and fail back there. The VM returns as an **unmanaged VM**: its services run, but it cannot be managed from Azure until it is registered on the new cluster and reconnected to its Azure resource (with the new resource group, custom location, storage path and logical network). Failing back to the same cluster restores the Azure connection within the Arc agent's 45-day reconnection window.
 
-## What we measured in the lab (13 Oct 2026)
+## What we measured on the test cluster (13 Oct 2026)
 
 Two-machine Azure Local instance, one Windows Server 2025 VM (Standard security type, 2 vCPU, 8 GB, 127 GB dynamic OS disk), replication to managed disks in the same region:
 

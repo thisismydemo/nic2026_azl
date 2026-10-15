@@ -25,7 +25,7 @@ function Get-NIC26Config {
         $cfg = Get-NIC26Config -Scope avd
         $cfg.values.tenant_id
     .EXAMPLE
-        Get-NIC26Config -Scope azure-local -Path C:\lab\env\azure-local -SharedPath C:\lab\env\shared
+        Get-NIC26Config -Scope azure-local -Path C:\env\azure-local -SharedPath C:\env\shared
     .OUTPUTS
         System.Collections.Specialized.OrderedDictionary
     #>

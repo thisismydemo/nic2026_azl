@@ -1,5 +1,5 @@
-# Naming defaults for the NIC26.Automation module. These are EXAMPLE values (the IIC placeholder organisation, the lab
-# token and the East US short code). Nothing in the code carries them.
+# Naming defaults for the NIC26.Automation module. These are EXAMPLE values (the IIC placeholder organisation, the naming
+# token (nic26) and the East US short code). Nothing in the code carries them.
 #
 # Change them for your own environment in any one of three ways (first match wins):
 #   1. set org / token / location_short in your environment file (the config loader and the name catalog use those first);

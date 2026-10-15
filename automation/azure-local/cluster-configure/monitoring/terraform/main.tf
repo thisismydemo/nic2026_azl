@@ -42,7 +42,7 @@ locals {
   }
 }
 
-# nic26 lab workspace (optional, D-054)
+# nic26 workspace (optional, D-054)
 resource "azurerm_log_analytics_workspace" "law" {
   count                           = var.create_workspace ? 1 : 0
   name                            = var.names["law"]

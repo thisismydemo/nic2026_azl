@@ -144,7 +144,7 @@ Describe 'Solution manifest integration: <Name> (scope <Scope>)' -ForEach $solut
                 $exempt | Should -BeTrue -Because "names.$key uses an unknown type and must be declared exempt"
             }
             if (-not $exempt) {
-                $name | Should -BeLike '*nic26*' -Because "names.$key = '$name' must carry the lab token (D-005)"
+                $name | Should -BeLike '*nic26*' -Because "names.$key = '$name' must carry the naming token (D-005)"
             }
         }
     }

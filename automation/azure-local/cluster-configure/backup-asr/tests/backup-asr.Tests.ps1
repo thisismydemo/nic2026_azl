@@ -212,7 +212,7 @@ Describe 'backup-asr specifics' {
     }
 
     Context 'scripted Prepare infrastructure' {
-        It 'reads lab values from the environment only and installs the documented extension' {
+        It 'reads environment values from the environment only and installs the documented extension' {
             $source = Get-Content (Join-Path $script:scripts 'Install-AsrInfrastructure.ps1') -Raw
             $source | Should -Match "publisher = 'Microsoft.SiteRecovery.Dra'; type = 'Windows'"
             $source | Should -Match 'arcSettings/default/extensions'

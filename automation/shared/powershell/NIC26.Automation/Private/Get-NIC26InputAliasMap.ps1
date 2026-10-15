@@ -12,7 +12,7 @@ function Get-NIC26InputAliasMap {
 
     return @{
         region_short            = 'location_short'                 # design/azure-local/landing-zone.md 10.6
-        lab_token               = 'token'                          # design/avd/landing-zone.md 11.5
+        naming_token               = 'token'                          # design/avd/landing-zone.md 11.5
         p2s_pool                = 'p2s_client_pool'                # design/avd/landing-zone.md 11.5
         identity_spoke_prefix   = 'identity_spoke_address_space'   # lz-azure-local (added input)
         management_spoke_prefix = 'management_spoke_address_space' # lz-azure-local (added input)

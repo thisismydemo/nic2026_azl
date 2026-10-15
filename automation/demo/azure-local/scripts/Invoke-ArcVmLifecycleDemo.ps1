@@ -126,7 +126,7 @@ function Split-SecretRef([string]$ref) {
     return @{ Vault = $Matches[1]; Name = $Matches[2] }
 }
 function Get-AdminCredential {
-    # Pin the Az context of THIS process to the lab tenant and subscription (other sessions may switch the saved default).
+    # Pin the Az context of THIS process to the configured tenant and subscription (other sessions may switch the saved default).
     Disable-AzContextAutosave -Scope Process | Out-Null
     $null = Set-AzContext -Tenant ([string]$shared.tenant_id) -Subscription $sub -Scope Process -WhatIf:$false
     $u = Split-SecretRef $envy.workload_vms.local_admin_username_secret

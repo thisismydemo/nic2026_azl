@@ -22,4 +22,4 @@ cd .\automation\azure-local\cluster-configure\gpu\scripts
 
 Remove: `Set-VmGpuAssignment.ps1 -Action Detach -Execute`. The host prep is left in place (a dismounted GPU with the mitigation INF is the supported DDA state); to give the GPU back to the host, `Mount-VMHostAssignableDevice -LocationPath <path>` on a drained node.
 
-Tests: `Invoke-Pester .\tests` (static: parse, StrictMode, no lab values, plan default, gates, CLI attach, guest policies).
+Tests: `Invoke-Pester .\tests` (static: parse, StrictMode, no environment values, plan default, gates, CLI attach, guest policies).

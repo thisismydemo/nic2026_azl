@@ -65,7 +65,7 @@ module "st_voucher" {
 # Active assignments on the cluster resource group (design §6.2)
 locals {
   rg_azl_rbac = {
-    lab_operators_owner       = { role = "Owner", principal = var.group_object_ids["grp_lab_operators"], type = "Group", description = "Build window: provisioning and Arc onboarding need Owner on the provisioning resource group; convert to eligible after Day-2 Ready" }
+    platform_operators_owner  = { role = "Owner", principal = var.group_object_ids["grp_platform_operators"], type = "Group", description = "Build window: provisioning and Arc onboarding need Owner on the provisioning resource group; convert to eligible after Day-2 Ready" }
     azl_admins_onboarding     = { role = "Azure Connected Machine Onboarding", principal = var.group_object_ids["grp_azl_admins"], type = "Group", description = null }
     azl_admins_resource_admin = { role = "Azure Connected Machine Resource Administrator", principal = var.group_object_ids["grp_azl_admins"], type = "Group", description = null }
     azl_rp_resource_manager   = { role = "Azure Connected Machine Resource Manager", principal = var.azl_rp_app_object_id, type = "ServicePrincipal", description = "Azure Local resource provider first-party application (Marketplace image download)" }

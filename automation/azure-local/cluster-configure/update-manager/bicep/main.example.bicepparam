@@ -3,7 +3,7 @@ using 'main.bicep'
 
 param subscription_id = '00000000-0000-0000-0000-000000000000'
 param location = 'eastus'
-param tags = { project: 'nic26', workload: 'azure-local', environment: 'demo', owner: 'lab-owner@contoso.com', 'managed-by': 'bicep', 'cost-center': 'iic-nic26-lab', lifecycle: 'temporary' }
+param tags = { project: 'nic26', workload: 'azure-local', environment: 'demo', owner: 'owner@contoso.com', 'managed-by': 'bicep', 'cost-center': 'iic-nic26-demo', lifecycle: 'temporary' }
 param maintenance_window = { start_date_time: '2026-10-05 02:00', duration: '03:00', time_zone: 'W. Europe Standard Time', recur_every: 'Week Sunday' }
 param patch_classifications = ['Critical', 'Security', 'UpdateRollup', 'Definition']
 param reboot_setting = 'IfRequired'

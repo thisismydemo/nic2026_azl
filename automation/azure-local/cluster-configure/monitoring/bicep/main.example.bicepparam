@@ -3,7 +3,7 @@ using 'main.bicep'
 
 param subscription_id = '00000000-0000-0000-0000-000000000000'
 param location = 'eastus'
-param tags = { project: 'nic26', workload: 'azure-local', environment: 'demo', owner: 'lab-owner@contoso.com', 'managed-by': 'bicep', 'cost-center': 'iic-nic26-lab', lifecycle: 'temporary' }
+param tags = { project: 'nic26', workload: 'azure-local', environment: 'demo', owner: 'owner@contoso.com', 'managed-by': 'bicep', 'cost-center': 'iic-nic26-demo', lifecycle: 'temporary' }
 param cluster_name = 'nic26-clus01'
 param nodes = [
   { name: 'nic26-01-n01', management_ip: '192.168.100.11' }
