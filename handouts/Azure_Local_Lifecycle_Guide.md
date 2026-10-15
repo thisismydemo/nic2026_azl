@@ -2,7 +2,7 @@
 
 **Handout for: Hybrid Cloud: Plan, Deploy, and Operate Azure Local from Discovery to Day 2 (NIC 2026).**
 
-This is the order the session followed, and the order an engineer can follow: thirteen stages, start to finish, on one two-node cluster. For each stage: what you do for Azure Local, where it is documented, which tools fit, and what the stage hands to the next one. The example values are the fictional customer IIC on two validated integrated-system nodes, switched storage, cloud witness, Local Identity with Key Vault, Azure Local 12.2609 (the latest at the time of the session; size against the release you deploy).
+This is the order the session followed, and the order an engineer can follow: thirteen stages, start to finish, on one two-node cluster. For each stage: what you do for Azure Local, where it is documented, which tools fit, and what the stage hands to the next one. The example values are the fictional company IIC, where you are the engineer, on two validated integrated-system nodes, switched storage, cloud witness, Local Identity with Key Vault, Azure Local 12.2609 (the latest at the time of the session; size against the release you deploy).
 
 ## The three boundaries worth getting right
 
