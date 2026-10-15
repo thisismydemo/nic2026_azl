@@ -18,8 +18,11 @@
       2. Role asr.node_vault_role (default Site Recovery Contributor: vault certificates/write, extendedInformation,
          replicationFabrics) for the Azure Local cluster resource's system-assigned identity, scope = the vault only:
          the extension fetches the vault credentials with the cluster identity, not the node identities.
+         The vault's own identity gets Contributor and Storage Blob Data Contributor on the cache storage account
+         (replication to managed disks writes there as the vault).
       3. Cluster extension asr.extension_name (cluster-aware: Azure installs it on every node; the portal does the same).
-         Healthy only when aggregateState is Succeeded; a failed node registration is re-run with a new forceUpdateTag.
+         Healthy only when aggregateState is Succeeded; a failed node registration is repaired by deleting and
+         installing the extension again (the documented route; forceUpdateTag is ignored by the API).
          Learn documents no node restart for this install; run Get-AsrNodeState.ps1 before (no pending reboot) and after
          (LastBootUpTime unchanged).
       4. Wait until every node is a Connected provider in the site, then map the replication policy to the site's
@@ -117,8 +120,24 @@ if ($has) { L "cluster $($envy.cluster_name): '$role' on the vault exists" }
 elseif (-not $Execute) { L "PLAN grant '$role' on $($asr.vault_name) to the cluster identity of $($envy.cluster_name)" }
 else { $null = New-AzRoleAssignment -ObjectId $clusterPrincipal -Scope $vaultId -RoleDefinitionName $role -ObjectType ServicePrincipal; L "cluster $($envy.cluster_name): '$role' on the vault granted (allow a few minutes for propagation)"; Start-Sleep -Seconds 300 }
 
-# 3. Cluster extension. Healthy only when every node reports Succeeded (aggregateState). A failed Enable on any node is
-#    re-run with a new forceUpdateTag: the Enable handler runs again (registration only; no reinstall, no node restart).
+# 2b. The vault's managed identity on the cache storage account. With managed disks Site Recovery writes replication
+#     data to the cache account as the vault identity: Contributor and Storage Blob Data Contributor on a Standard
+#     account (Learn: Replicate machines with private endpoints, Grant required permissions to the vault; Site Recovery
+#     FAQ). Without them enable replication fails with error 28143 (seen 13 Oct 2026).
+$cacheId = "/subscriptions/$sub/resourceGroups/$($asr.vault_resource_group)/providers/Microsoft.Storage/storageAccounts/$($asr.cache_storage_account)"
+$vault = Invoke-Arm GET $vaultId $asrApi $null
+if (-not $vault.PSObject.Properties['identity'] -or -not $vault.identity.principalId) { throw "Vault $($asr.vault_name) has no system-assigned identity (lz-azure-local enables it)." }
+foreach ($cacheRole in 'Contributor', 'Storage Blob Data Contributor') {
+    $has = Get-AzRoleAssignment -ObjectId ([string]$vault.identity.principalId) -Scope $cacheId -RoleDefinitionName $cacheRole -ErrorAction SilentlyContinue | Where-Object Scope -eq $cacheId
+    if ($has) { L "vault identity: '$cacheRole' on $($asr.cache_storage_account) exists" }
+    elseif (-not $Execute) { L "PLAN grant '$cacheRole' on $($asr.cache_storage_account) to the vault identity" }
+    else { $null = New-AzRoleAssignment -ObjectId ([string]$vault.identity.principalId) -Scope $cacheId -RoleDefinitionName $cacheRole -ObjectType ServicePrincipal; L "vault identity: '$cacheRole' on $($asr.cache_storage_account) granted" }
+}
+
+# 3. Cluster extension. Healthy only when every node reports Succeeded (aggregateState). A failed node registration is
+#    repaired by the documented route (Learn: Azure Arc extension management on Azure Local, Uninstall an extension):
+#    delete the extension, wait until it is gone, install it again. A forceUpdateTag is ignored by this API (PUT drops
+#    it, PATCH rejects it; 13 Oct 2026). The handler manifest sets rebootAfterInstall false: no node restarts.
 function Write-ExtState($e) {
     L "extension ${extName}: $($e.properties.provisioningState) / aggregate $($e.properties.aggregateState)"
     foreach ($pn in @($e.properties.perNodeExtensionDetails)) { L "  $($pn.name): $($pn.state)" }
@@ -138,17 +157,19 @@ $ext = Invoke-Arm GET $extId $hciApi $null
 $healthy = $ext -and $ext.properties.provisioningState -eq 'Succeeded' -and $ext.properties.aggregateState -eq 'Succeeded'
 if ($healthy) { Write-ExtState $ext }
 elseif (-not $Execute) {
-    if ($ext) { Write-ExtState $ext; L "PLAN re-run the Enable handler of $extName on every node (new forceUpdateTag)" }
+    if ($ext) { Write-ExtState $ext; L "PLAN delete $extName and install it again on every node (documented repair of a failed registration)" }
     else { L "PLAN install cluster extension $extName (Microsoft.SiteRecovery.Dra/Windows) on $($envy.cluster_name): every node" }
 }
 elseif ($ext -and $ext.properties.provisioningState -notin 'Succeeded', 'Failed') { Write-ExtState $ext; L 'extension busy - rerun later'; return }
 else {
     $params = @{ publisher = 'Microsoft.SiteRecovery.Dra'; type = 'Windows'; enableAutomaticUpgrade = $true; settings = $settings }
     if ($ext) {
-        $params.forceUpdateTag = [guid]::NewGuid().ToString()
-        L "extension ${extName}: re-running the Enable handler on every node (forceUpdateTag)"
+        L "extension ${extName}: aggregate $($ext.properties.aggregateState) - deleting it to install it again"
+        $null = Invoke-AzRestMethod -Method DELETE -Path "$($extId)?api-version=$hciApi"
+        $null = Wait-Until { if (-not (Invoke-Arm GET $extId $hciApi $null)) { $true } } "extension $extName deleted" 30
+        L "extension ${extName}: deleted"
     }
-    else { L "extension ${extName}: installing on every node" }
+    L "extension ${extName}: installing on every node"
     $null = Invoke-Arm PUT $extId $hciApi @{ properties = @{ extensionParameters = $params } }
     Start-Sleep -Seconds 60
     $ext = Wait-Until {

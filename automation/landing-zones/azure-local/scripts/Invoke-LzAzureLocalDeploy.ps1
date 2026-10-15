@@ -113,7 +113,15 @@ $configuredTenant = [string]$Config.tenant_id
 $subscriptionTenant = [string](Get-AzSubscription -SubscriptionId $sub -ErrorAction Stop | Select-Object -First 1 -ExpandProperty TenantId)
 $armTenant = if ($subscriptionTenant) { $subscriptionTenant } else { $configuredTenant }
 $vaultTenant = $configuredTenant
-$vaultSubscription = if ($Config.subscriptions -and $Config.subscriptions.management) { [string]$Config.subscriptions.management } else { $sub }
+# 'subscriptions' is optional; a PSCustomObject config (tests) throws on a missing property under StrictMode, so probe it first.
+$hasSubscriptions = ($Config -is [System.Collections.IDictionary]) ? $Config.Contains('subscriptions') : ($null -ne $Config.PSObject.Properties['subscriptions'])
+$managementSubscription = $null
+if ($hasSubscriptions -and $Config.subscriptions) {
+    $subs = $Config.subscriptions
+    $hasManagement = ($subs -is [System.Collections.IDictionary]) ? $subs.Contains('management') : ($null -ne $subs.PSObject.Properties['management'])
+    if ($hasManagement) { $managementSubscription = [string]$subs.management }
+}
+$vaultSubscription = if ($managementSubscription) { $managementSubscription } else { $sub }
 
 function Assert-LzContext {
     $ctx = Get-AzContext

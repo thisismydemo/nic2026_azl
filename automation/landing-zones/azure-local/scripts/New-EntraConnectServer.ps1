@@ -1,8 +1,12 @@
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     Builds the sync server for the hybrid identities (D-050): an Azure VM in the nic26 management subnet, AD-joined. Never on
-    a domain controller (owner, 12 Oct 2026; Learn: member server, Tier 0 asset).
+    a domain controller (owner, 12 Oct 2026; Learn: member server, Tier 0 asset). Default is a dry run; -Execute applies.
 .DESCRIPTION
+    Without -Execute the script reads the configuration, reports the steps it would perform and returns before any Azure
+    call (contract §7). With -Execute it performs the steps below; each is idempotent.
+
     Since 12 Oct 2026 this server runs Microsoft Entra Cloud Sync: the provisioning agent, its gMSA and the Graph
     configuration (OU=<ou_root>, password hash sync) are built by Set-HybridIdentitySync.ps1, fully scripted. Entra Connect
     Sync, installed by step 6 below, is left UNCONFIGURED: its wizard needs an interactive MFA sign-in and was blocked by
@@ -20,15 +24,20 @@
       5. Domain join (JsonADDomainExtension) into OU=Sync.
       6. Entra Connect: TLS 1.2 for .NET, MSI from the Microsoft Download Center (signature checked), silent install.
     Nothing is synchronized by this script; run Set-HybridIdentitySync.ps1 next (do not run the Entra Connect wizard).
+.PARAMETER AdminUserName
+    Local administrator name for the sync server, needed only on the first run (when the vault has no username secret yet).
+.PARAMETER EnvironmentPath
+    Environment folder for Get-NIC26Config (default: <repo>\environment\azure-local). All lab values come from
+    hybrid_identity in that file and from the shared file (G5): no lab value is written in this script.
+.PARAMETER Execute
+    Apply the changes. Without it the script only reports what it would do.
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'Only a newly generated password and the operator-supplied admin name are converted, in memory, to write them to Key Vault; nothing is printed or persisted elsewhere.')]
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess)]
 param(
-    # Local administrator name for the sync server, needed only on the first run (when the vault has no username secret yet).
     [string]$AdminUserName,
-    # Environment folder for Get-NIC26Config (default: <repo>\environment\azure-local). All lab values come from
-    # hybrid_identity in that file and from the shared file (G5): no lab value is written in this script.
-    [string]$EnvironmentPath
+    [string]$EnvironmentPath,
+    [switch]$Execute
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -44,6 +53,10 @@ $MgmtNsgName = $ss.mgmt_nsg_name; $IdentityNsgResourceGroup = $hi.dc_resource_gr
 $dcIp = @($v.identity_dc_ips)[0]
 $tags = @{ project = 'nic26'; environment = 'demo'; workload = 'identity'; role = 'entra-connect-sync'; 'managed-by' = 'script' }
 function Step($m) { "$(Get-Date -Format HH:mm:ss) $m" }
+if (-not $Execute) {
+    Write-Information "New-EntraConnectServer: would ensure the local admin secrets in $OpsVault, the NSG rules on $MgmtNsgName and $IdentityNsgName, the AD OU tree (Set-HybridIdentityAd.ps1), the VM $VmName ($VmSize, $PrivateIp) in $ResourceGroupName, its domain join into OU=$($ss.ou) and the Entra Connect install (what-if; pass -Execute to apply)." -InformationAction Continue
+    return
+}
 
 # 1. local admin secret ----------------------------------------------------------------------------------------------
 $null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue -WhatIf:$false
@@ -86,7 +99,7 @@ Step "identity NSG: Allow-AD-TCP/UDP-From-Nic26Sync (141/142, source $PrivateIp 
 
 # 3. AD: OU tree and join-account delegation (Set-HybridIdentityAd.ps1 - Run Command on the DC, AD objects only) ---------
 $adArgs = @{}; if ($EnvironmentPath) { $adArgs.Path = $EnvironmentPath }
-& (Join-Path $PSScriptRoot 'Set-HybridIdentityAd.ps1') @adArgs | ForEach-Object { Step "AD: $_" }
+& (Join-Path $PSScriptRoot 'Set-HybridIdentityAd.ps1') @adArgs -Execute | ForEach-Object { Step "AD: $_" }
 $ouPath = "OU=$($ss.ou),OU=Servers,OU=$($hi.ou_root),DC=" + ($DomainName -replace '\.', ',DC=')
 
 # 4. VM ----------------------------------------------------------------------------------------------------------------

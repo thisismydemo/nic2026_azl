@@ -128,7 +128,7 @@ function Split-SecretRef([string]$ref) {
 function Get-AdminCredential {
     # Pin the Az context of THIS process to the lab tenant and subscription (other sessions may switch the saved default).
     Disable-AzContextAutosave -Scope Process | Out-Null
-    $null = Set-AzContext -Tenant ([string]$shared.tenant_id) -Subscription $sub -Scope Process
+    $null = Set-AzContext -Tenant ([string]$shared.tenant_id) -Subscription $sub -Scope Process -WhatIf:$false
     $u = Split-SecretRef $envy.workload_vms.local_admin_username_secret
     $p = Split-SecretRef $envy.workload_vms.local_admin_password_secret
     $user = Get-AzKeyVaultSecret -VaultName $u.Vault -Name $u.Name -AsPlainText -ErrorAction Stop
@@ -202,7 +202,7 @@ function Invoke-GuestNetworkCheck([datetime]$t0) {
     }
     . (Join-Path $PSScriptRoot '..\..\..\shared\scripts\NIC26.GuestNetwork.ps1')
     Disable-AzContextAutosave -Scope Process | Out-Null
-    $null = Set-AzContext -Tenant ([string]$shared.tenant_id) -Subscription $sub -Scope Process
+    $null = Set-AzContext -Tenant ([string]$shared.tenant_id) -Subscription $sub -Scope Process -WhatIf:$false
     $nodeCred = [pscredential]::new([string](Resolve-NIC26KeyVaultRef -Ref $envy.identity.local_admin_username_secret -AsPlainText),
         (Resolve-NIC26KeyVaultRef -Ref $envy.identity.local_admin_password_secret))
     $guestUser = [string](Resolve-NIC26KeyVaultRef -Ref $envy.workload_vms.local_admin_username_secret -AsPlainText)

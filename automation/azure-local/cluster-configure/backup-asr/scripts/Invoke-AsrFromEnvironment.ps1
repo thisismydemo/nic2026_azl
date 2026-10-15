@@ -11,13 +11,15 @@
                     recovery RG/VNet/subnet, failover size, project tags on the Azure VM/NIC/disks, and the test
                     network = the recovery VNet with the NSG-isolated test subnet asr.test_subnet_name.
       WaitProtected waits until every protected VM is Protected with Normal health (initial replication done) and prints
-                    the elapsed time.
+                    the elapsed time. Run Enable again afterwards: the service takes the test network and subnet only
+                    once the item is Protected.
       RecoveryPlan  creates asr.recovery_plan_name with the protected VMs (Hyper-V site -> Azure) when it does not exist.
-      TestFailover  Invoke-AsrTestFailover.ps1 -Action Start (latest processed point, isolated test network) and times it.
+      TestFailover  points the recovery subnet at asr.test_subnet_name (the test VM takes the subnet with the recovery
+                    subnet's name), then Invoke-AsrTestFailover.ps1 -Action Start (latest processed point) and times it.
       Verify        read-only: the test VM in the recovery RG, its power state, NIC subnet and tags; with
                     -BootScreenshotPath the boot-diagnostics screenshot (managed boot diagnostics are switched on for
                     the temporary test VM if off: it is deleted by Cleanup).
-      Cleanup       Invoke-AsrTestFailover.ps1 -Action Cleanup and times it.
+      Cleanup       Invoke-AsrTestFailover.ps1 -Action Cleanup, times it, and sets the recovery subnet back.
       Status        read-only: protection state, health, test-failover state, last jobs.
     A planned or unplanned failover is never started here (demo/azure-local Start-AsrPlannedFailover.ps1, owner-driven).
 .EXAMPLE
@@ -66,7 +68,28 @@ function Get-ProtectedItemList {
     $fabric = Get-AzRecoveryServicesAsrFabric -FriendlyName $asr.hyperv_site_name -ErrorAction SilentlyContinue
     if (-not $fabric) { return @() }
     $items = foreach ($c in @(Get-AzRecoveryServicesAsrProtectionContainer -Fabric $fabric)) { Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $c }
-    return @($items | Where-Object { $vmNames -contains $_.FriendlyName })
+    return @($items | Where-Object { $vmNames -contains $_.Name -or $vmNames -contains ($_.FriendlyName -replace '-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', '') })
+}
+function Invoke-RecoverySubnetChange([string]$Name, [string]$Subnet) {
+    # Hyper-V to Azure: the test VM goes to the subnet of the test network that has the recovery subnet's name; per-NIC
+    # test-failover subnets are accepted by the API and ignored (13 Oct 2026, read back empty). With the test network
+    # = the recovery VNet, the recovery subnet is pointed at the NSG-isolated test subnet for the drill and back after
+    # Cleanup (Learn: Run a disaster recovery drill to Azure; Create a network for test failover).
+    $item = @(Get-ProtectedItemList | Where-Object { $_.Name -eq $Name }) | Select-Object -First 1
+    if (-not $item) { throw "No protected item $Name." }
+    $nic = @($item.NicDetailsList)[0]
+    $current = [string](@($nic.IpConfigs)[0].RecoverySubnetName)
+    if ($current -eq $Subnet) { L "${Name}: recovery subnet already $Subnet"; return }
+    if (-not $Execute) { L "PLAN ${Name}: recovery subnet $current -> $Subnet"; return }
+    $null = Set-AzRecoveryServicesAsrReplicationProtectedItem -InputObject $item -UpdateNic ([string]$nic.NicId) -RecoveryNetworkId $vnetId -RecoveryNicSubnetName $Subnet
+    $deadline = (Get-Date).AddMinutes(10)
+    do {
+        Start-Sleep -Seconds 10
+        $item = @(Get-ProtectedItemList | Where-Object { $_.Name -eq $Name }) | Select-Object -First 1
+        $now = [string](@(@($item.NicDetailsList)[0].IpConfigs)[0].RecoverySubnetName)
+    } while ($now -ne $Subnet -and (Get-Date) -lt $deadline)
+    if ($now -ne $Subnet) { throw "${Name}: recovery subnet still '$now', expected '$Subnet'." }
+    L "${Name}: recovery subnet $current -> $Subnet"
 }
 function Find-TestVm([string]$name) {
     # Site Recovery names the test VM after the recovery VM name with a '-test' suffix.
@@ -91,6 +114,7 @@ switch ($Action) {
             $p.LogStorageAccountId = $cacheId
             $p.Size = [string]$pv.target_vm_size
             $p.Tag = Get-TagSet
+            if ($pv.ContainsKey('os_type') -and $pv.os_type) { $p.OS = [string]$pv.os_type }
             & (Join-Path $PSScriptRoot 'Enable-AsrReplication.ps1') @p -Execute:$Execute
             L "$($pv.name): enable step done in $([int]$sw.Elapsed.TotalSeconds) s"
         }
@@ -99,9 +123,9 @@ switch ($Action) {
         $deadline = (Get-Date).AddMinutes($WaitMinutes)
         while ($true) {
             $items = @(Get-ProtectedItemList)
-            $line = ($items | ForEach-Object { "$($_.FriendlyName)=$($_.ProtectionState)/$($_.ReplicationHealth)" }) -join ' '
+            $line = ($items | ForEach-Object { "$($_.Name)=$($_.ProtectionState)/$($_.ReplicationHealth)" }) -join ' '
             L "elapsed $([int]$sw.Elapsed.TotalMinutes) min: $line"
-            if ($items.Count -eq $vmNames.Count -and @($items | Where-Object { $_.ProtectionState -ne 'Protected' }).Count -eq 0) { L "all Protected after $([int]$sw.Elapsed.TotalMinutes) min"; break }
+            if ($items.Count -eq $vmNames.Count -and @($items | Where-Object { $_.ProtectionState -ne 'Protected' -or $_.ReplicationHealth -ne 'Normal' }).Count -eq 0) { L "all Protected after $([int]$sw.Elapsed.TotalMinutes) min"; break }
             if ((Get-Date) -ge $deadline) { throw "Not all VMs Protected after $WaitMinutes min." }
             Start-Sleep -Seconds 60
         }
@@ -111,7 +135,7 @@ switch ($Action) {
         $plan = Get-AzRecoveryServicesAsrRecoveryPlan -Name $asr.recovery_plan_name -ErrorAction SilentlyContinue
         if ($plan) { L "recovery plan $($asr.recovery_plan_name): exists ($(@($plan.Groups | ForEach-Object { $_.ReplicationProtectedItems }).Count) items)" }
         elseif ($items.Count -eq 0) { throw 'No protected VM yet: run Enable and WaitProtected first.' }
-        elseif (-not $Execute) { L "PLAN create recovery plan $($asr.recovery_plan_name) (Hyper-V site -> Azure, Resource Manager) with $($items.FriendlyName -join ', ')" }
+        elseif (-not $Execute) { L "PLAN create recovery plan $($asr.recovery_plan_name) (Hyper-V site -> Azure, Resource Manager) with $($items.Name -join ', ')" }
         else {
             $fabric = Get-AzRecoveryServicesAsrFabric -FriendlyName $asr.hyperv_site_name
             $job = New-AzRecoveryServicesAsrRecoveryPlan -Name $asr.recovery_plan_name -PrimaryFabric $fabric -Azure -FailoverDeploymentModel ResourceManager -ReplicationProtectedItem $items
@@ -121,6 +145,7 @@ switch ($Action) {
     }
     'TestFailover' {
         foreach ($n in $vmNames) {
+            Invoke-RecoverySubnetChange $n ([string]$asr.test_subnet_name)
             & (Join-Path $PSScriptRoot 'Invoke-AsrTestFailover.ps1') @common -VmName $n -Action Start -TestNetworkId $vnetId -WaitMinutes $WaitMinutes -Execute:$Execute | Out-Null
             L "$n test failover $(if ($Execute) { 'completed' } else { 'previewed' }) in $([int]$sw.Elapsed.TotalSeconds) s"
         }
@@ -142,10 +167,18 @@ switch ($Action) {
                     $null = Update-AzVM -ResourceGroupName $vm.ResourceGroupName -VM $vm
                     Start-Sleep -Seconds 60
                 }
-                $uri = (Get-AzVM -ResourceGroupName $vm.ResourceGroupName -Name $vm.Name -Status).BootDiagnostics.ConsoleScreenshotBlobUri
-                $sas = Invoke-AzRestMethod -Method POST -Path "$($vm.Id)/retrieveBootDiagnosticsData?api-version=2024-07-01&sasUriExpirationTimeInMinutes=10"
-                $shot = ($sas.Content | ConvertFrom-Json).consoleScreenshotBlobUri
-                if ($shot) { Invoke-WebRequest -Uri $shot -OutFile $BootScreenshotPath; L "boot screenshot saved to $BootScreenshotPath" } else { L "no boot screenshot yet ($uri)" }
+                # The screenshot blob appears a few minutes after boot: retry for up to 10 minutes.
+                $saved = $false
+                for ($try = 1; $try -le 20 -and -not $saved; $try++) {
+                    $sas = Invoke-AzRestMethod -Method POST -Path "$($vm.Id)/retrieveBootDiagnosticsData?api-version=2024-07-01&sasUriExpirationTimeInMinutes=10"
+                    $shot = if ($sas.StatusCode -lt 300) { ($sas.Content | ConvertFrom-Json).consoleScreenshotBlobUri } else { $null }
+                    if ($shot) {
+                        try { Invoke-WebRequest -Uri $shot -OutFile $BootScreenshotPath -ErrorAction Stop; $saved = $true }
+                        catch { Write-Verbose "screenshot not ready ($try)" }
+                    }
+                    if (-not $saved) { Start-Sleep -Seconds 30 }
+                }
+                if ($saved) { L "boot screenshot saved to $BootScreenshotPath" } else { L 'no boot screenshot after 10 minutes' }
             }
         }
     }
@@ -153,13 +186,14 @@ switch ($Action) {
         foreach ($n in $vmNames) {
             & (Join-Path $PSScriptRoot 'Invoke-AsrTestFailover.ps1') @common -VmName $n -Action Cleanup -WaitMinutes $WaitMinutes -Execute:$Execute | Out-Null
             L "$n test failover cleanup $(if ($Execute) { 'completed' } else { 'previewed' }) in $([int]$sw.Elapsed.TotalSeconds) s"
+            Invoke-RecoverySubnetChange $n ([string]$asr.recovery_subnet_name)
         }
     }
     'Status' {
         $items = @(Get-ProtectedItemList)
         if ($items.Count -eq 0) { L 'no protected VM (Hyper-V site or replication not set up yet)' }
         foreach ($i in $items) {
-            L "$($i.FriendlyName): $($i.ProtectionState) / health $($i.ReplicationHealth) / test failover $($i.TestFailoverState) / allowed $(@($i.AllowedOperations) -join ',')"
+            L "$($i.Name): $($i.ProtectionState) / health $($i.ReplicationHealth) / test failover $($i.TestFailoverState) / allowed $(@($i.AllowedOperations) -join ',')"
         }
         $since = (Get-Date).AddDays(-2)
         Get-AzRecoveryServicesAsrJob -StartTime $since -ErrorAction SilentlyContinue | Select-Object -First 8 | ForEach-Object { L "job $($_.DisplayName) [$($_.TargetObjectName)]: $($_.State) $($_.StartTime) -> $($_.EndTime)" }

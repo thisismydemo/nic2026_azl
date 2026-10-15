@@ -478,13 +478,16 @@ function Get-DemoConfigValue {
         [string]$Key
     )
     $current = $Config
-    foreach ($segment in ($Key -split '\.')) {
+    $segments = @($Key -split '\.')
+    for ($i = 0; $i -lt $segments.Count; $i++) {
+        $segment = $segments[$i]
         if ($null -eq $current) { return $null }
         if ($current -is [System.Collections.IDictionary]) {
             if (-not $current.Contains($segment)) {
-                # Get-NIC26Config returns envelope metadata alongside the merged canonical values.
+                # Get-NIC26Config returns envelope metadata alongside the merged canonical values: continue the lookup
+                # inside 'values' with the rest of the key from this segment on (14 Oct: it used to drop a segment).
                 if ($current.Contains('values')) {
-                    return Get-DemoConfigValue -Config $current['values'] -Key (($Key -split '\.', 2)[-1])
+                    return Get-DemoConfigValue -Config $current['values'] -Key ($segments[$i..($segments.Count - 1)] -join '.')
                 }
                 return $null
             }
@@ -587,6 +590,13 @@ function Get-DemoAzlNameSet {
     $dnsZone = [string](Get-DemoConfigValue -Config $Config -Key 'identity.dns_zone')
     $nodes = Get-DemoNodeList -Config $Config
     $remoting = if ($dnsZone) { "$clusterName.$dnsZone" } else { $nodes[0].Name }
+    # remoting credential for a Local Identity cluster: <base>-username/-password in the ops vault (D-008; owner 15 Oct).
+    # Loaded once per session, kept in memory only; empty config = the operator's own session as before.
+    $credBase = [string](Get-DemoConfigValue -Config $Config -Key 'remoting_credential_base')
+    if ($credBase -and -not $script:DemoRemotingCredential) {
+        $kvOps = New-NIC26ResourceName -Type kv -Purpose 'ops' @nameParams
+        $script:DemoRemotingCredential = Get-DemoVaultCredential -VaultName $kvOps -BaseName $credBase
+    }
     return [pscustomobject]@{
         ClusterName             = $clusterName
         DnsZone                 = $dnsZone
@@ -832,6 +842,9 @@ function Remove-DemoFaultLock {
 
 #region Remote / device wrappers ----------------------------------------------------------------------------------------
 
+# module-level remoting credential for a Local Identity cluster (set by Get-DemoAzlNameSet from remoting_credential_base; Set-StrictMode needs it declared)
+$script:DemoRemotingCredential = $null
+
 function Invoke-DemoRemote {
     <#
     .SYNOPSIS
@@ -862,6 +875,9 @@ function Invoke-DemoRemote {
     )
     $params = @{ ComputerName = $ComputerName; ScriptBlock = $ScriptBlock; ErrorAction = 'Stop' }
     if ($ArgumentList.Count -gt 0) { $params['ArgumentList'] = $ArgumentList }
+    # Local Identity cluster (no AD): the operator's own session is refused by the nodes, so the name set loads the cluster
+    # admin pair from the ops vault (remoting_credential_base) and every remoting call uses it unless one is passed explicitly.
+    if (-not $Credential -and $script:DemoRemotingCredential) { $Credential = $script:DemoRemotingCredential }
     if ($Credential) { $params['Credential'] = $Credential }
     return Invoke-Command @params
 }
@@ -1179,8 +1195,9 @@ function Invoke-DemoLogQuery {
     )
     $customerId = $WorkspaceId
     if ($WorkspaceId -like '/subscriptions/*') {
-        $ws = Get-AzOperationalInsightsWorkspace -ResourceGroupName ($WorkspaceId -split '/')[4] -Name ($WorkspaceId -split '/')[-1] -ErrorAction Stop
-        $customerId = $ws.CustomerId.ToString()
+        # by resource ID, so the lookup works whatever subscription the context is on (the workspace lives in the Azure
+        # Local subscription, the AVD scripts run in the AVD one; 14 Oct)
+        $customerId = [string](Get-AzResource -ResourceId $WorkspaceId -ExpandProperties -ErrorAction Stop).Properties.customerId
     }
     $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $customerId -Query $Query -Timespan ([TimeSpan]::FromHours($TimespanHours)) -ErrorAction Stop
     return @($result.Results)

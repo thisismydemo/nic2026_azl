@@ -82,12 +82,12 @@ Describe 'Screen-hygiene filter (Hide-DemoSensitiveText / Write-DemoScreen)' {
         Initialize-DemoScreenHygiene -Config $cfg
         (Get-DemoHiddenTermList) | Should -Contain 'contoso-real.onmicrosoft.com'
         (Get-DemoHiddenTermList) | Should -Contain 'secretcorp'
-        $out = Hide-DemoSensitiveText -InputObject 'user thor@contoso-real.onmicrosoft.com at secretcorp, owner owner@contoso-real.com' -KeepGuid
+        $out = Hide-DemoSensitiveText -InputObject 'user user1@contoso-real.onmicrosoft.com at secretcorp, owner owner@contoso-real.com' -KeepGuid
         $out | Should -Not -Match 'contoso-real'
         $out | Should -Not -Match 'secretcorp'
     }
     It 'leaves IIC lab names untouched' {
-        $text = 'rg-iic-nic26-azl-eus-01 nic26-clus01 vdpool-iic-nic26-hybrid-eus-01 thor@contoso.com'
+        $text = 'rg-iic-nic26-azl-eus-01 nic26-clus01 vdpool-iic-nic26-hybrid-eus-01 user1@contoso.com'
         (Hide-DemoSensitiveText -InputObject $text) | Should -Be $text
     }
     It 'Write-DemoScreen filters the Information stream and never uses Write-Host' {

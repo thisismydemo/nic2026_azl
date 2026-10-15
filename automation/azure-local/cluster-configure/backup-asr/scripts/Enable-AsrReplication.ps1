@@ -31,11 +31,15 @@ Resource ID of the isolated test-failover virtual network.
 Optional test-failover subnet for the primary NIC. Needed when the test network is the recovery network itself (a
 separate, NSG-isolated subnet in the same VNet): without it Site Recovery picks the subnet with the recovery subnet's name.
 .PARAMETER LogStorageAccountId
-Cache (log) storage account for replication to managed disks (Learn: Hyper-V to Azure, managed disks).
+Cache storage account for replication to managed disks; passed as both the log and the target storage account (with
+the log account alone the service fails with error 70130, storage account not found; seen 13 Oct 2026).
 .PARAMETER Size
 Optional Azure VM size used at failover (for a Generation 2 source, a size that supports Generation 2).
 .PARAMETER Tag
 Optional tags written to the failed-over VM, its NICs and its disks (RecoveryVmTag, RecoveryNicTag, DiskTag).
+.PARAMETER OS
+Operating system to use when the protectable item does not report one (the portal asks for it on the Replication
+settings tab; an Azure Local guest without a connected guest agent reports none).
 .PARAMETER Execute
 Enable replication; omit to preview.
 #>
@@ -55,6 +59,7 @@ param(
     [string]$LogStorageAccountId,
     [string]$Size,
     [hashtable]$Tag,
+    [ValidateSet('Windows', 'Linux')][string]$OS,
     [switch]$Execute
 )
 
@@ -105,10 +110,21 @@ function Get-TfoSubnet($ProtectedItem) {
     return ''
 }
 function Invoke-TestNetworkUpdate($ProtectedItem) {
+    # The service accepts Compute and Network settings only once initial replication has finished (13 Oct 2026:
+    # ErrorInVMConfigurationAsProtectionFailed while the item was still being protected). Run this script again then.
+    if ($ProtectedItem.PSObject.Properties['ProtectionState'] -and $ProtectedItem.ProtectionState -and $ProtectedItem.ProtectionState -ne 'Protected') {
+        Write-Warning "Protected item $($ProtectedItem.Name) is '$($ProtectedItem.ProtectionState)': the test network and subnet are set by a rerun once it is Protected."
+        return
+    }
     $set = @{ InputObject = $ProtectedItem; TestNetworkId = $TestNetworkId }
     if ($TestSubnetName) {
         $nics = @(if ($ProtectedItem.PSObject.Properties['NicDetailsList']) { $ProtectedItem.NicDetailsList })
-        if ($nics.Count -eq 0 -or $null -eq $nics[0]) { throw "Protected item $($ProtectedItem.FriendlyName) reports no NIC; cannot set the test subnet." }
+        if ($nics.Count -eq 0 -or $null -eq $nics[0]) {
+            # NIC details arrive with the first replication data; a rerun of this script sets the subnet then.
+            Write-Warning "Protected item $($ProtectedItem.Name) reports no NIC yet: test network set, test subnet not yet set. Run this script again once replication has started."
+            $null = Set-AzRecoveryServicesAsrReplicationProtectedItem @set
+            return
+        }
         $set.UpdateNic = [string]$nics[0].NicId
         $set.RecoveryNetworkId = $RecoveryNetworkId
         $set.RecoveryNicSubnetName = $RecoverySubnetName
@@ -117,13 +133,36 @@ function Invoke-TestNetworkUpdate($ProtectedItem) {
     $null = Set-AzRecoveryServicesAsrReplicationProtectedItem @set
 }
 
+function Test-VmNameMatch([string]$Candidate, [string]$Name) {
+    # Azure Local names the Hyper-V VM '<resource name>-<guid>'; a plain Hyper-V VM keeps its own name.
+    return ($Candidate -eq $Name) -or ($Candidate -match ('^' + [regex]::Escape($Name) + '-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'))
+}
+function Find-ProtectedItem([string]$Name) {
+    @(Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $selectedContainer) |
+        Where-Object { $_.Name -eq $Name -or (Test-VmNameMatch $_.FriendlyName $Name) } | Select-Object -First 1
+}
+
 foreach ($vm in $VmName) {
-    $item = Get-AzRecoveryServicesAsrProtectableItem -ProtectionContainer $selectedContainer -FriendlyName $vm
-    if (-not $item) {
+    $matched = @(Get-AzRecoveryServicesAsrProtectableItem -ProtectionContainer $selectedContainer | Where-Object { Test-VmNameMatch $_.FriendlyName $vm })
+    if ($matched.Count -eq 0) {
         throw "Protectable VM '$vm' was not found."
     }
+    if ($matched.Count -gt 1) {
+        throw "More than one protectable VM matches '$vm': $($matched.FriendlyName -join ', ')."
+    }
+    $item = $matched[0]
 
-    $existing = Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $selectedContainer -FriendlyName $vm
+    $existing = Find-ProtectedItem $vm
+    if ($existing -and $existing.PSObject.Properties['ProtectionState'] -and $existing.ProtectionState -eq 'EnablingFailed') {
+        # A failed enable leaves an item that cannot be updated: disable it, then enable again below.
+        if (-not $Execute) { Write-Output "Would remove the failed replication item of '$vm' and enable it again." }
+        elseif ($PSCmdlet.ShouldProcess($vm, 'Remove the failed replication item')) {
+            $job = Remove-AzRecoveryServicesAsrReplicationProtectedItem -InputObject $existing -Force
+            do { Start-Sleep -Seconds 10; $job = Get-AzRecoveryServicesAsrJob -Job $job } while ($job.State -in 'InProgress', 'NotStarted')
+            Write-Output "Removed the failed replication item of '$vm' ($($job.State))."
+        }
+        $existing = $null
+    }
     if ($existing) {
         # Reconcile the test network (and subnet) on a VM that is already replicating (a failed earlier run may have left it unset).
         $subnetDiffers = $TestSubnetName -and ((Get-TfoSubnet $existing) -ne $TestSubnetName)
@@ -141,16 +180,22 @@ foreach ($vm in $VmName) {
         continue
     }
 
-    # The protectable item states its own OS and OS disk: nothing is guessed.
-    if (-not $item.OSDiskName) {
-        throw "Protectable VM '$vm' does not report an OS disk name."
+    # OS disk: the one the item reports; otherwise its only disk, or the single disk Azure Local names '*-OSDisk'.
+    $osDisk = [string]$item.OSDiskName
+    if (-not $osDisk) {
+        $disks = @($item.Disks)
+        $named = @($disks | Where-Object { $_.Name -like '*-OSDisk' })
+        if ($disks.Count -eq 1) { $osDisk = [string]$disks[0].Name }
+        elseif ($named.Count -eq 1) { $osDisk = [string]$named[0].Name }
+        else { throw "Protectable VM '$vm' does not report an OS disk and it cannot be identified from its disks." }
     }
-    if ($item.OS -notin @('Windows', 'Linux')) {
-        throw "Protectable VM '$vm' reports the operating system '$($item.OS)'; expected Windows or Linux."
+    $osType = if ($item.OS -in @('Windows', 'Linux')) { [string]$item.OS } else { $OS }
+    if ($osType -notin @('Windows', 'Linux')) {
+        throw "Protectable VM '$vm' reports no usable operating system ('$($item.OS)'); pass -OS Windows or -OS Linux."
     }
 
     if (-not $Execute) {
-        Write-Output "Would enable replication for '$vm' ($($item.OS), OS disk '$($item.OSDiskName)')."
+        Write-Output "Would enable replication for '$vm' ($osType, OS disk '$osDisk')."
         continue
     }
 
@@ -159,16 +204,20 @@ foreach ($vm in $VmName) {
             HyperVToAzure              = $true
             ProtectableItem            = $item
             Name                       = $vm
+            RecoveryVmName             = $vm
             ProtectionContainerMapping = $mapping
             RecoveryAzureNetworkId     = $RecoveryNetworkId
             RecoveryAzureSubnetName    = $RecoverySubnetName
             RecoveryResourceGroupId    = $RecoveryResourceGroupId
             UseManagedDisk             = 'true'
-            OS                         = $item.OS
-            OSDiskName                 = $item.OSDiskName
+            OS                         = $osType
+            OSDiskName                 = $osDisk
             WaitForCompletion          = $true
         }
-        if ($LogStorageAccountId) { $replication.LogStorageAccountId = $LogStorageAccountId }
+        if ($LogStorageAccountId) {
+            $replication.LogStorageAccountId = $LogStorageAccountId
+            $replication.RecoveryAzureStorageAccountId = $LogStorageAccountId
+        }
         if ($Size) { $replication.Size = $Size }
         if ($Tag -and $Tag.Count -gt 0) {
             $tags = [System.Collections.Generic.Dictionary[string, string]]::new()
@@ -177,9 +226,13 @@ foreach ($vm in $VmName) {
             $replication.RecoveryNicTag = $tags
             $replication.DiskTag = $tags
         }
-        $null = New-AzRecoveryServicesAsrReplicationProtectedItem @replication
+        $job = New-AzRecoveryServicesAsrReplicationProtectedItem @replication
+        if ($job -and $job.PSObject.Properties['State'] -and $job.State -in 'Failed', 'Cancelled', 'Canceled') {
+            $summary = @($job.Errors | ForEach-Object { if ($_.ServiceErrorDetails) { "$($_.ServiceErrorDetails.Code) $($_.ServiceErrorDetails.Message) $($_.ServiceErrorDetails.PossibleCauses)" } }) -join '; '
+            throw "Enable replication of $vm $($job.State): $summary"
+        }
         # The Hyper-V-to-Azure enable-replication parameter set has no test-network parameter: set it on the new item.
-        $created = Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $selectedContainer -FriendlyName $vm
+        $created = Find-ProtectedItem $vm
         if (-not $created) {
             throw "Replication of $vm was started but the protected item was not found afterwards."
         }

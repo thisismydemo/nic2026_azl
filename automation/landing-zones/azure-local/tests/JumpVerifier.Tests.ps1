@@ -1,6 +1,8 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 BeforeAll {
     . (Join-Path $PSScriptRoot '../scripts/Install-JumpTools.ps1')
+    # Pester can only mock a command that exists; CI runners have no winget.
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { function winget { throw 'winget is not installed; the test must mock it.' } }
     $script:pins = Join-Path $TestDrive 'pins.psd1'
     Set-Content $script:pins "@{ Tools = @{ git = @{ Version = '1.2.3'; Packages = @(@{Id='Example.Git';Version='1.2.3';Source='winget'}) } } }"
 }

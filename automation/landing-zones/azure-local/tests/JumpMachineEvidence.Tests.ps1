@@ -1,6 +1,10 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 BeforeAll {
     . (Join-Path $PSScriptRoot '../scripts/Install-JumpTools.ps1')
+    # Pester can only mock a command that exists; CI runners have no Microsoft.WinGet.Client module.
+    if (-not (Get-Command Get-WinGetPackage -ErrorAction SilentlyContinue)) {
+        function Get-WinGetPackage { param($Id, $Source, $MatchOption, [Parameter(ValueFromRemainingArguments)] $Rest) throw 'Microsoft.WinGet.Client is not installed; the test must mock it.' }
+    }
 }
 Describe 'exact non-ProductCode machine package evidence' {
     BeforeEach {

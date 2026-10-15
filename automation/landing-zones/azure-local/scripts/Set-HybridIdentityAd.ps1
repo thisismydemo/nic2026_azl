@@ -1,10 +1,13 @@
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     AD side of the hybrid identities for the SOFS/FSLogix example (D-050): OU tree, delegated domain-join account, UPN
     suffix, groups and hybrid test users. Runs on the domain controller through Azure Run Command (AD objects only;
-    nothing is installed on the DC).
+    nothing is installed on the DC). Default is a dry run; -Execute applies.
 .DESCRIPTION
     Idempotent. All values come from hybrid_identity in the azure-local environment file and the shared file (G5).
+    Without -Execute the script reads the configuration, reports what it would do (vault secrets, Run Command on the DC)
+    and returns before any Azure or AD call (contract §7). With -Execute it performs the steps below.
       - OU=<ou_root> with Servers\<server_ous>, Users, Groups (protected from accidental deletion)
       - join account delegated on each Servers\<ou> for computer objects only (create/delete, reset password, logon and
         account-restriction properties, validated DNS host name and SPN writes); the principal is written with the
@@ -12,10 +15,16 @@
       - UPN suffix added to the forest; groups; test users with the UPN suffix, added to their groups
     Passwords: generated here when missing, stored in the ops vault, passed to the DC as one protected Run Command
     parameter, never printed. The Run Command resource is removed afterwards.
+.PARAMETER Path
+    Environment folder for Get-NIC26Config (default: <repo>\environment\azure-local).
+.PARAMETER ResetTestUserPasswords
+    Reset an existing test user to the password held in the vault (owner, 14 Oct).
+.PARAMETER Execute
+    Apply the changes. Without it the script only reports what it would do.
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'Generated passwords and the join account UPN are converted in memory only to write them to Key Vault.')]
-[CmdletBinding()]
-param([string]$Path)
+[CmdletBinding(SupportsShouldProcess)]
+param([string]$Path, [switch]$ResetTestUserPasswords, [switch]$Execute)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '..\..\..\shared\powershell\NIC26.Automation') -Force
@@ -23,6 +32,10 @@ $cfgArgs = @{ Scope = 'azure-local' }; if ($Path) { $cfgArgs.Path = $Path }
 $v = (Get-NIC26Config @cfgArgs).values
 $hi = $v.hybrid_identity
 $tags = @{ project = 'nic26'; purpose = 'hybrid-identity-sofs'; 'managed-by' = 'script' }
+if (-not $Execute) {
+    Write-Information "Set-HybridIdentityAd: would ensure the join/test-user secrets in $($v.kv_ops_name) and run the AD setup (OU=$($hi.ou_root), join account $($hi.join_account), $(@($hi.server_ous).Count) server OUs) on $($hi.dc_vm_name) by Run Command (what-if; pass -Execute to apply)." -InformationAction Continue
+    return
+}
 
 $null = Set-AzContext -Subscription $v.subscription_id -Tenant $v.tenant_id -WarningAction SilentlyContinue -WhatIf:$false
 function Get-RandomPassword { $c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%+=?'; -join (1..24 | ForEach-Object { $c[[Security.Cryptography.RandomNumberGenerator]::GetInt32($c.Length)] }) + 'a9!Q' }
@@ -36,7 +49,7 @@ if (-not (Get-AzKeyVaultSecret -VaultName $v.kv_ops_name -Name $hi.join_username
     $null = Set-AzKeyVaultSecret -VaultName $v.kv_ops_name -Name $hi.join_username_secret -SecretValue (ConvertTo-SecureString $joinUpn -AsPlainText -Force) -Tag $tags
 }
 $users = @()
-if ($hi.ContainsKey('test_users') -and $hi.test_users.count -gt 0) {
+if ($hi.Contains('test_users') -and $hi.test_users.count -gt 0) {
     foreach ($i in 1..$hi.test_users.count) {
         $users += [ordered]@{ sam = "$($hi.test_users.prefix)$i"; pw = Get-OrNewSecret ($hi.test_users.password_secret_format -f $i) }
     }
@@ -45,7 +58,7 @@ $payload = [ordered]@{
     ouRoot = $hi.ou_root; serverOus = @($hi.server_ous); upnSuffix = $hi.upn_suffix; joinAccount = $hi.join_account
     joinUpn = $joinUpn; joinPw = Get-OrNewSecret $hi.join_password_secret
     groups = @($hi.groups | ForEach-Object { @{ name = $_.name; description = $_.description } })
-    users = $users; userGroups = @($hi.test_users.groups)
+    users = $users; userGroups = @($hi.test_users.groups); resetPw = [bool]$ResetTestUserPasswords
 } | ConvertTo-Json -Compress -Depth 5
 
 $dcScript = @'
@@ -81,6 +94,11 @@ foreach ($u in $p.users) {
     $upn = "$($u.sam)@$($p.upnSuffix)"
     if (-not (Get-ADUser -Filter "SamAccountName -eq '$($u.sam)'" -ErrorAction SilentlyContinue)) {
         New-ADUser -Name $u.sam -DisplayName $u.sam -SamAccountName $u.sam -UserPrincipalName $upn -EmailAddress $upn -Path $ouUsers -AccountPassword (ConvertTo-SecureString $u.pw -AsPlainText -Force) -Enabled $true -PasswordNeverExpires $true
+    } elseif ($p.resetPw) {
+        # -ResetTestUserPasswords (owner, 14 Oct): bring an existing test user back to the password in the vault
+        Set-ADAccountPassword -Identity $u.sam -Reset -NewPassword (ConvertTo-SecureString $u.pw -AsPlainText -Force)
+        Unlock-ADAccount -Identity $u.sam; Enable-ADAccount -Identity $u.sam
+        "reset: $($u.sam)"
     }
     foreach ($g in $p.userGroups) { Add-ADGroupMember -Identity $g -Members $u.sam }
 }

@@ -6,97 +6,295 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "subscription_id_avd", "subscription_id_azl",
-    "avd_vnet_prefix", "avd_subnets", "azl_spoke_vnet_id", "azl_spoke_prefix", "jump_admin_source_prefix", "onprem_compute_prefixes",
-    "dns_resolver_inbound_ip", "secondary_dns_ip", "avd_budget_monthly",
-    "host_pools", "rdp_properties", "scaling_plan",
-    "entra_groups", "group_object_ids", "demo_users", "ca_policy_name", "ca_mode",
-    "share_names", "share_quota_gib", "fslogix_settings_file", "redirections_xml", "backup_policy",
-    "images", "session_host_sku_azure", "computer_name_prefixes",
-    "dcr_counter_set", "shortpath_managed_port", "registration_token_ttl_hours",
-    "hybrid", "dhcp_reservations", "realms", "patch_channel", "secret_refs"
+    "subscription_id_avd",
+    "subscription_id_azl",
+    "avd_vnet_prefix",
+    "avd_subnets",
+    "azl_spoke_vnet_id",
+    "azl_spoke_prefix",
+    "jump_admin_source_prefix",
+    "onprem_compute_prefixes",
+    "dns_resolver_inbound_ip",
+    "secondary_dns_ip",
+    "avd_budget_monthly",
+    "host_pools",
+    "rdp_properties",
+    "scaling_plan",
+    "entra_groups",
+    "group_object_ids",
+    "demo_users",
+    "ca_policy_name",
+    "ca_mode",
+    "share_names",
+    "share_quota_gib",
+    "fslogix_settings_file",
+    "redirections_xml",
+    "backup_policy",
+    "images",
+    "session_host_sku_azure",
+    "computer_name_prefixes",
+    "dcr_counter_set",
+    "shortpath_managed_port",
+    "registration_token_ttl_hours",
+    "hybrid",
+    "dhcp_reservations",
+    "realms",
+    "patch_channel",
+    "secret_refs"
   ],
   "properties": {
-    "subscription_id_avd": { "$ref": "#/$defs/guid" },
-    "subscription_id_azl": { "$ref": "#/$defs/guid" },
-    "avd_vnet_prefix": { "$ref": "#/$defs/cidr", "description": "AVD spoke address space (AVD-LZ-04)." },
+    "subscription_id_avd": {
+      "$ref": "#/$defs/guid"
+    },
+    "subscription_id_azl": {
+      "$ref": "#/$defs/guid"
+    },
+    "avd_vnet_prefix": {
+      "$ref": "#/$defs/cidr",
+      "description": "AVD spoke address space (AVD-LZ-04)."
+    },
     "avd_subnets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hosts", "pe", "imgbuild", "dnsin"],
+      "required": [
+        "hosts",
+        "pe",
+        "imgbuild",
+        "dnsin"
+      ],
       "properties": {
-        "hosts": { "$ref": "#/$defs/cidr" },
-        "pe": { "$ref": "#/$defs/cidr" },
-        "imgbuild": { "$ref": "#/$defs/cidr" },
-        "dnsin": { "$ref": "#/$defs/cidr" }
+        "hosts": {
+          "$ref": "#/$defs/cidr"
+        },
+        "pe": {
+          "$ref": "#/$defs/cidr"
+        },
+        "imgbuild": {
+          "$ref": "#/$defs/cidr"
+        },
+        "dnsin": {
+          "$ref": "#/$defs/cidr"
+        }
       }
     },
-    "azl_spoke_vnet_id": { "$ref": "#/$defs/resourceIdOrEmpty", "description": "Azure Local spoke VNet id (output of lz-azure-local); empty before it exists." },
-    "azl_spoke_prefix": { "$ref": "#/$defs/cidr" },
-    "jump_admin_source_prefix": { "$ref": "#/$defs/cidr", "pattern": "/32$", "description": "Dedicated jump workspace private IPv4 host prefix; refresh after address changes." },
-    "onprem_compute_prefixes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/cidr" } },
-    "dns_resolver_inbound_ip": { "$ref": "#/$defs/ipv4", "description": "Static IP of the DNS Private Resolver inbound endpoint (section 4.5)." },
-    "enable_private_endpoints": { "type": "boolean", "description": "Owner decision D-029. false (default) = public endpoints, no privatelink zone, links or resolver; true = private-endpoint design." },
-    "enable_dns_private_resolver": { "type": "boolean", "description": "Deploy the DNS Private Resolver inbound endpoint (P-07 option B); false = DC conditional-forwarder option." },
-    "link_privatelink_zone_to_hub": { "type": "boolean", "description": "Also link the lab's privatelink.file zone to the hub VNet (default false)." },
-    "enable_backup": { "type": "boolean", "description": "Deploy the Recovery Services vault and protect both FSLogix shares (section 7.9)." },
-    "deploy_platform_scope_items": { "type": "boolean", "default": false, "description": "Platform-owned hub peering and policy delivery; explicit ownership approval required." },
-    "enable_policy_assignments": { "type": "boolean", "description": "Assign the built-in Deny/Audit/Modify policies of section 2.4 at subscription scope." },
-    "arc_onboard_sp_object_id": { "$ref": "#/$defs/guidOrEmpty", "description": "Object id of the Arc onboarding service principal; empty skips its role assignment." },
-    "secret_name_prefix": { "type": "string", "pattern": "^[a-z0-9]{2,8}-[a-z0-9]{3,8}-$", "description": "Normally inherited from shared; set here only to override for this scope." },
-    "secondary_dns_ip": { "$ref": "#/$defs/ipv4" },
-    "log_analytics_workspace_id": { "$ref": "#/$defs/resourceIdOrEmpty", "description": "Supplied central monitoring workspace resource ID." },
-    "key_vault_id": { "$ref": "#/$defs/resourceIdOrEmpty", "description": "Operations vault id (Azure Local LZ output)." },
-    "action_group_id": { "$ref": "#/$defs/resourceIdOrEmpty" },
-    "avd_budget_monthly": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "azl_spoke_vnet_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Azure Local spoke VNet id (output of lz-azure-local); empty before it exists."
+    },
+    "azl_spoke_prefix": {
+      "$ref": "#/$defs/cidr"
+    },
+    "jump_admin_source_prefix": {
+      "$ref": "#/$defs/cidr",
+      "pattern": "/32$",
+      "description": "Dedicated jump workspace private IPv4 host prefix; refresh after address changes."
+    },
+    "onprem_compute_prefixes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/cidr"
+      }
+    },
+    "dns_resolver_inbound_ip": {
+      "$ref": "#/$defs/ipv4",
+      "description": "Static IP of the DNS Private Resolver inbound endpoint (section 4.5)."
+    },
+    "enable_private_endpoints": {
+      "type": "boolean",
+      "description": "Owner decision D-029. false (default) = public endpoints, no privatelink zone, links or resolver; true = private-endpoint design."
+    },
+    "enable_dns_private_resolver": {
+      "type": "boolean",
+      "description": "Deploy the DNS Private Resolver inbound endpoint (P-07 option B); false = DC conditional-forwarder option."
+    },
+    "link_privatelink_zone_to_hub": {
+      "type": "boolean",
+      "description": "Also link the lab's privatelink.file zone to the hub VNet (default false)."
+    },
+    "enable_backup": {
+      "type": "boolean",
+      "description": "Deploy the Recovery Services vault and protect both FSLogix shares (section 7.9)."
+    },
+    "deploy_platform_scope_items": {
+      "type": "boolean",
+      "default": false,
+      "description": "Platform-owned hub peering and policy delivery; explicit ownership approval required."
+    },
+    "enable_policy_assignments": {
+      "type": "boolean",
+      "description": "Assign the built-in Deny/Audit/Modify policies of section 2.4 at subscription scope."
+    },
+    "arc_onboard_sp_object_id": {
+      "$ref": "#/$defs/guidOrEmpty",
+      "description": "Object id of the Arc onboarding service principal; empty skips its role assignment."
+    },
+    "secret_name_prefix": {
+      "type": "string",
+      "pattern": "^[a-z0-9]{2,8}-[a-z0-9]{3,8}-$",
+      "description": "Normally inherited from shared; set here only to override for this scope."
+    },
+    "secondary_dns_ip": {
+      "$ref": "#/$defs/ipv4"
+    },
+    "log_analytics_workspace_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Supplied central monitoring workspace resource ID."
+    },
+    "key_vault_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Operations vault id (Azure Local LZ output)."
+    },
+    "action_group_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty"
+    },
+    "avd_budget_monthly": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
     "host_pools": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["azure", "azl", "hybrid"],
+      "required": [
+        "azure",
+        "azl",
+        "hybrid"
+      ],
       "properties": {
-        "azure": { "$ref": "#/$defs/hostPool" },
-        "azl": { "$ref": "#/$defs/hostPool" },
-        "hybrid": { "$ref": "#/$defs/hostPool" }
+        "azure": {
+          "$ref": "#/$defs/hostPool"
+        },
+        "azl": {
+          "$ref": "#/$defs/hostPool"
+        },
+        "hybrid": {
+          "$ref": "#/$defs/hostPool"
+        }
       }
     },
-    "rdp_properties": { "type": "string", "minLength": 1, "maxLength": 2048, "description": "Custom RDP property string (section 6.2)." },
+    "rdp_properties": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Custom RDP property string (section 6.2)."
+    },
     "scaling_plan": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["time_zone", "assigned_pools", "schedules"],
+      "required": [
+        "time_zone",
+        "assigned_pools",
+        "schedules"
+      ],
       "properties": {
-        "time_zone": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "assigned_pools": { "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["azure", "azl", "hybrid"] } },
-        "exclusion_tag": { "type": "string", "maxLength": 64 },
-        "schedules": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/scalingSchedule" } }
+        "time_zone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "assigned_pools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "azure",
+              "azl",
+              "hybrid"
+            ]
+          }
+        },
+        "exclusion_tag": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "schedules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/scalingSchedule"
+          }
+        }
       }
     },
     "entra_groups": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["avd_azure", "avd_azl", "avd_hybrid", "avd_users", "avd_admins", "avd_devices", "lab_operators"],
+      "required": [
+        "avd_azure",
+        "avd_azl",
+        "avd_hybrid",
+        "avd_users",
+        "avd_admins",
+        "avd_devices",
+        "lab_operators"
+      ],
       "properties": {
-        "avd_azure": { "$ref": "#/$defs/groupName" },
-        "avd_azl": { "$ref": "#/$defs/groupName" },
-        "avd_hybrid": { "$ref": "#/$defs/groupName" },
-        "avd_users": { "$ref": "#/$defs/groupName" },
-        "avd_admins": { "$ref": "#/$defs/groupName" },
-        "avd_devices": { "$ref": "#/$defs/groupName" },
-        "lab_operators": { "$ref": "#/$defs/groupName" }
+        "avd_azure": {
+          "$ref": "#/$defs/groupName"
+        },
+        "avd_azl": {
+          "$ref": "#/$defs/groupName"
+        },
+        "avd_hybrid": {
+          "$ref": "#/$defs/groupName"
+        },
+        "avd_users": {
+          "$ref": "#/$defs/groupName"
+        },
+        "avd_admins": {
+          "$ref": "#/$defs/groupName"
+        },
+        "avd_devices": {
+          "$ref": "#/$defs/groupName"
+        },
+        "lab_operators": {
+          "$ref": "#/$defs/groupName"
+        },
+        "avd_apps": {
+          "$ref": "#/$defs/groupName"
+        }
       }
     },
     "group_object_ids": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["avd_azure", "avd_azl", "avd_hybrid", "avd_users", "avd_admins", "avd_devices", "lab_operators"],
+      "required": [
+        "avd_azure",
+        "avd_azl",
+        "avd_hybrid",
+        "avd_users",
+        "avd_admins",
+        "avd_devices",
+        "lab_operators"
+      ],
       "properties": {
-        "avd_azure": { "$ref": "#/$defs/guid" },
-        "avd_azl": { "$ref": "#/$defs/guid" },
-        "avd_hybrid": { "$ref": "#/$defs/guid" },
-        "avd_users": { "$ref": "#/$defs/guid" },
-        "avd_admins": { "$ref": "#/$defs/guid" },
-        "avd_devices": { "$ref": "#/$defs/guid" },
-        "lab_operators": { "$ref": "#/$defs/guid" }
+        "avd_azure": {
+          "$ref": "#/$defs/guid"
+        },
+        "avd_azl": {
+          "$ref": "#/$defs/guid"
+        },
+        "avd_hybrid": {
+          "$ref": "#/$defs/guid"
+        },
+        "avd_users": {
+          "$ref": "#/$defs/guid"
+        },
+        "avd_admins": {
+          "$ref": "#/$defs/guid"
+        },
+        "avd_devices": {
+          "$ref": "#/$defs/guid"
+        },
+        "lab_operators": {
+          "$ref": "#/$defs/guid"
+        },
+        "avd_apps": {
+          "$ref": "#/$defs/guid"
+        }
       }
     },
     "demo_users": {
@@ -105,150 +303,453 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["upn", "display_name", "realm"],
+        "required": [
+          "upn",
+          "display_name",
+          "realm"
+        ],
         "properties": {
-          "upn": { "$ref": "#/$defs/email" },
-          "display_name": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "realm": { "type": "string", "enum": ["azure", "azl", "hybrid", "admin", "spare"] },
-          "object_id": { "$ref": "#/$defs/guid" }
+          "upn": {
+            "$ref": "#/$defs/email"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "realm": {
+            "type": "string",
+            "enum": [
+              "azure",
+              "azl",
+              "hybrid",
+              "admin",
+              "spare"
+            ]
+          },
+          "object_id": {
+            "$ref": "#/$defs/guid"
+          }
         }
       }
     },
-    "ca_policy_name": { "type": "string", "pattern": "^CA-[A-Za-z0-9-]+$" },
-    "ca_mode": { "type": "string", "enum": ["reportOnly", "enabled", "disabled"] },
+    "ca_policy_name": {
+      "type": "string",
+      "pattern": "^CA-[A-Za-z0-9-]+$"
+    },
+    "ca_mode": {
+      "type": "string",
+      "enum": [
+        "reportOnly",
+        "enabled",
+        "disabled"
+      ]
+    },
     "share_names": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["profiles", "odfc"],
+      "required": [
+        "profiles",
+        "odfc"
+      ],
       "properties": {
-        "profiles": { "$ref": "#/$defs/shareName" },
-        "odfc": { "$ref": "#/$defs/shareName" }
+        "profiles": {
+          "$ref": "#/$defs/shareName"
+        },
+        "odfc": {
+          "$ref": "#/$defs/shareName"
+        }
       }
     },
-    "share_quota_gib": { "type": "integer", "minimum": 1, "maximum": 102400 },
-    "fslogix_settings_file": { "type": "string", "minLength": 1 },
-    "redirections_xml": { "type": "string", "minLength": 1 },
+    "share_quota_gib": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 102400
+    },
+    "fslogix_settings_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "redirections_xml": {
+      "type": "string",
+      "minLength": 1
+    },
     "backup_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schedule_time_utc", "retention_days", "soft_delete_retention_days"],
+      "required": [
+        "schedule_time_utc",
+        "retention_days",
+        "soft_delete_retention_days"
+      ],
       "properties": {
-        "schedule_time_utc": { "$ref": "#/$defs/timeOfDay" },
-        "retention_days": { "type": "integer", "minimum": 1, "maximum": 9999 },
-        "soft_delete_retention_days": { "type": "integer", "minimum": 14, "maximum": 180 }
+        "schedule_time_utc": {
+          "$ref": "#/$defs/timeOfDay"
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9999
+        },
+        "soft_delete_retention_days": {
+          "type": "integer",
+          "minimum": 14,
+          "maximum": 180
+        }
       }
     },
     "images": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["image_definitions", "aib_source_image", "packer_iso_path", "packer_iso_checksum", "packer_output_path", "azure_local_image_name", "hybrid_image_vhdx"],
+      "required": [
+        "image_definitions",
+        "aib_source_image",
+        "packer_iso_path",
+        "packer_iso_checksum",
+        "packer_output_path",
+        "azure_local_image_name",
+        "hybrid_image_vhdx"
+      ],
       "properties": {
-        "build_vm_size": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "os_disk_size_gb": { "type": "integer", "minimum": 64, "maximum": 2048 },
-        "replication_regions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "build_vm_size": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "os_disk_size_gb": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 2048
+        },
+        "replication_regions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "image_definitions": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "publisher", "offer", "sku", "os_type", "hyper_v_generation", "security_type", "os_state"],
+            "required": [
+              "name",
+              "publisher",
+              "offer",
+              "sku",
+              "os_type",
+              "hyper_v_generation",
+              "security_type",
+              "os_state"
+            ],
             "properties": {
-              "name": { "type": "string", "pattern": "^imgdef-[a-z0-9-]+$" },
-              "publisher": { "type": "string", "minLength": 1, "maxLength": 128 },
-              "offer": { "type": "string", "minLength": 1, "maxLength": 128 },
-              "sku": { "type": "string", "minLength": 1, "maxLength": 128 },
-              "os_type": { "type": "string", "enum": ["Windows", "Linux"] },
-              "hyper_v_generation": { "type": "string", "enum": ["V1", "V2"] },
-              "security_type": { "type": "string", "enum": ["Standard", "TrustedLaunch", "TrustedLaunchSupported", "ConfidentialVM"] },
-              "os_state": { "type": "string", "enum": ["Generalized", "Specialized"] }
+              "name": {
+                "type": "string",
+                "pattern": "^imgdef-[a-z0-9-]+$"
+              },
+              "publisher": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "offer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "sku": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "os_type": {
+                "type": "string",
+                "enum": [
+                  "Windows",
+                  "Linux"
+                ]
+              },
+              "hyper_v_generation": {
+                "type": "string",
+                "enum": [
+                  "V1",
+                  "V2"
+                ]
+              },
+              "security_type": {
+                "type": "string",
+                "enum": [
+                  "Standard",
+                  "TrustedLaunch",
+                  "TrustedLaunchSupported",
+                  "ConfidentialVM"
+                ]
+              },
+              "os_state": {
+                "type": "string",
+                "enum": [
+                  "Generalized",
+                  "Specialized"
+                ]
+              }
             }
           }
         },
         "aib_source_image": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["publisher", "offer", "sku", "version"],
+          "required": [
+            "publisher",
+            "offer",
+            "sku",
+            "version"
+          ],
           "properties": {
-            "publisher": { "type": "string", "minLength": 1 },
-            "offer": { "type": "string", "minLength": 1 },
-            "sku": { "type": "string", "minLength": 1 },
-            "version": { "type": "string", "pattern": "^(latest|\\d+\\.\\d+\\.\\d+)$" }
+            "publisher": {
+              "type": "string",
+              "minLength": 1
+            },
+            "offer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sku": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^(latest|\\d+\\.\\d+\\.\\d+)$"
+            }
           }
         },
-        "packer_iso_path": { "type": "string", "minLength": 1 },
-        "packer_iso_checksum": { "type": "string", "pattern": "^(sha256:[0-9a-fA-F]{64}|none)$" },
-        "packer_output_path": { "type": "string", "minLength": 1 },
-        "azure_local_image_name": { "type": "string", "pattern": "^img-[a-z0-9-]+$" },
-        "hybrid_image_vhdx": { "type": "string", "minLength": 1 }
+        "packer_iso_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packer_iso_checksum": {
+          "type": "string",
+          "pattern": "^(sha256:[0-9a-fA-F]{64}|none)$"
+        },
+        "packer_output_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "azure_local_image_name": {
+          "type": "string",
+          "pattern": "^img-[a-z0-9-]+$"
+        },
+        "hybrid_image_vhdx": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
-    "session_host_sku_azure": { "type": "string", "pattern": "^Standard_[A-Za-z0-9_-]+$" },
-    "session_host_zones": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 3 } },
+    "session_host_sku_azure": {
+      "type": "string",
+      "pattern": "^Standard_[A-Za-z0-9_-]+$"
+    },
+    "session_host_zones": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3
+      }
+    },
     "computer_name_prefixes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["azure", "azl", "hybrid"],
+      "required": [
+        "azure",
+        "azl",
+        "hybrid"
+      ],
       "description": "Explicit session-host computer-name prefixes (<= 13 chars so prefix + two-digit counter stays within NetBIOS 15; the portal's 11-char prefix rule is never exercised).",
       "properties": {
-        "azure": { "$ref": "#/$defs/prefix11" },
-        "azl": { "$ref": "#/$defs/prefix11" },
-        "hybrid": { "$ref": "#/$defs/prefix11" }
+        "azure": {
+          "$ref": "#/$defs/prefix11"
+        },
+        "azl": {
+          "$ref": "#/$defs/prefix11"
+        },
+        "hybrid": {
+          "$ref": "#/$defs/prefix11"
+        }
       }
     },
-    "dcr_counter_set": { "type": "string", "minLength": 1, "maxLength": 64 },
-    "shortpath_managed_port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
-    "registration_token_ttl_hours": { "type": "integer", "minimum": 1, "maximum": 24, "description": "K-7: tokens are generated at join time, never stored; <= 24 h." },
+    "dcr_counter_set": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "shortpath_managed_port": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535
+    },
+    "registration_token_ttl_hours": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24,
+      "description": "K-7: tokens are generated at join time, never stored; <= 24 h."
+    },
     "hybrid": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cluster_name", "csv_path", "compute_switch_name", "vlan_id", "vcpu", "memory_gb", "disk_gb", "vms", "arc_tags"],
+      "required": [
+        "cluster_name",
+        "csv_path",
+        "compute_switch_name",
+        "vlan_id",
+        "vcpu",
+        "memory_gb",
+        "disk_gb",
+        "vms",
+        "arc_tags"
+      ],
       "description": "Hyper-V VMs on the Azure Local nodes that stand in for an existing Hyper-V estate (design/avd/hybrid-hyperv-hosts.md 16.1).",
       "properties": {
-        "cluster_name": { "$ref": "#/$defs/netbios" },
-        "csv_path": { "type": "string", "minLength": 1 },
-        "compute_switch_name": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "vlan_id": { "type": "integer", "minimum": 1, "maximum": 4094 },
-        "vcpu": { "type": "integer", "minimum": 1, "maximum": 64 },
-        "memory_gb": { "type": "integer", "minimum": 2, "maximum": 1024 },
-        "disk_gb": { "type": "integer", "minimum": 32, "maximum": 4096 },
-        "master_vhdx": { "type": "string", "minLength": 1 },
-        "time_zone": { "type": "string", "minLength": 1 },
-        "anti_affinity_class": { "type": "string", "minLength": 1 },
-        "join_type": { "type": "string", "enum": ["AD", "Entra"] },
-        "domain_fqdn": { "type": "string" },
-        "domain_ou_path": { "type": "string" },
-        "domain_join_username_secret": { "$ref": "#/$defs/secretRef" },
-        "domain_join_password_secret": { "$ref": "#/$defs/secretRef" },
-        "node_admin_username_secret": { "$ref": "#/$defs/secretRef" },
-        "node_admin_password_secret": { "$ref": "#/$defs/secretRef" },
-        "arc_resource_group": { "type": "string", "minLength": 1 },
-        "location": { "type": "string", "minLength": 1 },
-        "host_pool_name": { "type": "string", "minLength": 3 },
-        "host_pool_resource_group": { "type": "string", "minLength": 1 },
-        "dcr_resource_group": { "type": "string", "minLength": 1 },
-        "dcr_name": { "type": "string", "minLength": 1 },
-        "dcr_association_name": { "type": "string", "minLength": 1 },
+        "cluster_name": {
+          "$ref": "#/$defs/netbios"
+        },
+        "csv_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "compute_switch_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "vlan_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4094
+        },
+        "vcpu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "memory_gb": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1024
+        },
+        "disk_gb": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4096
+        },
+        "master_vhdx": {
+          "type": "string",
+          "minLength": 1
+        },
+        "time_zone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "anti_affinity_class": {
+          "type": "string",
+          "minLength": 1
+        },
+        "join_type": {
+          "type": "string",
+          "enum": [
+            "AD",
+            "Entra"
+          ]
+        },
+        "domain_fqdn": {
+          "type": "string"
+        },
+        "domain_ou_path": {
+          "type": "string"
+        },
+        "domain_join_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "domain_join_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "node_admin_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "node_admin_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "arc_resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host_pool_name": {
+          "type": "string",
+          "minLength": 3
+        },
+        "host_pool_resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dcr_resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dcr_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dcr_association_name": {
+          "type": "string",
+          "minLength": 1
+        },
         "vms": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "owner_node", "mac_address", "ip_address"],
+            "required": [
+              "name",
+              "owner_node",
+              "mac_address",
+              "ip_address"
+            ],
             "properties": {
-              "name": { "$ref": "#/$defs/netbios" },
-              "owner_node": { "$ref": "#/$defs/netbios" },
-              "owner_node_address": { "$ref": "#/$defs/ipv4" },
-              "mac_address": { "$ref": "#/$defs/mac" },
-              "ip_address": { "$ref": "#/$defs/ipv4" }
+              "name": {
+                "$ref": "#/$defs/netbios"
+              },
+              "owner_node": {
+                "$ref": "#/$defs/netbios"
+              },
+              "owner_node_address": {
+                "$ref": "#/$defs/ipv4"
+              },
+              "mac_address": {
+                "$ref": "#/$defs/mac"
+              },
+              "ip_address": {
+                "$ref": "#/$defs/ipv4"
+              }
             }
           }
         },
         "arc_tags": {
           "type": "object",
-          "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,127}$" },
-          "additionalProperties": { "type": "string", "maxLength": 256 }
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 256
+          }
         }
       }
     },
@@ -257,57 +758,185 @@
       "additionalProperties": false,
       "description": "FSLogix share paths, mode and hosts per realm (Invoke-FslogixHostConfigRemote.ps1); Cloud Cache providers nearest first (D-053).",
       "properties": {
-        "azure": { "$ref": "#/$defs/fslogixRealm" },
-        "azl": { "$ref": "#/$defs/fslogixRealm" },
-        "hybrid": { "$ref": "#/$defs/fslogixRealm" }
+        "azure": {
+          "$ref": "#/$defs/fslogixRealm"
+        },
+        "azl": {
+          "$ref": "#/$defs/fslogixRealm"
+        },
+        "hybrid": {
+          "$ref": "#/$defs/fslogixRealm"
+        }
       }
     },
     "azl_session_hosts": {
       "type": "object",
       "additionalProperties": false,
       "description": "Azure Local realm session hosts as Azure Local VMs (T-6.1.7): logical network, image, explicit storage path per host (D-049), AD join into the AVD OU (D-050), DCR association.",
-      "required": ["resource_group", "custom_location", "logical_network", "image", "vcpu", "memory_mb", "join_type", "hosts", "dcr_resource_group", "dcr_name", "dcr_association_name", "deployment_name", "host_pool_name", "host_pool_resource_group"],
+      "required": [
+        "resource_group",
+        "custom_location",
+        "logical_network",
+        "image",
+        "vcpu",
+        "memory_mb",
+        "join_type",
+        "hosts",
+        "dcr_resource_group",
+        "dcr_name",
+        "dcr_association_name",
+        "deployment_name",
+        "host_pool_name",
+        "host_pool_resource_group"
+      ],
       "properties": {
-        "resource_group": { "type": "string", "minLength": 1, "maxLength": 90 },
-        "custom_location": { "type": "string", "minLength": 1 },
-        "logical_network": { "type": "string", "minLength": 1 },
-        "image": { "type": "string", "minLength": 1 },
-        "vcpu": { "type": "integer", "minimum": 1, "maximum": 64 },
-        "memory_mb": { "type": "integer", "minimum": 2048 },
-        "join_type": { "type": "string", "enum": ["AD", "Entra", "None"] },
-        "domain_fqdn": { "type": "string" },
-        "domain_ou_path": { "type": "string" },
-        "domain_join_username_secret": { "$ref": "#/$defs/secretRef" },
-        "domain_join_password_secret": { "$ref": "#/$defs/secretRef" },
-        "dcr_resource_group": { "type": "string", "minLength": 1 },
-        "dcr_name": { "type": "string", "minLength": 1 },
-        "dcr_association_name": { "type": "string", "minLength": 1 },
-        "deployment_name": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "host_pool_name": { "type": "string", "minLength": 3, "maxLength": 64 },
-        "host_pool_resource_group": { "type": "string", "minLength": 1, "maxLength": 90 },
-        "node_addresses": { "type": "array", "items": { "$ref": "#/$defs/ipv4" } },
-        "node_admin_username_secret": { "$ref": "#/$defs/secretRef" },
-        "node_admin_password_secret": { "$ref": "#/$defs/secretRef" },
+        "resource_group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 90
+        },
+        "custom_location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logical_network": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vcpu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 2048
+        },
+        "join_type": {
+          "type": "string",
+          "enum": [
+            "AD",
+            "Entra",
+            "None"
+          ]
+        },
+        "domain_fqdn": {
+          "type": "string"
+        },
+        "domain_ou_path": {
+          "type": "string"
+        },
+        "domain_join_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "domain_join_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "dcr_resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dcr_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dcr_association_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deployment_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "host_pool_name": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64
+        },
+        "host_pool_resource_group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 90
+        },
+        "node_addresses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ipv4"
+          }
+        },
+        "node_admin_username_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "node_admin_password_secret": {
+          "$ref": "#/$defs/secretRef"
+        },
         "hosts": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 3,
+          "maxItems": 8,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "computer_name", "nic_name", "storage_path"],
+            "required": [
+              "name",
+              "computer_name",
+              "nic_name",
+              "storage_path"
+            ],
             "properties": {
-              "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-              "computer_name": { "$ref": "#/$defs/netbios" },
-              "nic_name": { "type": "string", "minLength": 1, "maxLength": 80 },
-              "storage_path": { "type": "string", "minLength": 1 },
-              "gpu_dda_count": { "type": "integer", "minimum": 0, "maximum": 4 },
-              "vcpu": { "type": "integer", "minimum": 1, "maximum": 64 },
-              "memory_mb": { "type": "integer", "minimum": 2048 }
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "computer_name": {
+                "$ref": "#/$defs/netbios"
+              },
+              "nic_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "storage_path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gpu_dda_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              },
+              "vcpu": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 2048
+              },
+              "logical_network": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
-        "tags": { "type": "object", "additionalProperties": { "type": "string" } }
+        "tags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "guest_default_route": {
+          "type": "boolean",
+          "description": "F-1 workaround (owner, 14 Oct): add the default route inside new guests when the logical network's DHCP gives none."
+        }
       }
     },
     "dhcp_reservations": {
@@ -315,142 +944,578 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["hostname", "mac", "ip", "vlan_id"],
+        "required": [
+          "hostname",
+          "mac",
+          "ip",
+          "vlan_id"
+        ],
         "properties": {
-          "hostname": { "$ref": "#/$defs/netbios" },
-          "mac": { "$ref": "#/$defs/mac" },
-          "ip": { "$ref": "#/$defs/ipv4" },
-          "vlan_id": { "type": "integer", "minimum": 1, "maximum": 4094 }
+          "hostname": {
+            "$ref": "#/$defs/netbios"
+          },
+          "mac": {
+            "$ref": "#/$defs/mac"
+          },
+          "ip": {
+            "$ref": "#/$defs/ipv4"
+          },
+          "vlan_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          }
         }
       }
     },
     "realms": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["azure", "azl", "hybrid"],
+      "required": [
+        "azure",
+        "azl",
+        "hybrid"
+      ],
       "properties": {
-        "azure": { "$ref": "#/$defs/realm" },
-        "azl": { "$ref": "#/$defs/realm" },
-        "hybrid": { "$ref": "#/$defs/realm" }
+        "azure": {
+          "$ref": "#/$defs/realm"
+        },
+        "azl": {
+          "$ref": "#/$defs/realm"
+        },
+        "hybrid": {
+          "$ref": "#/$defs/realm"
+        }
       }
     },
     "gpu_demo_workload": {
       "type": "object",
       "additionalProperties": false,
       "description": "GPU beat a4b (option B): short CUDA/AI job on the GPU session host, installed by session-hosts-azure-local/scripts/Invoke-GpuDemoWorkload.ps1.",
-      "required": ["host", "python_version", "python_url", "torch_version", "torch_index_url"],
+      "required": [
+        "host",
+        "python_version",
+        "python_url",
+        "torch_version",
+        "torch_index_url"
+      ],
       "properties": {
-        "host": { "type": "string" },
-        "python_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-        "python_url": { "type": "string", "pattern": "^https://" },
-        "torch_version": { "type": "string", "pattern": "^\\d+\\.\\d+(\\.\\d+)?$" },
-        "torch_index_url": { "type": "string", "pattern": "^https://" },
-        "seconds": { "type": "integer", "minimum": 10, "maximum": 300 },
-        "shortcut_name": { "type": "string" }
+        "host": {
+          "type": "string"
+        },
+        "python_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "python_url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "torch_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+        },
+        "torch_index_url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "seconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 300
+        },
+        "shortcut_name": {
+          "type": "string"
+        }
       }
     },
-    "patch_channel": { "type": "string", "enum": ["intune", "wufb-local"] },
+    "patch_channel": {
+      "type": "string",
+      "enum": [
+        "intune",
+        "wufb-local"
+      ]
+    },
     "avm_versions": {
       "type": "object",
       "description": "Pinned Azure Verified Module versions per module (recorded for the README).",
-      "propertyNames": { "pattern": "^[a-z0-9/._-]+$" },
-      "additionalProperties": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      "propertyNames": {
+        "pattern": "^[a-z0-9/._-]+$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+      }
     },
     "secret_refs": {
       "type": "object",
       "description": "Named keyvault:// references read at run time (names only; values never enter files).",
-      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
-      "additionalProperties": { "$ref": "#/$defs/secretRef" }
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/secretRef"
+      }
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F-]{36}$",
+      "description": "The lab tenant; the live-deploy commands pin it (owner, 14 Oct)."
+    },
+    "workspace_friendly_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Feed title (Set-AvdFeedNames.ps1)."
+    },
+    "live_host_pool": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Host pool created live on stage by New-AvdLiveHostPool.ps1 (owner, 14 Oct).",
+      "required": [
+        "name",
+        "app_group_name",
+        "workspace_name",
+        "resource_group",
+        "type",
+        "load_balancer",
+        "max_session_limit"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app_group_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspace_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": [
+            "Pooled",
+            "Personal"
+          ]
+        },
+        "load_balancer": {
+          "enum": [
+            "BreadthFirst",
+            "DepthFirst",
+            "Persistent"
+          ]
+        },
+        "max_session_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "friendly_name": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "object"
+        }
+      }
+    },
+    "remote_apps": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "RemoteApp application group published live on stage by New-AvdRemoteApps.ps1 (demo a3f, owner, 14 Oct).",
+      "required": [
+        "host_pool_key",
+        "host_pool_name",
+        "resource_group",
+        "app_group_name",
+        "assign_group",
+        "workspace_name",
+        "apps"
+      ],
+      "properties": {
+        "host_pool_key": {
+          "enum": [
+            "azure",
+            "azl",
+            "hybrid"
+          ]
+        },
+        "host_pool_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app_group_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "friendly_name": {
+          "type": "string"
+        },
+        "assign_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspace_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prefer_remote_app": {
+          "type": "boolean"
+        },
+        "apps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "start_menu_item"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+              },
+              "start_menu_item": {
+                "type": "string",
+                "minLength": 1
+              },
+              "friendly_name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "tags": {
+          "type": "object"
+        }
+      }
     }
   },
   "$defs": {
     "fslogixRealm": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["profile_unc", "odfc_unc", "mode", "hosts"],
+      "required": [
+        "profile_unc",
+        "odfc_unc",
+        "mode",
+        "hosts"
+      ],
       "properties": {
-        "profile_unc": { "type": "string", "pattern": "^\\\\\\\\[^\\\\]+\\\\[^\\\\]+$" },
-        "odfc_unc": { "type": "string", "pattern": "^\\\\\\\\[^\\\\]+\\\\[^\\\\]+$" },
-        "mode": { "type": "string", "enum": ["Production", "Rehearsal"] },
-        "cloud_cache_providers": { "type": "array", "maxItems": 4, "items": { "type": "string" } },
+        "profile_unc": {
+          "type": "string",
+          "pattern": "^\\\\\\\\[^\\\\]+\\\\[^\\\\]+$"
+        },
+        "odfc_unc": {
+          "type": "string",
+          "pattern": "^\\\\\\\\[^\\\\]+\\\\[^\\\\]+$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "Production",
+            "Rehearsal"
+          ]
+        },
+        "cloud_cache_providers": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "string"
+          }
+        },
         "hosts": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "kind", "subscription", "resource_group"],
+            "required": [
+              "name",
+              "kind",
+              "subscription",
+              "resource_group"
+            ],
             "properties": {
-              "name": { "type": "string", "minLength": 1 },
-              "kind": { "type": "string", "enum": ["azure-vm", "arc"] },
-              "subscription": { "type": "string", "enum": ["avd", "azl"] },
-              "resource_group": { "type": "string", "minLength": 1 }
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "azure-vm",
+                  "arc"
+                ]
+              },
+              "subscription": {
+                "type": "string",
+                "enum": [
+                  "avd",
+                  "azl"
+                ]
+              },
+              "resource_group": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         }
       }
     },
-    "guid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
-    "guidOrEmpty": { "type": "string", "pattern": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
-    "ipv4": { "type": "string", "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$" },
-    "cidr": { "type": "string", "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/(3[0-2]|[12]?\\d)$" },
-    "email": { "type": "string", "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$" },
-    "resourceIdOrEmpty": { "type": "string", "pattern": "^$|^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/[A-Za-z.]+/[^/]+/[^/]+(/.*)?$" },
-    "secretRef": { "type": "string", "pattern": "^keyvault://[a-z0-9-]{3,24}/[A-Za-z0-9-]+$" },
-    "netbios": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,13}[a-z0-9])?$" },
-    "mac": { "type": "string", "pattern": "^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$" },
-    "groupName": { "type": "string", "pattern": "^grp-[a-z0-9-]+$", "maxLength": 256 },
-    "shareName": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$" },
-    "prefix11": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,11}[a-z0-9])?$" },
-    "timeOfDay": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
-    "loadBalancer": { "type": "string", "enum": ["BreadthFirst", "DepthFirst"] },
+    "guid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "guidOrEmpty": {
+      "type": "string",
+      "pattern": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "ipv4": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$"
+    },
+    "cidr": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/(3[0-2]|[12]?\\d)$"
+    },
+    "email": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+    },
+    "resourceIdOrEmpty": {
+      "type": "string",
+      "pattern": "^$|^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/[A-Za-z.]+/[^/]+/[^/]+(/.*)?$"
+    },
+    "secretRef": {
+      "type": "string",
+      "pattern": "^keyvault://[a-z0-9-]{3,24}/[A-Za-z0-9-]+$"
+    },
+    "netbios": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,13}[a-z0-9])?$"
+    },
+    "mac": {
+      "type": "string",
+      "pattern": "^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"
+    },
+    "groupName": {
+      "type": "string",
+      "pattern": "^grp-[a-z0-9-]+$",
+      "maxLength": 256
+    },
+    "shareName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$"
+    },
+    "prefix11": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,11}[a-z0-9])?$"
+    },
+    "timeOfDay": {
+      "type": "string",
+      "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+    },
+    "loadBalancer": {
+      "type": "string",
+      "enum": [
+        "BreadthFirst",
+        "DepthFirst"
+      ]
+    },
     "hostPool": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "load_balancer", "max_session_limit", "start_vm_on_connect", "validation_environment", "session_host_count", "friendly_name"],
+      "required": [
+        "type",
+        "load_balancer",
+        "max_session_limit",
+        "start_vm_on_connect",
+        "validation_environment",
+        "session_host_count",
+        "friendly_name"
+      ],
       "properties": {
-        "type": { "type": "string", "enum": ["Pooled", "Personal"] },
-        "load_balancer": { "$ref": "#/$defs/loadBalancer" },
-        "max_session_limit": { "type": "integer", "minimum": 1, "maximum": 999999 },
-        "start_vm_on_connect": { "type": "boolean" },
-        "validation_environment": { "type": "boolean" },
-        "session_host_count": { "type": "integer", "minimum": 0, "maximum": 99 },
-        "friendly_name": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "preferred_app_group_type": { "type": "string", "enum": ["Desktop", "RailApplications"] }
+        "type": {
+          "type": "string",
+          "enum": [
+            "Pooled",
+            "Personal"
+          ]
+        },
+        "load_balancer": {
+          "$ref": "#/$defs/loadBalancer"
+        },
+        "max_session_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999
+        },
+        "start_vm_on_connect": {
+          "type": "boolean"
+        },
+        "validation_environment": {
+          "type": "boolean"
+        },
+        "session_host_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
+        },
+        "friendly_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "preferred_app_group_type": {
+          "type": "string",
+          "enum": [
+            "Desktop",
+            "RailApplications"
+          ]
+        },
+        "desktop_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
       }
     },
     "scalingSchedule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "days_of_week", "ramp_up_start_time", "peak_start_time", "ramp_down_start_time", "off_peak_start_time"],
+      "required": [
+        "name",
+        "days_of_week",
+        "ramp_up_start_time",
+        "peak_start_time",
+        "ramp_down_start_time",
+        "off_peak_start_time"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "days_of_week": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] } },
-        "ramp_up_start_time": { "$ref": "#/$defs/timeOfDay" },
-        "ramp_up_load_balancing": { "$ref": "#/$defs/loadBalancer" },
-        "ramp_up_minimum_hosts_percent": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "ramp_up_capacity_threshold_percent": { "type": "integer", "minimum": 1, "maximum": 100 },
-        "peak_start_time": { "$ref": "#/$defs/timeOfDay" },
-        "peak_load_balancing": { "$ref": "#/$defs/loadBalancer" },
-        "ramp_down_start_time": { "$ref": "#/$defs/timeOfDay" },
-        "ramp_down_load_balancing": { "$ref": "#/$defs/loadBalancer" },
-        "ramp_down_minimum_hosts_percent": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "ramp_down_capacity_threshold_percent": { "type": "integer", "minimum": 1, "maximum": 100 },
-        "ramp_down_force_logoff_users": { "type": "boolean" },
-        "ramp_down_wait_time_minutes": { "type": "integer", "minimum": 0, "maximum": 1440 },
-        "ramp_down_notification_message": { "type": "string", "maxLength": 512 },
-        "off_peak_start_time": { "$ref": "#/$defs/timeOfDay" },
-        "off_peak_load_balancing": { "$ref": "#/$defs/loadBalancer" }
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "days_of_week": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+              "Sunday"
+            ]
+          }
+        },
+        "ramp_up_start_time": {
+          "$ref": "#/$defs/timeOfDay"
+        },
+        "ramp_up_load_balancing": {
+          "$ref": "#/$defs/loadBalancer"
+        },
+        "ramp_up_minimum_hosts_percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "ramp_up_capacity_threshold_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "peak_start_time": {
+          "$ref": "#/$defs/timeOfDay"
+        },
+        "peak_load_balancing": {
+          "$ref": "#/$defs/loadBalancer"
+        },
+        "ramp_down_start_time": {
+          "$ref": "#/$defs/timeOfDay"
+        },
+        "ramp_down_load_balancing": {
+          "$ref": "#/$defs/loadBalancer"
+        },
+        "ramp_down_minimum_hosts_percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "ramp_down_capacity_threshold_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "ramp_down_force_logoff_users": {
+          "type": "boolean"
+        },
+        "ramp_down_wait_time_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "ramp_down_notification_message": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "off_peak_start_time": {
+          "$ref": "#/$defs/timeOfDay"
+        },
+        "off_peak_load_balancing": {
+          "$ref": "#/$defs/loadBalancer"
+        }
       }
     },
     "realm": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "join_type", "os", "friendly_name"],
+      "required": [
+        "enabled",
+        "join_type",
+        "os",
+        "friendly_name"
+      ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "join_type": { "type": "string", "enum": ["entra", "ad", "hybrid"] },
-        "os": { "type": "string", "enum": ["win11-multisession", "win11-single"] },
-        "friendly_name": { "type": "string", "minLength": 1, "maxLength": 64 }
+        "enabled": {
+          "type": "boolean"
+        },
+        "join_type": {
+          "type": "string",
+          "enum": [
+            "entra",
+            "ad",
+            "hybrid"
+          ]
+        },
+        "os": {
+          "type": "string",
+          "enum": [
+            "win11-multisession",
+            "win11-single"
+          ]
+        },
+        "friendly_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
       }
     }
   }

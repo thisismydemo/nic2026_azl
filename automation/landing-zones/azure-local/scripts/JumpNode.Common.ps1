@@ -2,6 +2,10 @@
 <#
 .SYNOPSIS
     Installs and verifies the pinned machine Node runtime and bundled npm.
+.DESCRIPTION
+    Function library dot-sourced by Install-JumpTools.ps1 (not run on its own). It proves the machine Node install from
+    the pinned manifest (MSI ProductCode, publisher, binary hash, npm version, machine PATH) and installs the verified
+    official MSI only through Invoke-JumpNodeSetup, whose ShouldProcess gate is driven by the entry script's -Execute switch.
 .NOTES
     Author: Kristopher Turner
     TaskReference: T-3.1.3b

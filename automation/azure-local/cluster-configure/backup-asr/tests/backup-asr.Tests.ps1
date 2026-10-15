@@ -95,12 +95,14 @@ Describe 'backup-asr specifics' {
             Mock Get-AzRecoveryServicesAsrProtectionContainer { [pscustomobject]@{ Name = 'example-container' } }
             Mock Get-AzRecoveryServicesAsrProtectionContainerMapping { [pscustomobject]@{ PolicyFriendlyName = 'example-asr-policy' } }
             Mock Get-AzRecoveryServicesAsrProtectableItem {
-                [pscustomobject]@{ OSDiskName = 'example-os-disk'; OS = 'Windows' }
+                # Azure Local names the Hyper-V VM '<resource name>-<guid>'
+                [pscustomobject]@{ FriendlyName = 'example-vm-00000000-0000-0000-0000-000000000000'; OSDiskName = 'example-os-disk'; OS = 'Windows'; Disks = @() }
+                [pscustomobject]@{ FriendlyName = 'protected-vm'; OSDiskName = 'example-os-disk'; OS = 'Windows'; Disks = @() }
             }
             $global:BackupAsrEnabled = $false
             Mock Get-AzRecoveryServicesAsrReplicationProtectedItem {
-                if ($FriendlyName -eq 'protected-vm') { [pscustomobject]@{ FriendlyName = $FriendlyName; SelectedTfoAzureNetworkId = 'another-network' } }
-                elseif ($global:BackupAsrEnabled) { [pscustomobject]@{ FriendlyName = $FriendlyName; SelectedTfoAzureNetworkId = $null } }
+                [pscustomobject]@{ Name = 'protected-vm'; FriendlyName = 'protected-vm'; SelectedTfoAzureNetworkId = 'another-network' }
+                if ($global:BackupAsrEnabled) { [pscustomobject]@{ Name = 'example-vm'; FriendlyName = 'example-vm-00000000-0000-0000-0000-000000000000'; SelectedTfoAzureNetworkId = $null } }
             }
             Mock New-AzRecoveryServicesAsrReplicationProtectedItem { $global:BackupAsrEnabled = $true } -RemoveParameterType 'ProtectableItem', 'ProtectionContainerMapping'
             Mock Set-AzRecoveryServicesAsrReplicationProtectedItem {} -RemoveParameterType 'InputObject'
@@ -114,7 +116,7 @@ Describe 'backup-asr specifics' {
         It 'uses HyperVToAzure for each unprotected VM and skips a protected VM' {
             & (Join-Path $script:scripts 'Enable-AsrReplication.ps1') @script:asrParameters -Execute | Out-Null
             Should -Invoke New-AzRecoveryServicesAsrReplicationProtectedItem -Times 1 -Exactly -ParameterFilter {
-                $HyperVToAzure -and $Name -eq 'example-vm' -and $OSDiskName -eq 'example-os-disk' -and $UseManagedDisk -eq 'true'
+                $HyperVToAzure -and $Name -eq 'example-vm' -and $RecoveryVmName -eq 'example-vm' -and $OSDiskName -eq 'example-os-disk' -and $UseManagedDisk -eq 'true'
             }
             # the new VM and the already-replicating VM (reconciled: its test network differs) both get the test network
             Should -Invoke Set-AzRecoveryServicesAsrReplicationProtectedItem -Times 2 -Exactly -ParameterFilter {
@@ -126,7 +128,7 @@ Describe 'backup-asr specifics' {
             $global:BackupAsrEnabled = $false
             Mock Get-AzRecoveryServicesAsrReplicationProtectedItem {
                 if ($global:BackupAsrEnabled) {
-                    [pscustomobject]@{ FriendlyName = $FriendlyName; SelectedTfoAzureNetworkId = $null; NicDetailsList = @([pscustomobject]@{ NicId = 'example-nic' }) }
+                    [pscustomobject]@{ Name = 'example-vm'; FriendlyName = 'example-vm-00000000-0000-0000-0000-000000000000'; SelectedTfoAzureNetworkId = $null; NicDetailsList = @([pscustomobject]@{ NicId = 'example-nic' }) }
                 }
             }
             $parameters = $script:asrParameters.Clone()
@@ -134,11 +136,22 @@ Describe 'backup-asr specifics' {
             & (Join-Path $script:scripts 'Enable-AsrReplication.ps1') @parameters -TestSubnetName 'example-test-subnet' `
                 -LogStorageAccountId '/subscriptions/example/storageAccounts/examplecache' -Size 'Standard_D2s_v5' -Tag @{ project = 'example' } -Execute | Out-Null
             Should -Invoke New-AzRecoveryServicesAsrReplicationProtectedItem -Times 1 -Exactly -ParameterFilter {
-                $LogStorageAccountId -eq '/subscriptions/example/storageAccounts/examplecache' -and $Size -eq 'Standard_D2s_v5' -and $RecoveryVmTag.project -eq 'example' -and $DiskTag.project -eq 'example'
+                $LogStorageAccountId -eq '/subscriptions/example/storageAccounts/examplecache' -and $RecoveryAzureStorageAccountId -eq $LogStorageAccountId -and $Size -eq 'Standard_D2s_v5' -and $RecoveryVmTag.project -eq 'example' -and $DiskTag.project -eq 'example'
             }
             Should -Invoke Set-AzRecoveryServicesAsrReplicationProtectedItem -Times 1 -Exactly -ParameterFilter {
                 $UpdateNic -eq 'example-nic' -and $TestNicSubnetName -eq 'example-test-subnet' -and $RecoveryNicSubnetName -eq 'example-recovery-subnet'
             }
+        }
+
+        It 'takes the OS from -OS and the single OS disk when the item reports neither' {
+            Mock Get-AzRecoveryServicesAsrProtectableItem {
+                [pscustomobject]@{ FriendlyName = 'example-vm-00000000-0000-0000-0000-000000000000'; OSDiskName = ''; OS = ''; Disks = @([pscustomobject]@{ Name = 'example-vm-OSDisk' }) }
+            }
+            $parameters = $script:asrParameters.Clone()
+            $parameters.VmName = @('example-vm')
+            { & (Join-Path $script:scripts 'Enable-AsrReplication.ps1') @parameters -Execute } | Should -Throw '*-OS*'
+            & (Join-Path $script:scripts 'Enable-AsrReplication.ps1') @parameters -OS Windows -Execute | Out-Null
+            Should -Invoke New-AzRecoveryServicesAsrReplicationProtectedItem -Times 1 -Exactly -ParameterFilter { $OS -eq 'Windows' -and $OSDiskName -eq 'example-vm-OSDisk' }
         }
 
         It 'throws when the requested policy has no container mapping' {
@@ -157,7 +170,7 @@ Describe 'backup-asr specifics' {
             Mock Set-AzRecoveryServicesAsrVaultContext {}
             Mock Get-AzRecoveryServicesAsrFabric { [pscustomobject]@{ Name = 'example-site' } }
             Mock Get-AzRecoveryServicesAsrProtectionContainer { [pscustomobject]@{ Name = 'example-container' } }
-            Mock Get-AzRecoveryServicesAsrReplicationProtectedItem { [pscustomobject]@{ FriendlyName = 'example-vm' } }
+            Mock Get-AzRecoveryServicesAsrReplicationProtectedItem { [pscustomobject]@{ Name = 'example-vm'; FriendlyName = 'example-vm-00000000-0000-0000-0000-000000000000' } }
             Mock Start-AzRecoveryServicesAsrTestFailoverJob { [pscustomobject]@{ Name = 'example-job' } }
             Mock Start-AzRecoveryServicesAsrTestFailoverCleanupJob { [pscustomobject]@{ Name = 'example-cleanup-job' } }
             Mock Get-AzRecoveryServicesAsrJob { [pscustomobject]@{ State = $global:BackupAsrJobState; Errors = $global:BackupAsrJobErrors } }
@@ -237,6 +250,7 @@ asr:
             Mock Invoke-AzRestMethod {
                 if ($Method -ne 'GET') { throw 'no write expected' }
                 if ($Path -match 'clusters/example-cluster\?') { return [pscustomobject]@{ StatusCode = 200; Content = '{"identity":{"principalId":"example-principal"}}' } }
+                if ($Path -match 'vaults/example-vault\?') { return [pscustomobject]@{ StatusCode = 200; Content = '{"identity":{"principalId":"example-vault-principal"}}' } }
                 if ($Path -match 'machines/') { return [pscustomobject]@{ StatusCode = 200; Content = '{"identity":{"principalId":"example-principal"}}' } }
                 if ($Path -match '(replicationFabrics|extendedInformation|extensions)/') { return [pscustomobject]@{ StatusCode = 404; Content = '' } }
                 [pscustomobject]@{ StatusCode = 200; Content = '{}' }
@@ -251,6 +265,7 @@ asr:
     Context 'Azure VM backup' {
         BeforeEach {
             Mock Set-AzContext {}
+            Mock Get-AzContext { [pscustomobject]@{ Subscription = [pscustomobject]@{ Id = 'other-subscription' }; Tenant = [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000000' } } }   # the CI runner has no Azure login
             Mock Get-AzRecoveryServicesVault { [pscustomobject]@{ ID = 'example-vault-id' } }
             Mock Get-AzRecoveryServicesBackupProtectionPolicy { [pscustomobject]@{ Name = 'example-backup-policy' } }
             Mock Get-AzRecoveryServicesBackupItem {
@@ -294,7 +309,7 @@ asr:
             Mock Get-AzRecoveryServicesAsrFabric { [pscustomobject]@{ Name = 'example-site' } }
             Mock Get-AzRecoveryServicesAsrProtectionContainer { [pscustomobject]@{ Name = 'example-container' } }
             Mock Get-AzRecoveryServicesAsrReplicationProtectedItem {
-                [pscustomobject]@{ ReplicationHealth = $global:BackupAsrReplicationHealth; ProtectionState = 'Protected' }
+                [pscustomobject]@{ Name = 'example-vm'; FriendlyName = 'example-vm-00000000-0000-0000-0000-000000000000'; ReplicationHealth = $global:BackupAsrReplicationHealth; ProtectionState = 'Protected' }
             }
             Mock Get-AzRecoveryServicesBackupItem { [pscustomobject]@{ Name = 'example-jump' } }
             Mock Get-AzRecoveryServicesBackupRecoveryPoint { $global:BackupAsrRecoveryPoints } -RemoveParameterType 'Item'

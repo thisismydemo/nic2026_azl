@@ -55,7 +55,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClusterDeploy.Common.ps1')
 # SSH host key pinning (Get-NodePrepSshTrustStore / Open-NodePrepSshSession), shared with node preparation.
-. (Join-Path $PSScriptRoot '..\..\os-provisioning\scripts\NodePreparation.Common.ps1')
+. (Join-Path $PSScriptRoot '..\..\..\shared\scripts\SshHostKeyPinning.Common.ps1')
 
 $inputs = Get-ClusterDeployInputs -InputFile $InputFile
 $seed = if ($SeedNodeName) { @($inputs.nodes | Where-Object { $_.name -eq $SeedNodeName }) } else { @($inputs.nodes[0]) }

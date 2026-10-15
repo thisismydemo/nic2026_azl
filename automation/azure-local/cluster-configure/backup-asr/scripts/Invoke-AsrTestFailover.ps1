@@ -68,7 +68,10 @@ if (-not $fabric) {
 
 $item = $null
 foreach ($container in @(Get-AzRecoveryServicesAsrProtectionContainer -Fabric $fabric)) {
-    $item = Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $container -FriendlyName $VmName
+    # Matches the protected item's name, or the Azure Local Hyper-V name '<resource name>-<guid>'.
+    $pattern = '^' + [regex]::Escape($VmName) + '-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    $item = @(Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $container) |
+        Where-Object { $_.Name -eq $VmName -or $_.FriendlyName -eq $VmName -or $_.FriendlyName -match $pattern } | Select-Object -First 1
     if ($item) {
         break
     }

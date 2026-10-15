@@ -39,7 +39,7 @@ host_pools:
     start_vm_on_connect: true
     validation_environment: false
     session_host_count: 2
-    friendly_name: Asgard
+    friendly_name: Azure desktop pool
     preferred_app_group_type: Desktop
   azl:
     type: Pooled
@@ -48,7 +48,7 @@ host_pools:
     start_vm_on_connect: false
     validation_environment: false
     session_host_count: 2
-    friendly_name: Midgard
+    friendly_name: Azure Local desktop pool
     preferred_app_group_type: Desktop
   hybrid:
     type: Pooled
@@ -57,7 +57,7 @@ host_pools:
     start_vm_on_connect: false
     validation_environment: false
     session_host_count: 2
-    friendly_name: Outer realms
+    friendly_name: Hybrid desktop pool
     preferred_app_group_type: Desktop
 rdp_properties: "enablerdsaadauth:i:1;redirectclipboard:i:1;drivestoredirect:s:;audiomode:i:0;audiocapturemode:i:1;camerastoredirect:s:;redirectprinters:i:0;redirectsmartcards:i:0;redirectwebauthn:i:1;use multimon:i:1;dynamic resolution:i:1;networkautodetect:i:1;bandwidthautodetect:i:1;autoreconnection enabled:i:1"
 scaling_plan:
@@ -78,7 +78,7 @@ scaling_plan:
       ramp_down_capacity_threshold_percent: 60
       ramp_down_force_logoff_users: false
       ramp_down_wait_time_minutes: 30
-      ramp_down_notification_message: The realm is closing; save your work.
+      ramp_down_notification_message: This desktop is closing for the night; save your work.
       off_peak_start_time: "20:00"
       off_peak_load_balancing: DepthFirst
 
@@ -100,10 +100,10 @@ group_object_ids:
   avd_devices: 00000000-0000-0000-0000-000000000000
   lab_operators: 00000000-0000-0000-0000-000000000000
 demo_users:
-  - { upn: thor@contoso.com, display_name: Thor Odinson, realm: azure }
-  - { upn: odin@contoso.com, display_name: Odin Allfather, realm: azl }
-  - { upn: freya@contoso.com, display_name: Freya Vanadis, realm: hybrid }
-  - { upn: heimdall@contoso.com, display_name: Heimdall Gatekeeper, realm: admin }
+  - { upn: user1@contoso.com, display_name: Demo User 1, realm: azure }
+  - { upn: user2@contoso.com, display_name: Demo User 2, realm: azl }
+  - { upn: user3@contoso.com, display_name: Demo User 3, realm: hybrid }
+  - { upn: admin1@contoso.com, display_name: Demo Admin, realm: admin }
 ca_policy_name: CA-iic-nic26-avd   # prefix: New-AvdConditionalAccess.ps1 appends -mfa-service and -mfa-sso
 ca_mode: reportOnly
 
@@ -173,9 +173,9 @@ dhcp_reservations:
   - { hostname: nic26-avd-hv02, mac: 00-15-5D-26-15-02, ip: 192.168.120.192, vlan_id: 120 }
 
 realms:
-  azure:  { enabled: true, join_type: entra, os: win11-multisession, friendly_name: Asgard }
-  azl:    { enabled: true, join_type: entra, os: win11-multisession, friendly_name: Midgard }
-  hybrid: { enabled: true, join_type: entra, os: win11-single, friendly_name: Outer realms }
+  azure:  { enabled: true, join_type: entra, os: win11-multisession, friendly_name: Azure desktop pool }
+  azl:    { enabled: true, join_type: entra, os: win11-multisession, friendly_name: Azure Local desktop pool }
+  hybrid: { enabled: true, join_type: entra, os: win11-single, friendly_name: Hybrid desktop pool }
 patch_channel: intune
 
 avm_versions:

@@ -3,6 +3,8 @@
 param()
 BeforeAll {
     . (Join-Path $PSScriptRoot '../scripts/Install-JumpTools.ps1')
+    # Pester can only mock a command that exists; CI runners have no winget.
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { function winget { throw 'winget is not installed; the test must mock it.' } }
 }
 Describe 'WinGet machine inventory' {
     It 'queries exact id/source in machine scope and parses the returned version' {
@@ -24,6 +26,10 @@ Describe 'WinGet machine inventory' {
     }
     It 'does not accept output from an unsuccessful inventory command' {
         Mock winget { $global:LASTEXITCODE = 1; 'Example  Test.Package  1.2.3  winget' }
+        # The failed CLI query falls back to the pinned machine inventory, which needs the machine-wide Microsoft.WinGet.Client
+        # module; it is mocked as empty so the result does not depend on the module being installed on the test machine.
+        Mock Get-JumpClientInstalledVersion { $null }
         Get-InstalledWingetVersion -Id 'Test.Package' -Source 'winget' | Should -BeNullOrEmpty
+        Should -Invoke Get-JumpClientInstalledVersion -Times 1 -Exactly
     }
 }

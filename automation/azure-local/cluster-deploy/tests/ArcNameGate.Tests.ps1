@@ -11,6 +11,10 @@ BeforeAll {
     $script:solutionRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
     . (Join-Path $script:solutionRoot 'scripts\ClusterDeploy.Common.ps1')
     $script:gateScript = Join-Path $script:solutionRoot 'scripts\Test-ClusterDeployArcNameGate.ps1'
+    # The CI runner has no Posh-SSH: Pester can only mock commands that exist, so the absent ones get inert stubs.
+    foreach ($cmd in 'New-SSHSession', 'Remove-SSHSession', 'Invoke-SSHCommand', 'Add-SSHTrustedHost', 'New-SSHMemoryTrustedHostStore') {
+        if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { Set-Item -Path "Function:\global:$cmd" -Value { throw "$cmd stub: Posh-SSH is not installed here" } }
+    }
 
     $script:buggy = @'
 function Get-Helper { $env:COMPUTERNAME }

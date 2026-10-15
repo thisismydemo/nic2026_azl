@@ -723,6 +723,13 @@
               "target_vm_size": {
                 "type": "string",
                 "pattern": "^Standard_[A-Za-z0-9_]+$"
+              },
+              "os_type": {
+                "enum": [
+                  "Windows",
+                  "Linux"
+                ],
+                "description": "Used when the protectable item reports no operating system."
               }
             }
           }
@@ -737,6 +744,10 @@
           "type": "string"
         }
       }
+    },
+    "remoting_credential_base": {
+      "type": "string",
+      "description": "Ops-vault secret base (<base>-username/-password) the demo scripts use for PowerShell remoting to a Local Identity cluster; empty = the operator session"
     },
     "log_analytics_workspace_id": {
       "$ref": "#/$defs/resourceIdOrEmpty",

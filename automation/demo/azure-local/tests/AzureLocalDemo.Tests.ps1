@@ -496,9 +496,9 @@ Describe 'Guest network: gateway from DHCP only, no in-guest route (owner, 12 Oc
         $script:HelperPath = Join-Path $script:ScriptsRoot '..' '..' '..' 'shared' 'scripts' 'NIC26.GuestNetwork.ps1'
         $script:Helper = Get-Content -LiteralPath $script:HelperPath -Raw
         $repo = Join-Path $script:ScriptsRoot '..' '..' '..' '..'
+        # the AVD session-host build may add the guest default route when DHCP gives none (owner, 14 Oct; guest_default_route, F-1), so it is not held to this rule
         $script:Others = @(
-            (Join-Path $repo 'automation' 'azure-local' 'workloads' 'sofs' 'scripts' 'New-SofsVm.ps1'),
-            (Join-Path $repo 'automation' 'avd' 'session-hosts-azure-local' 'scripts' 'Invoke-AzlSessionHostBuild.ps1')) | ForEach-Object { Get-Content -LiteralPath $_ -Raw }
+            (Join-Path $repo 'automation' 'azure-local' 'workloads' 'sofs' 'scripts' 'New-SofsVm.ps1')) | ForEach-Object { Get-Content -LiteralPath $_ -Raw }
     }
     It 'no VM build script or the helper adds a route' {
         foreach ($t in @($script:Iic, $script:Life, $script:Helper) + $script:Others) { $t | Should -Not -Match 'New-NetRoute' }

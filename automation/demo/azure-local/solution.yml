@@ -10,6 +10,7 @@ depends_on: [lz-azure-local, cluster-deploy, cluster-configure, demo-shared]
 
 inputs:
   - { name: cluster_name,              type: string, description: "Cluster name (remoting target is <cluster_name>.<identity.dns_zone>)", required: true, default: null, source: environment }
+  - { name: remoting_credential_base,  type: string, description: "Ops-vault secret base (<base>-username/-password) used for PowerShell remoting to a Local Identity cluster; empty = the operator session", required: false, default: null, source: environment }
   - { name: identity,                  type: map,    description: "identity.dns_zone for the cluster FQDN", required: true, default: null, source: environment }
   - { name: nodes,                     type: list,   description: "Nodes with name and management_ip (WinRM targets)", required: true, default: null, source: environment }
   - { name: intents,                   type: list,   description: "Network ATC intents; the Compute intent's first adapter is the default drift target", required: true, default: null, source: environment }

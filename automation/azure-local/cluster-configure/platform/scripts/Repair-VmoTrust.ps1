@@ -43,7 +43,7 @@ Import-Module (Join-Path $PSScriptRoot '..\..\..\..\shared\powershell\NIC26.Auto
 $cfgArgs = @{ Scope = 'azure-local' }; if ($EnvironmentPath) { $cfgArgs.Path = $EnvironmentPath }
 $v = (Get-NIC26Config @cfgArgs).values
 Disable-AzContextAutosave -Scope Process | Out-Null
-$null = Set-AzContext -Tenant $v.tenant_id -Subscription $v.subscription_id -Scope Process -WarningAction SilentlyContinue
+$null = Set-AzContext -Tenant $v.tenant_id -Subscription $v.subscription_id -Scope Process -WarningAction SilentlyContinue -WhatIf:$false
 $first = @($v.nodes)[0]; $second = @($v.nodes)[1]
 # Cluster admin from the identity block's keyvault:// references (G5: no secret names in code)
 function Split-KvRef([string]$Ref) { if ($Ref -notmatch '^keyvault://([^/]+)/(.+)$') { throw "Not a keyvault:// reference: $Ref" }; @{ Vault = $Matches[1]; Name = $Matches[2] } }
@@ -140,7 +140,7 @@ if ($base.PoolKids -notcontains $ExpectedKid) { Stop-Run "shared signing pool ha
 foreach ($st in $run) {
     switch ($st) {
         'PreCheck' {
-            Invoke-Node $first { Get-ClusterNode | ForEach-Object { "node $($_.Name) $($_.State)" }; Get-ClusterSharedVolume | ForEach-Object { "csv $($_.Name) $($_.State)" }; Get-Service vmoService -ComputerName . | ForEach-Object { "vmoService $($_.Status)" } } | ForEach-Object { Step $_ }
+            Invoke-Node $first { Get-ClusterNode | ForEach-Object { "node $($_.Name) $($_.State)" }; Get-ClusterSharedVolume | ForEach-Object { "csv $($_.Name) $($_.State)" }; Get-Service vmoService | ForEach-Object { "vmoService $($_.Status)" } } | ForEach-Object { Step $_ }
             foreach ($n in $first, $second) { Step "$($n.name) TLS :50052 chains to shared root: $(Get-NodeLeafOk $n $base.CaCert)" }
         }
         'Evidence' {

@@ -9,7 +9,9 @@ param()
 BeforeDiscovery {
     $script:ScriptDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts'
     $script:AllScripts = @(Get-ChildItem $script:ScriptDir -Filter '*.ps1' | Select-Object -ExpandProperty FullName)
-    $script:StateChanging = @($script:AllScripts | Where-Object { (Split-Path $_ -Leaf) -notin @('Test-LandingZone.ps1', 'Test-JumpTools.ps1') })
+    # *.Common.ps1 are dot-sourced function libraries (their state-changing functions carry SupportsShouldProcess); the
+    # entry script Install-JumpTools.ps1 carries the -Execute gate and is checked here.
+    $script:StateChanging = @($script:AllScripts | Where-Object { (Split-Path $_ -Leaf) -notin @('Test-LandingZone.ps1', 'Test-JumpTools.ps1') -and (Split-Path $_ -Leaf) -notlike '*.Common.ps1' })
 }
 
 BeforeAll {
@@ -43,7 +45,8 @@ BeforeAll {
     }
     Reset-LzInventory
     function Get-AzContext { [pscustomobject]@{ Subscription = [pscustomobject]@{ Id = $global:LzTestSub }; Tenant = [pscustomobject]@{ Id = $global:LzTestSub }; Account = [pscustomobject]@{ Id = 'user1@contoso.com' } } }
-    function Set-AzContext { param($SubscriptionId, [Parameter(ValueFromRemainingArguments)] $Rest) }
+    function Set-AzContext { [CmdletBinding(SupportsShouldProcess)] param($SubscriptionId, $Subscription, $Tenant, [Parameter(ValueFromRemainingArguments)] $Rest) }   # scripts call it with -WhatIf:$false
+    function Get-AzSubscription { param($SubscriptionId, [Parameter(ValueFromRemainingArguments)] $Rest) [pscustomobject]@{ Id = $SubscriptionId; TenantId = $global:LzTestSub } }   # the orchestrator resolves the subscription's live tenant
     function Get-AzResource {
         [CmdletBinding()]
         param($ResourceType, $ResourceGroupName, $ResourceId, $ApiVersion, [Parameter(ValueFromRemainingArguments)] $Rest)
@@ -76,12 +79,14 @@ BeforeAll {
     function Get-AzRoleManagementPolicyAssignment { [CmdletBinding()] param($Scope) [pscustomobject]@{ RoleDefinitionId = '11111111-1111-1111-1111-111111111111'; PolicyId = "$Scope/providers/Microsoft.Authorization/roleManagementPolicies/test-policy" } }
     function Get-AzRoleManagementPolicy { [CmdletBinding()] param($Scope, $Name) [pscustomobject]@{ Rule = @([pscustomobject]@{ Id = 'Expiration_Admin_Eligibility'; MaximumDuration = 'P90D'; IsExpirationRequired = $true }) } }
     function Invoke-NIC26WithRetry { param([scriptblock]$ScriptBlock, $MaxMinutes, $Activity) & $ScriptBlock }
+    function Get-MgContext { [pscustomobject]@{ Account = 'user1@contoso.com'; TenantId = $global:LzTestSub; Scopes = @('Group.ReadWrite.All') } }   # an existing Graph context, so the script never reaches Connect-MgGraph
     function Get-MgGroup { param($Filter, $ConsistencyLevel, $CountVariable) }
     function New-MgGroup { param($DisplayName, $MailEnabled, $MailNickname, $SecurityEnabled, $Description) [pscustomobject]@{ Id = '22222222-2222-2222-2222-222222222222' } }
     function New-AzSubscriptionDeployment { param($Name, $TemplateFile, $TemplateParameterFile, $enabled_stages, [switch]$WhatIf, [Parameter(ValueFromRemainingArguments)] $Rest) [pscustomobject]@{ WhatIf = [bool]$WhatIf; Stages = $enabled_stages } }
     function Invoke-NIC26ArmDeployment { param($SubscriptionId, $Name, $Location, $TemplateFile, $ParameterFile, $ParameterOverrides, [switch]$Preview) }
     function New-AzManagementGroupDeployment { param($Name, $ManagementGroupId, $TemplateFile, [switch]$WhatIf, [Parameter(ValueFromRemainingArguments)] $Rest) }
-    function az { param([Parameter(ValueFromRemainingArguments)] $Rest) $global:LASTEXITCODE = 0; if ($Rest -contains '--outfile') { Set-Content -Path $Rest[[array]::IndexOf($Rest, '--outfile') + 1] -Value '{}' } }
+    # Plain function on purpose: a [Parameter()] attribute would make it an advanced function, where the CLI's '-o json' is ambiguous with -OutVariable/-OutBuffer.
+    function az { $global:LASTEXITCODE = 0; if ($args -contains '--outfile') { Set-Content -Path $args[[array]::IndexOf($args, '--outfile') + 1] -Value '{}' } }
 }
 
 AfterAll {
