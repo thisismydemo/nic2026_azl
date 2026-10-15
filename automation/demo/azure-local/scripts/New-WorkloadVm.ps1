@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Seeds the IIC workload VMs (app and data tiers) on the cluster as Azure Local VMs with az stack-hci-vm, from
+    Seeds the workload VMs (app and data tiers) on the cluster as Azure Local VMs with az stack-hci-vm, from
     environment/azure-local/environment.yml (workload_vms). Plan T-5.5.2; storage-design.md section 5 VM inventory.
 .DESCRIPTION
     Per VM, in Microsoft's order (Learn: Create network interfaces; Create Azure Local VMs enabled by Azure Arc):
@@ -19,7 +19,7 @@
     missing pair is generated in memory (CSPRNG) and written to the vault - the password is never printed.
     The az CLI is run through its own Python (not az.cmd) so cmd.exe never parses the password; the password is still on
     that child process's command line for the duration of the call (same residual as the documented CLI usage).
-    No domain join: the design names none for the IIC estate. Azure PowerShell is out of scope for Azure Local VM
+    No domain join: the design names none for these workload VMs. Azure PowerShell is out of scope for Azure Local VM
     resources on this build; Az.KeyVault is used for the vault only.
     Stage GuestNetwork (part of All, after Vm): the guest must get its default gateway from the logical network's DHCP;
     no in-guest route is added (owner, 12 Oct 2026). The stage reads each running guest over PowerShell Direct from the
@@ -31,12 +31,15 @@
     only when DHCP has supplied the gateway.
 .PARAMETER Stage
     All (default: Vm then GuestNetwork), Vm, GuestNetwork or RemovePersistentRoute.
+.PARAMETER NewAdminUsername
+    Local administrator user name written to the vault with -CreateMissingSecret when the username secret does not exist yet.
+    Default: workload_vms.local_admin_username in the environment file; the run stops when neither is set.
 .PARAMETER Name
     Limit the run to these VM resource names (default: every workload_vms.vms entry).
 .EXAMPLE
-    .\New-IicWorkloadVm.ps1                                   # plan only
-    .\New-IicWorkloadVm.ps1 -Execute -CreateMissingSecret     # create
-    .\New-IicWorkloadVm.ps1 -Stage GuestNetwork -Execute      # DHCP gateway check + guest management on the existing VMs
+    .\New-WorkloadVm.ps1                                   # plan only
+    .\New-WorkloadVm.ps1 -Execute -CreateMissingSecret     # create
+    .\New-WorkloadVm.ps1 -Stage GuestNetwork -Execute      # DHCP gateway check + guest management on the existing VMs
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Private helpers inside a script that is gated as a whole (-Execute or -WhatIf); they never run on their own.')]
 [CmdletBinding()]
@@ -45,7 +48,7 @@ param(
     [string]$EnvironmentFile = (Join-Path $PSScriptRoot '..\..\..\..\environment\azure-local\environment.yml'),
     [string]$SharedEnvironmentFile = (Join-Path $PSScriptRoot '..\..\..\..\environment\shared\environment.yml'),
     [string[]]$Name,
-    [string]$NewAdminUsername = 'iicadmin',
+    [string]$NewAdminUsername,
     [switch]$CreateMissingSecret,
     [switch]$Execute,
     [ValidateRange(1, 120)][int]$GatewayTimeoutMinutes = 15,
@@ -61,6 +64,8 @@ $shared = Get-Content -LiteralPath $SharedEnvironmentFile -Raw | ConvertFrom-Yam
 $sub = [string]$envy.subscription_id
 $rg = [string]$envy.vm_management.resource_group
 $location = [string]$shared.location
+# Workload tag value: workload_vms.workload_tag, else the shared tags' workload, else azure-local (no organisation literal here).
+$workloadTag = if ($envy.workload_vms.ContainsKey('workload_tag') -and $envy.workload_vms.workload_tag) { [string]$envy.workload_vms.workload_tag } elseif ($shared.tags.ContainsKey('workload')) { [string]$shared.tags.workload } else { 'azure-local' }
 $cl = "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.ExtendedLocation/customLocations/$($envy.vm_management.custom_location)"
 $hci = "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.AzureStackHCI"
 
@@ -89,7 +94,7 @@ function Get-State([string]$id) {
 }
 function Set-Tag([string]$id, [string]$tier, [string]$purpose) {
     $t = @(); foreach ($k in $shared.tags.Keys) { $t += "$k=$($shared.tags[$k])" }
-    $t += 'workload=iic', "tier=$tier", 'managed-by=script'
+    $t += "workload=$workloadTag", "tier=$tier", 'managed-by=script'
     if ($purpose) { $t += "purpose=$purpose" }
     $null = Invoke-WlAz (@('tag', 'update', '--resource-id', $id, '--operation', 'Merge', '--tags') + $t)
 }
@@ -133,8 +138,11 @@ function Get-AdminCredential {
     if ($user -and $pass) { return @{ User = $user; Pass = $pass } }
     if (-not $CreateMissingSecret) { throw "Local administrator secrets $($u.Name)/$($p.Name) missing in $($u.Vault); rerun with -CreateMissingSecret." }
     $expires = (Get-Date).ToUniversalTime().AddDays(90)
-    $tag = @{ project = [string]$shared.tags.project; workload = 'iic'; 'managed-by' = 'script' }
-    if (-not $user) { $user = $NewAdminUsername; $null = Set-AzKeyVaultSecret -VaultName $u.Vault -Name $u.Name -SecretValue (ConvertTo-Secure $user) -Expires $expires -Tag $tag -ContentType 'username' }
+    $tag = @{ project = [string]$shared.tags.project; workload = $workloadTag; 'managed-by' = 'script' }
+    if (-not $user) {
+        $user = if ($NewAdminUsername) { $NewAdminUsername } elseif ($envy.workload_vms.ContainsKey('local_admin_username') -and $envy.workload_vms.local_admin_username) { [string]$envy.workload_vms.local_admin_username } else { throw 'The username secret does not exist yet: pass -NewAdminUsername or set workload_vms.local_admin_username in the environment file.' }
+        $null = Set-AzKeyVaultSecret -VaultName $u.Vault -Name $u.Name -SecretValue (ConvertTo-Secure $user) -Expires $expires -Tag $tag -ContentType 'username'
+    }
     if (-not $pass) { $pass = New-Password; $null = Set-AzKeyVaultSecret -VaultName $p.Vault -Name $p.Name -SecretValue (ConvertTo-Secure $pass) -Expires $expires -Tag $tag -ContentType 'password' }
     L "local administrator pair written to $($u.Vault) ($($u.Name), $($p.Name)); value not shown"
     return @{ User = $user; Pass = $pass }

@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Builds the sync server for the hybrid identities (D-050): an Azure VM in the nic26 management subnet, AD-joined. Never on
+    Builds the sync server for the hybrid identities (D-050): an Azure VM in the management subnet, AD-joined. Never on
     a domain controller (owner, 12 Oct 2026; Learn: member server, Tier 0 asset). Default is a dry run; -Execute applies.
 .DESCRIPTION
     Without -Execute the script reads the configuration, reports the steps it would perform and returns before any Azure
@@ -43,7 +43,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '..\..\..\shared\powershell\NIC26.Automation') -Force
 $cfgArgs = @{ Scope = 'azure-local' }; if ($EnvironmentPath) { $cfgArgs.Path = $EnvironmentPath }
-$v = (Get-NIC26Config @cfgArgs).values
+$config = Get-NIC26Config @cfgArgs
+$v = $config.values
+$ctx = Get-NIC26NamingContext -Config $config
 $hi = $v.hybrid_identity; $ss = $hi.sync_server
 $TenantId = $v.tenant_id; $SubscriptionId = $v.subscription_id; $identitySubId = $v.subscriptions.identity
 $Location = $v.location; $DomainName = $v.ad_domain_fqdn; $OpsVault = $v.kv_ops_name
@@ -51,7 +53,7 @@ $ResourceGroupName = $ss.resource_group; $VmName = $ss.vm_name; $ComputerName = 
 $PrivateIp = $ss.private_ip; $VnetResourceGroup = $ss.vnet_resource_group; $VnetName = $ss.vnet_name; $SubnetName = $ss.subnet_name
 $MgmtNsgName = $ss.mgmt_nsg_name; $IdentityNsgResourceGroup = $hi.dc_resource_group; $IdentityNsgName = $hi.identity_nsg_name
 $dcIp = @($v.identity_dc_ips)[0]
-$tags = @{ project = 'nic26'; environment = 'demo'; workload = 'identity'; role = 'entra-connect-sync'; 'managed-by' = 'script' }
+$tags = @{} + $ctx.Tags + @{ workload = 'identity'; role = 'entra-connect-sync'; 'managed-by' = 'script' }
 function Step($m) { "$(Get-Date -Format HH:mm:ss) $m" }
 if (-not $Execute) {
     Write-Information "New-EntraConnectServer: would ensure the local admin secrets in $OpsVault, the NSG rules on $MgmtNsgName and $IdentityNsgName, the AD OU tree (Set-HybridIdentityAd.ps1), the VM $VmName ($VmSize, $PrivateIp) in $ResourceGroupName, its domain join into OU=$($ss.ou) and the Entra Connect install (what-if; pass -Execute to apply)." -InformationAction Continue
@@ -60,7 +62,7 @@ if (-not $Execute) {
 
 # 1. local admin secret ----------------------------------------------------------------------------------------------
 $null = Set-AzContext -Subscription $SubscriptionId -Tenant $TenantId -WarningAction SilentlyContinue -WhatIf:$false
-$kvTags = @{ project = 'nic26'; purpose = 'entra-connect-sync'; 'managed-by' = 'script' }
+$kvTags = @{ project = $ctx.Project; purpose = 'entra-connect-sync'; 'managed-by' = 'script' }
 $userSecret = $ss.admin_username_secret; $pwSecret = $ss.admin_password_secret
 if (-not (Get-AzKeyVaultSecret -VaultName $OpsVault -Name $userSecret -ErrorAction SilentlyContinue)) {
     $null = Set-AzKeyVaultSecret -VaultName $OpsVault -Name $userSecret -SecretValue (ConvertTo-SecureString $(if ($AdminUserName) { $AdminUserName } else { throw 'First run: pass -AdminUserName (the vault has no admin username secret yet).' }) -AsPlainText -Force) -Tag $kvTags
@@ -162,7 +164,7 @@ $wiz = 'C:\Program Files\Microsoft Azure Active Directory Connect\AzureADConnect
 'Entra reachability: ' + ((Test-NetConnection -ComputerName login.microsoftonline.com -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded)
 '@
 $install = $install.Replace('__MSI_URL__', $ss.entra_connect_msi_url).Replace('__DC_IP__', $dcIp)
-$null = Set-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VmName -RunCommandName 'nic26-entra-connect-install' -Location $Location -SourceScript $install -AsyncExecution:$false -TimeoutInSecond 1800
-$iv = (Get-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VmName -RunCommandName 'nic26-entra-connect-install' -Expand InstanceView).InstanceView
+$null = Set-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VmName -RunCommandName "$($ctx.Token)-entra-connect-install" -Location $Location -SourceScript $install -AsyncExecution:$false -TimeoutInSecond 1800
+$iv = (Get-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VmName -RunCommandName "$($ctx.Token)-entra-connect-install" -Expand InstanceView).InstanceView
 Step "Entra Connect install: $($iv.ExecutionState) exit $($iv.ExitCode)"; $iv.Output; if ($iv.Error) { 'ERRORS:'; $iv.Error }
-$null = Remove-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VmName -RunCommandName 'nic26-entra-connect-install'
+$null = Remove-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VmName -RunCommandName "$($ctx.Token)-entra-connect-install"

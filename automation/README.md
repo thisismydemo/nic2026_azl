@@ -31,12 +31,13 @@ Import-Module .\automation\shared\powershell\NIC26.Automation\NIC26.Automation.p
 $cfg = Get-NIC26Config -Scope azure-local            # validates environment/<scope>/*.yml against the schemas
 ConvertTo-NIC26BicepParam -Solution <solution folder or name> -Config $cfg -Execute
 ConvertTo-NIC26TfVars     -Solution <solution folder or name> -Config $cfg -Execute
+# Terraform state: New-NIC26TerraformBackendConfig -Solution <solution folder or name> -Config $cfg -Execute writes the -backend-config file from terraform_backend
 # then the solution's own README: what-if or plan, review, deploy with -Execute, run its tests
 ```
 
 Two things to know about the loop:
 
-- **Tuning inputs.** Optional inputs that are not keys of the environment schema (for example the monitoring alert thresholds, the policy `enforcement_mode` and the PIM assignment list) keep the default in the solution's `solution.yml`; change them there. Everything an environment file can set is in `shared/schemas`.
+- **Tuning inputs.** Optional inputs (for example the monitoring alert thresholds, the policy `enforcement_mode`, the PIM assignment list, the cluster network and security settings and the Key Vault secret names of the deployment) have a default in the solution's `solution.yml`; set them in your environment file to change them. Each one is an optional key of the environment schema with a commented example in `shared/examples`; everything an environment file can set is in `shared/schemas`.
 - **Entry points outside the loop.** `azure-local/cluster-configure/gpu`, `azure-local/cluster-configure/sdn-network` and `shared/security` have their own README and scripts and no `solution.yml`; follow the README of each.
 
 ## Your configuration

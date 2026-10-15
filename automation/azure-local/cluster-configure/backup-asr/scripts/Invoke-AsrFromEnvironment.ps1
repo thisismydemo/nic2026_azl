@@ -55,7 +55,7 @@ $common = @{ SubscriptionId = $sub; VaultResourceGroup = [string]$asr.vault_reso
 function L([string]$m) { $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $m"; $line; if ($LogFile) { Add-Content -LiteralPath $LogFile -Value $line } }
 function Get-TagSet {
     $t = @{}; foreach ($k in $shared.tags.Keys) { $t[$k] = [string]$shared.tags[$k] }
-    $t.workload = 'iic'; $t.'managed-by' = 'script'; $t.purpose = 'asr-demo'
+    if (-not $t.ContainsKey('workload')) { $t.workload = 'azure-local' }; $t.'managed-by' = 'script'; $t.purpose = 'asr-demo'
     return $t
 }
 function Get-ProtectedItemList {

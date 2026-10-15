@@ -491,7 +491,7 @@ Describe 'Invoke-ArcVmLifecycleDemo.ps1 (outline 4.4)' {
 
 Describe 'Guest network: gateway from DHCP only, no in-guest route (owner, 12 Oct 2026)' {
     BeforeAll {
-        $script:Iic = Get-Content -LiteralPath (Join-Path $script:ScriptsRoot 'New-IicWorkloadVm.ps1') -Raw
+        $script:Iic = Get-Content -LiteralPath (Join-Path $script:ScriptsRoot 'New-WorkloadVm.ps1') -Raw
         $script:Life = Get-Content -LiteralPath (Join-Path $script:ScriptsRoot 'Invoke-ArcVmLifecycleDemo.ps1') -Raw
         $script:HelperPath = Join-Path $script:ScriptsRoot '..' '..' '..' 'shared' 'scripts' 'NIC26.GuestNetwork.ps1'
         $script:Helper = Get-Content -LiteralPath $script:HelperPath -Raw

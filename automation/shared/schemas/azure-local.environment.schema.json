@@ -321,6 +321,13 @@
     "jump_admin_username_secret": {
       "$ref": "#/$defs/secretRef"
     },
+    "jump_admin_username": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+      "description": "Local administrator name written to the ops vault (jump_admin_username_secret) the first time Invoke-LzAzureLocalDeploy.ps1 generates the jump credential. Not Administrator. Optional once the secret exists."
+    },
     "jump_admin_password_secret": {
       "$ref": "#/$defs/secretRef"
     },
@@ -1484,7 +1491,7 @@
     "workload_vms": {
       "type": "object",
       "additionalProperties": false,
-      "description": "IIC workload VMs seeded on the cluster (storage-design.md section 5 VM inventory; T-5.5.2).",
+      "description": "Workload VMs seeded on the cluster (the app and data tiers of the demo estate).",
       "required": [
         "local_admin_username_secret",
         "local_admin_password_secret",
@@ -1496,6 +1503,18 @@
         },
         "local_admin_password_secret": {
           "$ref": "#/$defs/secretRef"
+        },
+        "local_admin_username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "description": "User name written to the vault when the username secret does not exist yet (New-WorkloadVm.ps1 -CreateMissingSecret). Optional."
+        },
+        "workload_tag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Value of the workload tag on the VMs, NICs and disks. Optional; default is the shared tags workload value, else azure-local."
         },
         "vms": {
           "type": "array",
@@ -2454,6 +2473,297 @@
             }
           }
         }
+      }
+    },
+    "pim_assignments": {
+      "type": "array",
+      "description": "Eligible PIM rows (group key from entra_groups, built-in role name) at subscription scope. Optional; the access-pim solution default applies when absent.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "group",
+          "role"
+        ],
+        "properties": {
+          "group": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      }
+    },
+    "asr_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Site Recovery replication policy tuning. Optional; solution defaults apply to every key left out.",
+      "properties": {
+        "recovery_point_retention_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 720
+        },
+        "replication_frequency_seconds": {
+          "type": "integer",
+          "enum": [
+            30,
+            300,
+            900
+          ]
+        },
+        "app_consistent_snapshot_frequency_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12
+        }
+      }
+    },
+    "backup_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Azure VM backup policy tuning for the Azure Local VMs (schedule in UTC HH:mm). Optional; solution defaults apply to every key left out.",
+      "properties": {
+        "schedule_run_time_utc": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 9999
+        },
+        "instant_restore_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    },
+    "alert_evaluation_frequency": {
+      "type": "string",
+      "pattern": "^PT([0-9]+M|[0-9]+H)$",
+      "description": "How often the monitoring alert rules run (ISO 8601 duration, for example PT5M). Optional."
+    },
+    "alert_window_size": {
+      "type": "string",
+      "pattern": "^PT([0-9]+M|[0-9]+H)$",
+      "description": "Time window each alert rule evaluates (ISO 8601 duration, for example PT15M). Optional."
+    },
+    "node_heartbeat_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1440,
+      "description": "Minutes without a node heartbeat before the alert fires. Optional."
+    },
+    "enable_vm_insights_dcr": {
+      "type": "boolean",
+      "description": "Create the VM insights data collection rule. Optional."
+    },
+    "vm_switch_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Hyper-V switch the compute intent created (Get-VMSwitch on a node); used by the platform logical networks. Optional; the platform solution default applies when absent."
+    },
+    "marketplace_images": {
+      "type": "array",
+      "description": "Marketplace images to download as Azure Local VM images. Optional; the platform solution default (Windows 11 multi-session and Windows Server) applies when absent.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "publisher",
+          "offer",
+          "sku",
+          "os_type"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "publisher": {
+            "type": "string",
+            "minLength": 1
+          },
+          "offer": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sku": {
+            "type": "string",
+            "minLength": 1
+          },
+          "os_type": {
+            "type": "string",
+            "enum": [
+              "Windows",
+              "Linux"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "hyper_v_generation": {
+            "type": "string",
+            "enum": [
+              "V1",
+              "V2"
+            ]
+          }
+        }
+      }
+    },
+    "enable_network_security_group": {
+      "type": "boolean",
+      "description": "Create the Azure Local NSG of the platform solution. Optional."
+    },
+    "enforcement_mode": {
+      "type": "string",
+      "enum": [
+        "Default",
+        "DoNotEnforce"
+      ],
+      "description": "Policy assignment enforcement mode. Optional."
+    },
+    "assign_insights_policies": {
+      "type": "boolean",
+      "description": "Assign the monitoring (insights) policies. Optional."
+    },
+    "networking_type": {
+      "type": "string",
+      "enum": [
+        "switchedMultiServerDeployment",
+        "switchlessMultiServerDeployment",
+        "switchedSingleServerDeployment",
+        "switchlessSingleServerDeployment"
+      ],
+      "description": "Cluster network topology of the deployment. Optional."
+    },
+    "networking_pattern": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Recorded network pattern of the deployment (the resource derives it from the intents). Optional."
+    },
+    "rdma_protocol": {
+      "type": "string",
+      "enum": [
+        "",
+        "RoCEv2",
+        "iWARP",
+        "RoCE"
+      ],
+      "description": "RDMA protocol of the storage intent; empty lets the platform decide. Optional."
+    },
+    "sbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Solution Builder Extension of the release. Optional.",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "manifest_source": {
+          "type": "string"
+        },
+        "manifest_creation_date": {
+          "type": "string"
+        }
+      }
+    },
+    "security_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Security baseline switches of the deployment. Optional; every key left out stays at the secure default (true).",
+      "properties": {
+        "drift_control_enforced": {
+          "type": "boolean"
+        },
+        "credential_guard_enforced": {
+          "type": "boolean"
+        },
+        "smb_signing_enforced": {
+          "type": "boolean"
+        },
+        "smb_cluster_encryption": {
+          "type": "boolean"
+        },
+        "bitlocker_boot_volume": {
+          "type": "boolean"
+        },
+        "bitlocker_data_volumes": {
+          "type": "boolean"
+        },
+        "wdac_enforced": {
+          "type": "boolean"
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Telemetry switches of the deployment. Optional.",
+      "properties": {
+        "streaming_data_client": {
+          "type": "boolean"
+        },
+        "eu_location": {
+          "type": "boolean"
+        },
+        "episodic_data_upload": {
+          "type": "boolean"
+        }
+      }
+    },
+    "storage_configuration_mode": {
+      "type": "string",
+      "enum": [
+        "Express",
+        "InfraOnly",
+        "KeepStorage"
+      ],
+      "description": "Storage configuration of the deployment. Optional."
+    },
+    "logs_retention_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3650,
+      "description": "Retention of the deployment logs in days. Optional."
+    },
+    "assign_hci_rp_role": {
+      "type": "boolean",
+      "description": "Assign the Azure Stack HCI resource provider role during the deployment. Optional."
+    },
+    "local_admin_secret_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{0,127}$",
+      "description": "Name of the cluster Key Vault secret that holds the local administrator credential (base64 user:password). Empty or absent: <cluster_name>-LocalAdminCredential."
+    },
+    "witness_key_secret_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{0,127}$",
+      "description": "Name of the cluster Key Vault secret that holds the witness storage account key (base64). Empty or absent: <cluster_name>-WitnessStorageKey."
+    },
+    "screen_hidden_terms": {
+      "type": "array",
+      "description": "Extra literal terms the demo screen-hygiene filter masks (tenant short name, shared resource names). Optional.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
       }
     }
   },

@@ -73,7 +73,9 @@ $StageOrder = @('CloudAccount', 'AdObjects', 'Agent', 'Register', 'Configure', '
 
 Import-Module (Join-Path $PSScriptRoot '..\..\..\shared\powershell\NIC26.Automation') -Force
 $cfgArgs = @{ Scope = 'azure-local' }; if ($EnvironmentPath) { $cfgArgs.Path = $EnvironmentPath }
-$v = (Get-NIC26Config @cfgArgs).values
+$config = Get-NIC26Config @cfgArgs
+$v = $config.values
+$namingContext = Get-NIC26NamingContext -Config $config
 $hi = $v.hybrid_identity; $ss = $hi.sync_server
 if (-not $hi.Contains('cloud_sync')) { throw 'hybrid_identity.cloud_sync is missing from the environment file.' }
 $cs = $hi.cloud_sync
@@ -87,7 +89,7 @@ $ConfigName = $cs.configuration_name
 $Phs = [bool](Get-Opt $cs 'password_hash_sync' $true)
 $Vault = $v.kv_ops_name
 $Graph = 'https://graph.microsoft.com'
-$Tags = @{ project = 'nic26'; environment = 'demo'; workload = 'identity'; 'managed-by' = 'script' }
+$Tags = @{} + $namingContext.Tags + @{ workload = 'identity'; 'managed-by' = 'script' }
 $Mode = if ($Execute) { 'EXECUTE' } else { 'PLAN' }
 
 function Say([string]$Message) { Write-Output "$(Get-Date -AsUTC -Format HH:mm:ss) $Message" }
@@ -228,7 +230,7 @@ if (-not $k) {
 $sync = Get-ADComputer $RetrieverComputer
 $g = Get-ADServiceAccount -Filter "Name -eq '$GmsaName'" -Properties PrincipalsAllowedToRetrieveManagedPassword
 if (-not $g) {
-    New-ADServiceAccount -Name $GmsaName -DNSHostName "$GmsaName.$($dom.DNSRoot)" -PrincipalsAllowedToRetrieveManagedPassword $sync -KerberosEncryptionType AES256 -Path "OU=$SyncOu,OU=Servers,$ou" -Description 'NIC26 Entra Cloud Sync agent (managed-by=script)'
+    New-ADServiceAccount -Name $GmsaName -DNSHostName "$GmsaName.$($dom.DNSRoot)" -PrincipalsAllowedToRetrieveManagedPassword $sync -KerberosEncryptionType AES256 -Path "OU=$SyncOu,OU=Servers,$ou" -Description 'Entra Cloud Sync agent (managed-by=script)'
     'gMSA created'
 } elseif (@($g.PrincipalsAllowedToRetrieveManagedPassword) -notcontains $sync.DistinguishedName) {
     Set-ADServiceAccount $GmsaName -PrincipalsAllowedToRetrieveManagedPassword (@($g.PrincipalsAllowedToRetrieveManagedPassword) + $sync.DistinguishedName)
@@ -261,7 +263,7 @@ if ('AdObjects' -in $run) {
     Say "[AdObjects] on $($hi.dc_vm_name) (Run Command, AD objects only)"
     $adParams = @{ GmsaName = $cs.gmsa_name; RetrieverComputer = $ss.computer_name; OuRoot = $hi.ou_root; SyncOu = $ss.ou; AllowKdsCreate = $AllowKdsRootKeyCreation.IsPresent.ToString().ToLower() }
     Invoke-Change $hi.dc_vm_name "KDS root key check; gMSA $($cs.gmsa_name) in OU=$($ss.ou),OU=Servers,OU=$($hi.ou_root) retrievable by $($ss.computer_name)$; replication rights on $DomainDn; read/group full control/create-delete user on $ScopeOu" {
-        Invoke-VmScript -SubscriptionId $v.subscriptions.identity -ResourceGroup $hi.dc_resource_group -VmName $hi.dc_vm_name -Name 'nic26-cs-gmsa' -Script $AdScript -Parameters $adParams -TimeoutSeconds 600
+        Invoke-VmScript -SubscriptionId $v.subscriptions.identity -ResourceGroup $hi.dc_resource_group -VmName $hi.dc_vm_name -Name "$($namingContext.Token)-cs-gmsa" -Script $AdScript -Parameters $adParams -TimeoutSeconds 600
     }
 }
 
@@ -308,7 +310,7 @@ if ('Agent' -in $run -or 'Register' -in $run) {
         if ('Agent' -in $run) {
             Say "[Agent] on $($ss.vm_name) (Run Command)"
             Invoke-Change $ss.vm_name "download the provisioning agent, check the Microsoft signature, install /quiet (expected version $(Get-Opt $cs 'agent_version' 'latest'))" {
-                Invoke-VmScript -SubscriptionId $v.subscription_id -ResourceGroup $ss.resource_group -VmName $ss.vm_name -Name 'nic26-cs-agent' -Script $AgentScript -Parameters @{ InstallerUrl = $cs.agent_installer_url; InstallDir = $cs.agent_install_dir } -TimeoutSeconds 1200
+                Invoke-VmScript -SubscriptionId $v.subscription_id -ResourceGroup $ss.resource_group -VmName $ss.vm_name -Name "$($namingContext.Token)-cs-agent" -Script $AgentScript -Parameters @{ InstallerUrl = $cs.agent_installer_url; InstallDir = $cs.agent_install_dir } -TimeoutSeconds 1200
             }
         }
         if ('Register' -in $run) {
@@ -321,7 +323,7 @@ if ('Agent' -in $run -or 'Register' -in $run) {
                     DomUser = "$($v.ad_domain_netbios)\$($hi.join_account)"
                     DomPw = Get-AzKeyVaultSecret -VaultName $Vault -Name $hi.join_password_secret -AsPlainText
                 } | ConvertTo-Json -Compress
-                try { Invoke-VmScript -SubscriptionId $v.subscription_id -ResourceGroup $ss.resource_group -VmName $ss.vm_name -Name 'nic26-cs-register' -Script $RegisterScript -Parameters @{ DomainName = $Domain; GmsaName = $cs.gmsa_name } -Protected @{ Payload = $payload } }
+                try { Invoke-VmScript -SubscriptionId $v.subscription_id -ResourceGroup $ss.resource_group -VmName $ss.vm_name -Name "$($namingContext.Token)-cs-register" -Script $RegisterScript -Parameters @{ DomainName = $Domain; GmsaName = $cs.gmsa_name } -Protected @{ Payload = $payload } }
                 finally { Remove-Variable payload -ErrorAction SilentlyContinue }
                 $agent = Get-Agent
                 Say "  agent in Entra: $(if ($agent) { "$($agent.machineName) $($agent.status)" } else { 'not listed yet' })"

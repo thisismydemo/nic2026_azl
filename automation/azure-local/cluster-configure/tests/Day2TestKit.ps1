@@ -95,9 +95,19 @@ function Invoke-Day2SolutionTests {
                 $t | Should -Match "ValidateSet\('Apply', 'Remove'\)"
             }
         }
-        It 'entry scripts refuse Terraform without -BackendConfig before reading any config or touching Azure' {
-            foreach ($name in $EntryScripts) {
-                { & (Join-Path $SolutionRoot "scripts\$name") -Action Apply -Tool Terraform -WarningAction SilentlyContinue 6>$null } | Should -Throw '*BackendConfig*'
+        It 'entry scripts refuse Terraform without -BackendConfig and without terraform_backend in the environment, before touching Azure' {
+            $emptyRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('nic26-empty-' + [guid]::NewGuid().ToString('N'))
+            $null = New-Item -ItemType Directory -Path $emptyRoot
+            $previous = $env:NIC26_REPO_ROOT
+            try {
+                $env:NIC26_REPO_ROOT = $emptyRoot
+                foreach ($name in $EntryScripts) {
+                    { & (Join-Path $SolutionRoot "scripts\$name") -Action Apply -Tool Terraform -WarningAction SilentlyContinue 6>$null } | Should -Throw '*BackendConfig*'
+                }
+            }
+            finally {
+                $env:NIC26_REPO_ROOT = $previous
+                Remove-Item -LiteralPath $emptyRoot -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
     }

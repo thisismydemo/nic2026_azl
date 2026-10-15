@@ -297,6 +297,11 @@
         },
         "use_azuread_auth": {
           "type": "boolean"
+        },
+        "key_prefix": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,62}$",
+          "description": "Optional folder in the container; the state key is <key_prefix>/<solution name>.tfstate (see New-NIC26TerraformBackendConfig)."
         }
       }
     }

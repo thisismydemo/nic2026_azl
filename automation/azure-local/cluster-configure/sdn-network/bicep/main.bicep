@@ -1,35 +1,45 @@
-// SDN enabled by Azure Arc: logical networks and network security groups on nic26-clus01 (design network-design.md §4.6, D-048).
+// SDN enabled by Azure Arc: logical networks and network security groups on the Azure Local instance (network-design 4.6).
 // API version 2026-04-01-preview for the VM management resources. Requires SDN enabled by Arc (Add-EceFeature -Name NC)
-// before NSGs are created. Values come from the environment file; main.example.bicepparam shows the shape with neutral values.
+// before NSGs are created. Every value comes from the environment file (sdn, logical_networks, network_security_groups,
+// tags, location) through ConvertTo-NIC26BicepParam; nothing here is specific to one deployment.
 // Every NSG has at least one rule (Learn: an empty NSG blocks all inbound traffic).
 
 targetScope = 'resourceGroup'
 
 @description('Azure region of the Azure Local instance.')
-param location string = 'eastus'
+param location string
 
-@description('Resource ID of the custom location of nic26-clus01.')
-param customLocationId string
-
-@description('VM switch the compute intent created (live: ComputeSwitch(compute), 11 Oct 2026).')
-param vmSwitchName string = 'ComputeSwitch(compute)'
-
-@description('DNS servers handed to every logical network (the domain controllers).')
-param dnsServers array
+#disable-next-line no-unused-params
+param subscription_id string
 
 @description('Tags on every resource.')
-param tags object = {}
+param tags object
 
-@description('Network security groups: name and rules (priority, direction, access, protocol, prefixes, ports).')
-param nsgs array
+@description('sdn block of the environment file; vm_switch_name is the Hyper-V switch the compute intent created.')
+param sdn object
 
-@description('Logical networks: name, vlan, prefix, gateway, pool start/end, nsg (name of an NSG in nsgs, or empty).')
-param logicalNetworks array
+@description('vm_management block of the environment file; custom_location is the custom location of the Azure Local instance (same resource group).')
+param vm_management object
 
+@description('Logical networks: name, purpose, vlan_id, subnet, gateway, ip_pool { start, end }, dns_servers, nsg (name of an NSG or empty).')
+param logical_networks array
+
+@description('Network security groups: name and rules (name, priority, direction, access, protocol, source[], destination[], ports[]).')
+param network_security_groups array
+
+@description('Pass switch: false creates the logical networks only (pass 1), true adds the NSGs, their rules and the attachment (pass 2).')
+param deploy_network_security_groups bool = true
+
+@description('Resolved name catalog (deployment_name).')
+#disable-next-line no-unused-params
+param names object
+
+var customLocationId = resourceId('Microsoft.ExtendedLocation/customLocations', vm_management.custom_location)
 var extendedLocation = {
   type: 'CustomLocation'
   name: customLocationId
 }
+var nsgs = deploy_network_security_groups ? network_security_groups : []
 
 resource nsg 'Microsoft.AzureStackHCI/networkSecurityGroups@2026-04-01-preview' = [for n in nsgs: {
   name: n.name
@@ -47,43 +57,43 @@ resource rule 'Microsoft.AzureStackHCI/networkSecurityGroups/securityRules@2026-
   name: r.name
   extendedLocation: extendedLocation
   properties: {
-    description: r.description
+    description: r.?description ?? r.name
     priority: r.priority
     direction: r.direction
     access: r.access
     protocol: r.protocol
-    sourceAddressPrefixes: r.sourceAddressPrefixes
+    sourceAddressPrefixes: r.source
     sourcePortRanges: [
       '*'
     ]
-    destinationAddressPrefixes: r.destinationAddressPrefixes
-    destinationPortRanges: r.destinationPortRanges
+    destinationAddressPrefixes: r.destination
+    destinationPortRanges: r.ports
   }
 }]
 
-resource lnet 'Microsoft.AzureStackHCI/logicalNetworks@2026-04-01-preview' = [for l in logicalNetworks: {
+resource lnet 'Microsoft.AzureStackHCI/logicalNetworks@2026-04-01-preview' = [for l in logical_networks: {
   name: l.name
   location: location
   extendedLocation: extendedLocation
-  tags: union(tags, { vlan: string(l.vlan), purpose: l.purpose })
+  tags: union(tags, { vlan: string(l.vlan_id), purpose: l.purpose })
   properties: {
-    vmSwitchName: vmSwitchName
+    vmSwitchName: sdn.vm_switch_name
     dhcpOptions: {
-      dnsServers: dnsServers
+      dnsServers: l.dns_servers
     }
     subnets: [
       {
         name: '${l.name}-subnet'
         properties: union({
-          addressPrefix: l.addressPrefix
+          addressPrefix: l.subnet
           ipAllocationMethod: 'Static'
-          vlan: l.vlan
+          vlan: l.vlan_id
           ipPools: [
             {
               name: 'vm-pool'
               ipPoolType: 'vm'
-              start: l.poolStart
-              end: l.poolEnd
+              start: l.ip_pool.start
+              end: l.ip_pool.end
             }
           ]
           routeTable: {
@@ -99,7 +109,7 @@ resource lnet 'Microsoft.AzureStackHCI/logicalNetworks@2026-04-01-preview' = [fo
               ]
             }
           }
-        }, empty(l.nsg) ? {} : {
+        }, (!deploy_network_security_groups || empty(l.?nsg ?? '')) ? {} : {
           networkSecurityGroup: {
             id: resourceId('Microsoft.AzureStackHCI/networkSecurityGroups', l.nsg)
           }
@@ -112,5 +122,5 @@ resource lnet 'Microsoft.AzureStackHCI/logicalNetworks@2026-04-01-preview' = [fo
   ]
 }]
 
-output logicalNetworkIds array = [for (l, i) in logicalNetworks: lnet[i].id]
+output logicalNetworkIds array = [for (l, i) in logical_networks: lnet[i].id]
 output nsgIds array = [for (n, i) in nsgs: nsg[i].id]

@@ -160,8 +160,14 @@ function Invoke-Day2Solution {
         [switch]$Execute
     )
     if (-not $Execute) { $WhatIfPreference = $true }
-    # Parameter guards first (before any config load or Azure call): deterministic refusals.
-    if ($Tool -eq 'Terraform' -and -not $BackendConfig) { throw 'Terraform needs -BackendConfig <environment/.../backend.hcl> (contract §3); nothing was read or changed.' }
+    # Parameter guards first (before any Azure call): deterministic refusals. The Terraform state location comes from
+    # terraform_backend in the environment file unless an explicit -BackendConfig file is given.
+    $backendFromEnvironment = $Tool -eq 'Terraform' -and -not $BackendConfig
+    if ($backendFromEnvironment) {
+        [void](Import-Day2AutomationModule)
+        $probe = try { (Get-NIC26Config -Scope $Scope).values } catch { $null }
+        if ($null -eq $probe -or -not $probe.Contains('terraform_backend')) { throw 'Terraform needs -BackendConfig <backend.hcl> or a terraform_backend block in the environment file (contract §3); nothing was changed.' }
+    }
     if ($Tool -eq 'Bicep' -and $Action -eq 'Remove' -and -not $RemoveWithAz) { throw "$SolutionName has no Az remove block; use -Tool Terraform (destroy) instead." }
     foreach ($cmd in @('az') + $(if ($Tool -eq 'Terraform') { @('terraform') } else { @() })) {
         if (-not (Test-Day2Command -Name $cmd)) { throw "'$cmd' is not installed on this machine." }
@@ -176,6 +182,7 @@ function Invoke-Day2Solution {
     $config = Get-NIC26Config -Scope $Scope
     ConvertTo-NIC26BicepParam -Solution $SolutionRoot -Config $config -Execute | Out-Null
     ConvertTo-NIC26TfVars -Solution $SolutionRoot -Config $config -Execute | Out-Null
+    if ($backendFromEnvironment) { $BackendConfig = (New-NIC26TerraformBackendConfig -Solution $SolutionRoot -Config $config -Execute).FullName }
     $inputs = Get-Day2Inputs -SolutionRoot $SolutionRoot
     # Solution-specific refusals that must happen before any what-if or deployment (for example a start date that has passed).
     if ($Action -eq 'Apply' -and $PreApplyCheck) { & $PreApplyCheck $inputs }

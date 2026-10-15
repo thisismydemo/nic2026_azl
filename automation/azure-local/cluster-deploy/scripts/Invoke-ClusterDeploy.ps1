@@ -146,7 +146,11 @@ foreach ($current in $stages) {
                 Invoke-ClusterDeployNative -FilePath 'az' -ArgumentList @('deployment', 'group', 'what-if', '--subscription', $inputs.subscription_id, '--resource-group', $inputs.names.rg_azl, '--name', $deploymentName, '--template-file', (Join-Path $bicepDir 'main.bicep'), '--mode', 'Incremental', '--parameters', $bicepParamFile, '--parameters', "deployment_mode=$Pass")
             }
             else {
-                if (-not $BackendConfig) { throw 'Terraform Preview/Execute needs -BackendConfig <environment/.../backend.hcl> (contract §3).' }
+                if (-not $BackendConfig) {
+                    # No explicit file: render the state location from terraform_backend in the environment file.
+                    try { $BackendConfig = (New-NIC26TerraformBackendConfig -Solution (Split-Path -Path $tfDir -Parent) -Config (Get-NIC26Config -Scope 'azure-local') -Execute -WhatIf:$false).FullName }
+                    catch { throw "Terraform Preview/Execute needs -BackendConfig <backend.hcl> or terraform_backend in the environment file (contract §3): $($_.Exception.Message)" }
+                }
                 Invoke-ClusterDeployNative -FilePath 'terraform' -ArgumentList @('init', '-input=false', "-backend-config=$BackendConfig") -WorkingDirectory $tfDir
                 Invoke-ClusterDeployNative -FilePath 'terraform' -ArgumentList @('plan', '-input=false', "-var-file=$tfVarsFile", "-var=deployment_mode=$Pass", "-out=$Solution-$($Pass.ToLowerInvariant()).tfplan") -WorkingDirectory $tfDir
             }

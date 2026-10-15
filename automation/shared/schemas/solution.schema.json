@@ -57,7 +57,8 @@
         "required": { "type": "boolean" },
         "default": { "description": "Only genuinely safe defaults; never a tenant, subscription or address." },
         "source": { "type": "string", "enum": ["environment", "keyvault", "generated"] },
-        "path": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$", "description": "Optional dot path into the config when the value is nested (e.g. secret_refs.jump_admin_password)." }
+        "path": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$", "description": "Optional dot path into the config when the value is nested (e.g. secret_refs.jump_admin_password)." },
+        "packer_var": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$", "description": "Packer solutions only: the Packer variable this input fills in the generated variable file (dotted for a map(string) variable, e.g. customizer_tokens.install_teams_app). Inputs without it are not written to the variable file." }
       }
     },
     "output": {

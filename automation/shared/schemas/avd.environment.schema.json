@@ -549,6 +549,171 @@
         "hybrid_image_vhdx": {
           "type": "string",
           "minLength": 1
+        },
+        "build_admin_username_secret": {
+          "$ref": "#/$defs/secretRef",
+          "description": "keyvault:// reference of the image build administrator user name (Packer builds)."
+        },
+        "build_admin_password_secret": {
+          "$ref": "#/$defs/secretRef",
+          "description": "keyvault:// reference of the image build administrator password (Packer builds)."
+        },
+        "packer_cpus": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "description": "vCPUs of the Packer build VM. Optional (default 4)."
+        },
+        "packer_memory_mb": {
+          "type": "integer",
+          "minimum": 2048,
+          "maximum": 262144,
+          "description": "Memory of the Packer build VM in MB. Optional (default 8192)."
+        },
+        "packer_disk_size_mb": {
+          "type": "integer",
+          "minimum": 32768,
+          "maximum": 2097152,
+          "description": "OS disk of the Packer build VM in MB. Optional (default 131072)."
+        },
+        "packer_winrm_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(m|h)$",
+          "description": "How long Packer waits for WinRM (for example 2h). Optional (default 2h)."
+        },
+        "image_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Version recorded for the Packer-built image. Optional (default 1.0.0)."
+        },
+        "arc_agent_uri": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "description": "Download address of the Azure Connected Machine agent MSI that the image carries. Optional."
+        },
+        "arc_agent_directory": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 260,
+          "description": "Folder inside the image where the Arc agent installer is kept. Optional (default C:\\ArcAgent)."
+        },
+        "vsphere": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "vSphere target of the Packer vsphere-iso template (take-home reference).",
+          "required": [
+            "server",
+            "username",
+            "datacenter",
+            "cluster",
+            "datastore",
+            "folder",
+            "network",
+            "iso_datastore_path"
+          ],
+          "properties": {
+            "server": {
+              "type": "string",
+              "minLength": 1
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "password_secret": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "insecure_connection": {
+              "type": "boolean"
+            },
+            "datacenter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cluster": {
+              "type": "string",
+              "minLength": 1
+            },
+            "datastore": {
+              "type": "string",
+              "minLength": 1
+            },
+            "folder": {
+              "type": "string",
+              "minLength": 1
+            },
+            "network": {
+              "type": "string",
+              "minLength": 1
+            },
+            "iso_datastore_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vmtools_iso_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vm_version": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "nutanix": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Nutanix Prism target of the Packer nutanix template (take-home reference).",
+          "required": [
+            "endpoint",
+            "username",
+            "cluster_name",
+            "subnet_name",
+            "iso_image_name",
+            "virtio_iso_image_name",
+            "image_name"
+          ],
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "password_secret": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "insecure": {
+              "type": "boolean"
+            },
+            "cluster_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "subnet_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "iso_image_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "virtio_iso_image_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "image_name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
@@ -1202,6 +1367,152 @@
         "tags": {
           "type": "object"
         }
+      }
+    },
+    "enable_scaling_plan": {
+      "type": "boolean",
+      "description": "Create the scaling plan of the control plane. Optional (default true)."
+    },
+    "storage_path_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Resource ID of the Azure Local storage path the image import uses; empty lets the script resolve it. Optional."
+    },
+    "sas_duration_seconds": {
+      "type": "integer",
+      "minimum": 300,
+      "maximum": 86400,
+      "description": "Lifetime of the SAS used to import the image VHD (seconds). Optional (default 3600)."
+    },
+    "build_timeout_minutes": {
+      "type": "integer",
+      "minimum": 6,
+      "maximum": 960,
+      "description": "Azure Image Builder build timeout in minutes. Optional (default 120)."
+    },
+    "defender_paths": {
+      "type": "string",
+      "maxLength": 4096,
+      "description": "Semicolon-separated local Defender path exclusions baked into the image. Optional (default none)."
+    },
+    "defender_processes": {
+      "type": "string",
+      "maxLength": 4096,
+      "description": "Semicolon-separated local Defender process exclusions baked into the image. Optional (default none)."
+    },
+    "vdot_archive_uri": {
+      "type": "string",
+      "pattern": "^(https://[^\\s]+)?$",
+      "description": "Pinned https address of the VDOT ZIP, or empty to skip VDOT. Optional."
+    },
+    "vdot_archive_sha256": {
+      "type": "string",
+      "pattern": "^([0-9a-fA-F]{64})?$",
+      "description": "Expected SHA-256 of the VDOT ZIP (required when vdot_archive_uri is set). Optional."
+    },
+    "install_teams_app": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ],
+      "description": "true provisions the new Teams app in the image; false for the Microsoft 365 marketplace source. Optional (default false)."
+    },
+    "disable_teams_autoupdate": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ],
+      "description": "true disables Teams automatic updates in the image. Optional (default false)."
+    },
+    "vcpu": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128,
+      "description": "vCPUs of an Azure Local session host (a host entry may set its own). Optional (default 4)."
+    },
+    "memory_mb": {
+      "type": "integer",
+      "minimum": 2048,
+      "maximum": 4194304,
+      "description": "Memory of an Azure Local session host in MB (a host entry may set its own). Optional (default 16384)."
+    },
+    "enable_monitoring": {
+      "type": "boolean",
+      "description": "Install the Azure Monitor Agent and the DCR association on the Azure Local session hosts. Optional (default true)."
+    },
+    "os_disk_sku": {
+      "type": "string",
+      "enum": [
+        "Premium_LRS",
+        "StandardSSD_LRS",
+        "Standard_LRS",
+        "Premium_ZRS",
+        "StandardSSD_ZRS"
+      ],
+      "description": "OS disk SKU of the Azure session hosts. Optional (default Premium_LRS)."
+    },
+    "os_disk_size_gb": {
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 2048,
+      "description": "OS disk size of the Azure session hosts in GB. Optional (default 128)."
+    },
+    "encryption_at_host": {
+      "type": "boolean",
+      "description": "Encryption at host on the Azure session hosts. Optional (default true)."
+    },
+    "dcr_avd_insights_id": {
+      "$ref": "#/$defs/resourceIdOrEmpty",
+      "description": "Resource ID of the AVD Insights data collection rule for the hybrid hosts; empty skips the association. Optional."
+    },
+    "hostpool_identity_principal_id": {
+      "$ref": "#/$defs/guidOrEmpty",
+      "description": "Object ID of the host pool managed identity used for the hybrid-host role assignments; empty skips them. Optional."
+    },
+    "enable_arc_extensions": {
+      "type": "boolean",
+      "description": "Deploy the Arc extensions on the hybrid hosts. Optional (default false)."
+    },
+    "manage_arc_rg_rbac": {
+      "type": "boolean",
+      "description": "Manage the role assignments on the Arc resource group. Optional (default false)."
+    },
+    "assign_vm_login_roles": {
+      "type": "boolean",
+      "description": "Assign the Virtual Machine User Login roles to the user groups. Optional (default true)."
+    },
+    "demo_user_domain": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$",
+      "description": "Domain of the demo user principal names (masked by the screen-hygiene filter; the default for the New-Avd*Users scripts -Domain)."
+    },
+    "demo_user_usage_location": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "Two-letter usage location set on the demo users (licensing). Required by the New-Avd*Users scripts when they create users."
+    },
+    "screen_hidden_terms": {
+      "type": "array",
+      "description": "Extra literal terms the demo screen-hygiene filter masks (tenant short name, shared resource names). Optional.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
       }
     }
   },

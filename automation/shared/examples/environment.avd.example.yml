@@ -141,6 +141,40 @@ images:
   packer_output_path: C:\ClusterStorage\csv-nic26-m2-vmstore-01\images
   azure_local_image_name: img-iic-nic26-win11-avd-25h2
   hybrid_image_vhdx: images\img-iic-nic26-win11-ent-25h2.vhdx
+  # Key Vault references (names only) of the image build account used by the Packer builds.
+  build_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-avd-image-build-admin-username
+  build_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-avd-image-build-admin-password
+  # Optional Packer tuning (defaults shown); ConvertTo-NIC26PackerVars writes them into the generated Packer variable file.
+  # packer_cpus: 4
+  # packer_memory_mb: 8192
+  # packer_disk_size_mb: 131072
+  # packer_winrm_timeout: 2h
+  # image_version: 1.0.0
+  # arc_agent_uri: https://aka.ms/AzureConnectedMachineAgent
+  # arc_agent_directory: C:\ArcAgent
+  # Take-home Packer targets (avd/images/packer-vsphere and packer-nutanix; reference templates).
+  vsphere:
+    server: vcenter.example.invalid
+    username: svc-packer@vsphere.example.invalid
+    password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-vcenter-packer-password
+    insecure_connection: false
+    datacenter: example-datacenter
+    cluster: example-cluster
+    datastore: example-datastore
+    folder: example-templates
+    network: example-build-network
+    iso_datastore_path: "[example-datastore] iso/windows11-enterprise.iso"
+  nutanix:
+    endpoint: prism.example.invalid
+    port: 9440
+    username: svc-packer
+    password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-prism-packer-password
+    insecure: false
+    cluster_name: example-cluster
+    subnet_name: example-build-subnet
+    iso_image_name: example-windows11-enterprise-iso
+    virtio_iso_image_name: example-virtio-drivers-iso
+    image_name: example-avd-w11-ent-image
 session_host_sku_azure: Standard_D4ds_v4
 session_host_zones: [1, 2]
 computer_name_prefixes:
@@ -191,3 +225,103 @@ secret_refs:
   arc_onboarding_client_id: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-arc-onboarding-spn-client-id
   arc_onboarding_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-arc-onboarding-spn-secret
   entra_bulk_token: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-avd-entra-bulktoken-secret
+
+# --- demo users, image build and session-host tuning (all optional unless stated; defaults shown) ---------------------------
+demo_user_domain: contoso.com        # domain of the demo user principal names; the default of New-AvdDemoUsers.ps1 -Domain
+demo_user_usage_location: US         # two-letter usage location set on the demo users (licensing)
+# screen_hidden_terms: [example]     # extra literal terms the demo screen-hygiene filter masks
+# enable_scaling_plan: true          # control plane: create the scaling plan
+# build_timeout_minutes: 120         # Azure Image Builder timeout
+# defender_paths: ""                 # semicolon-separated Defender path exclusions baked into the image
+# defender_processes: ""             # semicolon-separated Defender process exclusions baked into the image
+# vdot_archive_uri: ""               # pinned https address of the VDOT ZIP; empty skips VDOT
+# vdot_archive_sha256: ""            # SHA-256 of that ZIP
+# install_teams_app: false           # true provisions the new Teams app in the image
+# disable_teams_autoupdate: false
+# storage_path_id: ""                # Azure Local storage path for the image import; empty resolves it
+# sas_duration_seconds: 3600         # SAS lifetime for the image VHD import
+# os_disk_sku: Premium_LRS           # Azure session hosts
+# os_disk_size_gb: 128
+# encryption_at_host: true
+# vcpu: 4                            # Azure Local session hosts (a host entry may set its own)
+# memory_mb: 16384
+# enable_monitoring: true            # Azure Monitor Agent + DCR association on the Azure Local hosts
+# dcr_avd_insights_id: ""            # hybrid hosts: AVD Insights DCR resource ID; empty skips the association
+# hostpool_identity_principal_id: "" # hybrid hosts: host pool managed identity object ID; empty skips the role assignments
+# enable_arc_extensions: false
+# manage_arc_rg_rbac: false
+# assign_vm_login_roles: true
+
+# --- optional blocks (uncomment and adapt; every value is a neutral placeholder) ----------------------------------------------
+# tenant_id: 00000000-0000-0000-0000-000000000000      # pins the tenant of the live-deploy commands (the shared tenant_id is used when absent)
+# secret_name_prefix: example-nic26-                   # prefix of Key Vault secret names; overrides the shared value
+# workspace_friendly_name: Example Workspace           # title of the AVD feed
+# deploy_platform_scope_items: false                   # true lets the landing zone create the platform-scope items (budgets, policy at management group)
+# # Azure Local realm session hosts (avd/session-hosts-azure-local/scripts/Invoke-AzlSessionHostBuild.ps1).
+# azl_session_hosts:
+#   resource_group: rg-iic-nic26-azl-eus-01
+#   custom_location: cl-iic-nic26-azl-eus-01
+#   logical_network: lnet-iic-nic26-avd-vlan120-eus
+#   image: img-iic-nic26-win11-avd-25h2
+#   vcpu: 4
+#   memory_mb: 16384
+#   join_type: AD
+#   domain_fqdn: contoso.com
+#   domain_ou_path: OU=AVD,OU=Servers,DC=contoso,DC=com
+#   domain_join_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-ad-domainjoin-username
+#   domain_join_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-ad-domainjoin-password
+#   dcr_resource_group: rg-iic-nic26-avd-mon-eus-01
+#   dcr_name: dcr-iic-nic26-avd-insights-eus-01
+#   dcr_association_name: dcra-iic-nic26-avd-azl-01
+#   deployment_name: dep-iic-nic26-avd-session-hosts-azure-local-01
+#   host_pool_name: vdpool-iic-nic26-azl-eus-01
+#   host_pool_resource_group: rg-iic-nic26-avd-eus-01
+#   guest_default_route: false
+#   node_addresses: [192.0.2.11, 192.0.2.12]
+#   node_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-cluster-admin-username
+#   node_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-cluster-admin-password
+#   hosts:
+#     - { name: vm-iic-nic26-avd-azl-01, computer_name: nic26-avd-al01, nic_name: nic-vm-iic-nic26-avd-azl-01-01, storage_path: sp-nic26-m2-vmstore-01, gpu_dda_count: 0 }
+#   tags: { workload: avd, managed-by: bicep, realm: azl }
+# # GPU as compute (avd/session-hosts-azure-local/scripts/Invoke-GpuDemoWorkload.ps1).
+# gpu_demo_workload:
+#   host: vm-iic-nic26-avd-azl-03
+#   python_version: 3.12.10
+#   python_url: https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe
+#   torch_version: 2.6.0
+#   torch_index_url: https://download.pytorch.org/whl/cu124
+#   seconds: 30
+#   shortcut_name: GPU demo
+# # FSLogix per realm (avd/fslogix/scripts/Invoke-FslogixHostConfigRemote.ps1 -Realm <realm>); cloud_cache_providers empty = no Cloud Cache.
+# fslogix_realms:
+#   azure:
+#     profile_unc: '\\stiicnic26fslogixeus01.file.core.windows.net\nic26-fslogix-profiles'
+#     odfc_unc: '\\stiicnic26fslogixeus01.file.core.windows.net\nic26-fslogix-odfc'
+#     mode: Production
+#     cloud_cache_providers: []
+#     hosts:
+#       - { name: vm-iic-nic26-avd-az-eus-01, kind: azure-vm, subscription: avd, resource_group: rg-iic-nic26-avd-hosts-eus-01 }
+# # A host pool created on stage (avd/control-plane/scripts/New-AvdLiveHostPool.ps1; -Remove deletes it).
+# live_host_pool:
+#   name: vdpool-iic-nic26-live-eus-01
+#   app_group_name: vdag-iic-nic26-live-eus-01
+#   workspace_name: vdws-iic-nic26-eus-01
+#   resource_group: rg-iic-nic26-avd-eus-01
+#   type: Pooled
+#   load_balancer: BreadthFirst
+#   max_session_limit: 4
+#   friendly_name: Live demo pool
+#   tags: { workload: avd, purpose: live-demo }
+# # A RemoteApp application group on one pool (avd/control-plane/scripts/New-AvdRemoteApps.ps1; -Remove deletes it).
+# remote_apps:
+#   host_pool_key: azure
+#   host_pool_name: vdpool-iic-nic26-azure-eus-01
+#   resource_group: rg-iic-nic26-avd-eus-01
+#   app_group_name: vdag-iic-nic26-azure-rapp-eus-01
+#   friendly_name: Apps
+#   assign_group: grp-iic-nic26-avd-apps
+#   workspace_name: vdws-iic-nic26-eus-01
+#   prefer_remote_app: false
+#   apps:
+#     - { name: msedge, start_menu_item: Microsoft Edge, friendly_name: Microsoft Edge }
+#   tags: { workload: avd, purpose: live-demo }

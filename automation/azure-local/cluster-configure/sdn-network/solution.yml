@@ -1,0 +1,29 @@
+# NIC 2026 - SDN enabled by Arc: logical networks and network security groups (cluster-configure/sdn-network)
+# Every value comes from the environment file (sdn, logical_networks, network_security_groups, tags, location); the
+# deployment script generates its Bicep parameter files from this manifest with ConvertTo-NIC26BicepParam.
+
+name: cluster-configure-sdn-network
+description: Logical networks and network security groups for an Azure Local instance with SDN enabled by Azure Arc (API 2026-04-01-preview), two passes in Microsoft's order.
+scope: azure-local
+tools: [bicep, powershell]
+depends_on: [cluster-deploy]
+
+inputs:
+  - { name: subscription_id,          type: string, description: "Azure Local landing-zone subscription ID (GUID)", required: true, default: null, source: environment }
+  - { name: location,                 type: string, description: "Region of the Azure Local instance", required: true, default: null, source: environment }
+  - { name: tags,                     type: map,    description: "The shared required tags (naming standard section 3a)", required: true, default: null, source: environment }
+  - { name: sdn,                      type: map,    description: "sdn block: prefix, nc_fqdn, nc_ip and vm_switch_name (the Hyper-V switch the compute intent created; read it with Get-VMSwitch)", required: true, default: null, source: environment }
+  - { name: vm_management,            type: map,    description: "vm_management block: resource_group (where the logical networks and NSGs are created) and custom_location", required: true, default: null, source: environment }
+  - { name: logical_networks,         type: list,   description: "logical_networks[]: name, purpose, vlan_id, subnet, gateway, ip_pool {start,end}, dns_servers, nsg (name of an entry in network_security_groups or empty)", required: true, default: null, source: environment }
+  - { name: network_security_groups,  type: list,   description: "network_security_groups[]: name and rules[] (name, priority, direction, access, protocol, source[], destination[], ports[])", required: true, default: null, source: environment }
+  - { name: deploy_network_security_groups, type: bool, description: "Pass switch written by scripts/Invoke-SdnNetworkDeploy.ps1: false = logical networks only (pass 1), true = NSGs, rules and the attachment (pass 2)", required: false, default: null, source: generated }
+  - { name: names,                    type: map,    description: "Resolved name catalog (contract section 10)", required: true, default: null, source: generated }
+
+outputs:
+  - { name: logical_network_ids, type: list, description: "Resource IDs of the logical networks" }
+  - { name: nsg_ids,             type: list, description: "Resource IDs of the network security groups" }
+
+destroy: none   # NSG and logical-network removal is an Azure Local teardown step (an NSG delete can hang)
+
+names:
+  deployment_name: { type: dep, purpose: azl-sdn }

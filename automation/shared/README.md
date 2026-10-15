@@ -79,6 +79,10 @@ Test-NIC26ResourceName -Name <string> -Type <abbr> [-Token nic26] [-Detailed]
 ConvertTo-NIC26BicepParam   -Solution <folder|name> -Config <object> [-OutFile <path>] [-Execute] [-WhatIf]
 ConvertTo-NIC26TfVars       -Solution <folder|name> -Config <object> [-OutFile <path>] [-Execute] [-WhatIf]
 ConvertTo-NIC26AnsibleVars  -Solution <folder|name> -Config <object> [-OutFile <path>] [-Execute] [-WhatIf]
+ConvertTo-NIC26PackerVars   -Solution <folder|name> -Config <object> [-OutFile <path>] [-Execute] [-WhatIf]   # Packer variable file; inputs map with packer_var in solution.yml
+New-NIC26TerraformBackendConfig -Solution <folder|name> -Config <object> [-OutFile <path>] [-Execute] [-WhatIf]   # backend.generated.hcl from terraform_backend
+Get-NIC26NamingContext      -Config <object>                                 # org, token, region, tags, secret prefix from the environment file
+Get-NIC26AvdHostContext     -Realm <azure|azl|hybrid|image> -Config <object> # subscription, resource groups, host pool and machine names of an AVD realm
 Resolve-NIC26KeyVaultRef -Ref keyvault://<vault>/<secret> [-AsPlainText] [-MaxMinutes 5]
 Invoke-NIC26WithRetry -ScriptBlock <sb> [-MaxMinutes 5] [-InitialSeconds 2] [-MaxDelaySeconds 60] [-RetryOn <regex>] [-Activity <label>] [-ArgumentList <object[]>]
 Invoke-NIC26ArmDeployment -SubscriptionId <id> -Name <deployment> -Location <region> -TemplateFile <main.bicep|json> -ParameterFile <json> [-ParameterOverrides @{...}] [-Preview]

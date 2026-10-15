@@ -37,7 +37,7 @@ cd .\automation\azure-local\cluster-configure\platform\scripts
 .\Invoke-PlatformConfigure.ps1 -Action Apply            # what-if
 .\Invoke-PlatformConfigure.ps1 -Action Apply -Execute
 .\Invoke-PlatformConfigure.ps1 -Action Remove -Execute  # live replay (D-014): then Apply again on stage
-# parity: -Tool Terraform -BackendConfig <environment\azure-local\backend.cluster-configure-platform.hcl>
+# parity: -Tool Terraform (state location from terraform_backend in the environment file; an explicit -BackendConfig <file> overrides it)
 ```
 
 State for the demo script: `..\scripts\Get-Day2ControlState.ps1` → control `platform` (Applied when every logical network, image and storage path exists and the images report `Available`; Partial while an image is still downloading).

@@ -70,11 +70,11 @@ BeforeAll {
 }
 
 Describe 'Module surface' {
-    It 'exports exactly the eleven contract functions' {
+    It 'exports exactly the fifteen contract functions' {
         $expected = @(
-            'ConvertTo-NIC26AnsibleVars', 'ConvertTo-NIC26BicepParam', 'ConvertTo-NIC26TfVars', 'Get-NIC26Config',
-            'Get-NIC26SolutionManifest', 'Invoke-NIC26ArmDeployment', 'Invoke-NIC26WithRetry', 'New-NIC26ResourceName', 'Resolve-NIC26KeyVaultRef',
-            'Test-NIC26ResourceName', 'Write-NIC26Log'
+            'ConvertTo-NIC26AnsibleVars', 'ConvertTo-NIC26BicepParam', 'ConvertTo-NIC26PackerVars', 'ConvertTo-NIC26TfVars', 'Get-NIC26AvdHostContext', 'Get-NIC26Config',
+            'Get-NIC26NamingContext', 'Get-NIC26SolutionManifest', 'Invoke-NIC26ArmDeployment', 'Invoke-NIC26WithRetry', 'New-NIC26ResourceName', 'New-NIC26TerraformBackendConfig',
+            'Resolve-NIC26KeyVaultRef', 'Test-NIC26ResourceName', 'Write-NIC26Log'
         )
         $actual = @(Get-Command -Module $script:ModuleName | Select-Object -ExpandProperty Name | Sort-Object)
         $actual | Should -Be ($expected | Sort-Object)

@@ -36,7 +36,7 @@ function Get-Opt($Object, [string]$Key) {
     return $null
 }
 $switch = [string]$envy.sdn.vm_switch_name
-$tags = @('project=nic26', 'environment=demo', 'workload=azure-local', 'lifecycle=temporary')
+$tags = @((Get-NIC26NamingContext -Config $envy).TagPairs) + @('workload=azure-local')
 function L([string]$m) { $line = "$(Get-Date -Format HH:mm:ss) $m"; $line; if ($LogFile) { Add-Content -LiteralPath $LogFile -Value $line } }
 function Invoke-AzCli([string[]]$a) {
     $out = & $azExe @a --subscription $SubscriptionId --only-show-errors 2>&1 | Out-String

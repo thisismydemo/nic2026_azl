@@ -133,7 +133,7 @@ function Get-AdminCredential {
     $p = Split-SecretRef $envy.workload_vms.local_admin_password_secret
     $user = Get-AzKeyVaultSecret -VaultName $u.Vault -Name $u.Name -AsPlainText -ErrorAction Stop
     $pass = Get-AzKeyVaultSecret -VaultName $p.Vault -Name $p.Name -AsPlainText -ErrorAction Stop
-    if (-not $user -or -not $pass) { throw "Local administrator secrets $($u.Name)/$($p.Name) missing in $($u.Vault) (New-IicWorkloadVm.ps1 -CreateMissingSecret creates them)." }
+    if (-not $user -or -not $pass) { throw "Local administrator secrets $($u.Name)/$($p.Name) missing in $($u.Vault) (New-WorkloadVm.ps1 -CreateMissingSecret creates them)." }
     return @{ User = $user; Pass = $pass }
 }
 

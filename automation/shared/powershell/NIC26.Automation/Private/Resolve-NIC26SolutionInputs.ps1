@@ -88,7 +88,8 @@ function Resolve-NIC26SolutionInputs {
                     $problems.Add("input '$name' is type string but the config value is a $($value.GetType().Name)")
                     continue
                 }
-                $value = [string]$value
+                # A YAML boolean for a string input (for example install_teams_app: true) becomes 'true' / 'false', not 'True'.
+                $value = if ($value -is [bool]) { $value.ToString().ToLowerInvariant() } else { [string]$value }
             }
             'int' {
                 if ($value -is [string] -and $value -match '^-?\d+$') { $value = [long]$value }

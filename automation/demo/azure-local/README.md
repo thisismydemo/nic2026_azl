@@ -14,7 +14,7 @@ Scripts behind the live beats of planning/sessions/azure-local/outline.md. All o
 | §3.3 / §4.5 / §5 | `Show-AsrState.ps1`, `Start-AsrPlannedFailover.ps1`, `Get-AsrFailoverStatus.ps1` | start is `-WhatIf` default; status read-only |
 | before the session | `Test-DemoSmoke.ps1` | read-only pass/fail list; exit code |
 | §4.4 VM lifecycle through Arc | `Invoke-ArcVmLifecycleDemo.ps1` | `-Stage Create\|Show\|Remove\|All`, plan by default, `-Execute` changes Azure; the demo VM from `demo_vm_lifecycle` in `environment.yml` (NIC from the logical network pool, gallery image, storage path, Trusted launch, guest management, tags merged); every step timed (`-TimingFile`); Remove deletes VM, NIC and any Arc machine left and verifies nothing remains |
-| build (T-5.5.2): IIC workload VMs | `New-IicWorkloadVm.ps1` | plan by default, `-Execute` creates; idempotent (NIC → data disks → VM from `workload_vms` in `environment.yml`, tier NSG, static IP, Trusted launch, explicit storage path, tags merged); local administrator from the ops vault (`-CreateMissingSecret` generates it, never printed) |
+| build: workload VMs | `New-WorkloadVm.ps1` | plan by default, `-Execute` creates; idempotent (NIC → data disks → VM from `workload_vms` in `environment.yml`, tier NSG, static IP, Trusted launch, explicit storage path, tags merged); local administrator from the ops vault (`-CreateMissingSecret` generates it, never printed) |
 
 ## Fault safety (outline §4.2: drive → drift → node, never stacked)
 

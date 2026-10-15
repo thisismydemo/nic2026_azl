@@ -53,7 +53,7 @@ param(
     [object] $Config,
     [string] $ParameterFile,
     [string] $BackendConfig,
-    [string] $JumpAdminUsername = 'jumpadmin'   # local-admin user created on the jump server; not Administrator (management-plane 1.5)
+    [string] $JumpAdminUsername   # override of jump_admin_username (local-admin user created on the jump server; not Administrator, management-plane 1.5)
 )
 
 Set-StrictMode -Version Latest
@@ -172,7 +172,7 @@ function Get-LzJumpCredential {
             for ($i = 0; $i -lt 20; $i++) { $pwd.AppendChar($alphabet[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($alphabet.Length)]) }
             $pwd.MakeReadOnly()
             $user = [securestring]::new()   # deliberately not 'Administrator' (management-plane §1.5); a username, not a secret
-            $jumpUser = $JumpAdminUsername
+            $jumpUser = if ($JumpAdminUsername) { $JumpAdminUsername } elseif ($Config -is [System.Collections.IDictionary] -and $Config.Contains('jump_admin_username') -and $Config['jump_admin_username']) { [string] $Config['jump_admin_username'] } else { throw 'The jump username secret does not exist yet: set jump_admin_username in the environment file (or pass -JumpAdminUsername).' }
             foreach ($c in [char[]]$jumpUser) { $user.AppendChar($c) }
             $user.MakeReadOnly()
             $expires = (Get-Date).ToUniversalTime().AddDays(90)
@@ -260,6 +260,10 @@ function Invoke-LzBootstrap {
 function Invoke-LzTerraform {
     param([string[]] $EnabledStages, [hashtable] $Overrides = @{})
     $varFile = Get-LzParameterFile
+    if (-not $BackendConfig -and $Config -is [System.Collections.IDictionary] -and $Config.Contains('terraform_backend')) {
+        # No explicit file: render the state location from terraform_backend in the environment file.
+        $script:BackendConfig = (New-NIC26TerraformBackendConfig -Solution (Split-Path -Path $tfDir -Parent) -Config $Config -Execute -WhatIf:$false).FullName
+    }
     $initArgs = @('init', '-input=false', '-no-color')
     $initArgs += $BackendConfig ? @("-backend-config=$BackendConfig") : @('-backend=false')
     if (-not $BackendConfig -and $Execute) { throw 'Terraform -Execute needs -BackendConfig (remote state in st_tfstate; contract §3).' }

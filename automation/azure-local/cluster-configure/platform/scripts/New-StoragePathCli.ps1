@@ -25,7 +25,8 @@ $envy = Get-Content -LiteralPath $EnvironmentFile -Raw | ConvertFrom-Yaml
 if (-not $SubscriptionId) { $SubscriptionId = [string]$envy.subscription_id }
 if (-not $ResourceGroupName) { $ResourceGroupName = [string]$envy.vm_management.resource_group }
 if (-not $CustomLocationName) { $CustomLocationName = [string]$envy.vm_management.custom_location }
-if (-not $Location) { $Location = [string](Get-Content -LiteralPath $SharedEnvironmentFile -Raw | ConvertFrom-Yaml).location }
+$sharedValues = Get-Content -LiteralPath $SharedEnvironmentFile -Raw | ConvertFrom-Yaml
+if (-not $Location) { $Location = [string]$sharedValues.location }
 $cl = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.ExtendedLocation/customLocations/$CustomLocationName"
 foreach ($sp in $envy.storage.storage_paths) {
     $state = & $azExe stack-hci-vm storagepath show -g $ResourceGroupName --name $sp.name --subscription $SubscriptionId --query properties.provisioningState -o tsv --only-show-errors 2>$null
@@ -35,7 +36,8 @@ foreach ($sp in $envy.storage.storage_paths) {
         if ($LASTEXITCODE -ne 0) { throw "$($sp.name): $(($out -replace '\s+', ' ').Trim())" }
         # stack-hci-vm storagepath create --tags fails client-side (extension serializer bug, 12 Oct 2026): tag with az tag update
         $id = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.AzureStackHCI/storageContainers/$($sp.name)"
-        $null = & $azExe tag update --resource-id $id --operation Merge --tags project=nic26 environment=demo workload=azure-local "volume=$($sp.volume)" --only-show-errors 2>&1
+        $tagPairs = @($sharedValues.tags.Keys | ForEach-Object { "$_=$($sharedValues.tags[$_])" }) + @("workload=azure-local", "volume=$($sp.volume)")   # shared tags from the environment file
+        $null = & $azExe tag update --resource-id $id --operation Merge --tags @tagPairs --only-show-errors 2>&1
         "$($sp.name): created ($($sp.path)), tagged"
     }
 }

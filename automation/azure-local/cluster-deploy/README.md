@@ -76,7 +76,7 @@ cd .\automation\azure-local\cluster-deploy\scripts
 .\Invoke-ClusterDeploy.ps1 -Pass Deploy -Execute                 # 2.5–3 h, same polling (bounded, retried)
 .\Test-ClusterPostDeployment.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json -OutputJson .\post-deployment.json
 .\Set-ClusterVaultPublicAccess.ps1 -InputFile ..\terraform\terraform.generated.tfvars.json -CheckFromNode            # read-only check that the nodes reach the vault; public access stays on (no private endpoints, D-029)
-# Terraform parity: add -Tool Terraform -BackendConfig <environment\azure-local\backend.cluster-deploy.hcl>
+# Terraform parity: add -Tool Terraform; the state location comes from terraform_backend in the environment file (an explicit -BackendConfig <file> overrides it)
 ```
 
 `Test-ClusterPostDeployment.ps1` is read-only: cluster resource Succeeded/Connected, Deploy status Success, `identityProvider = LocalIdentity`, Arc machines Connected with the required extensions (incl. `AzureEdgeAKVBackupForWindows`), custom location, Arc Resource Bridge `Running`, witness account, cluster vault secrets by **name** (ECE + backed-up BitLocker/RecoveryAdmin), node identities' vault roles; over WinRM from the jump server: nodes Up, cloud witness Online, S2D Healthy, `Get-NetIntentStatus` Success, RDMA/jumbo on storage only, **WORKGROUP + `ADAware = 2`**, live-migration network selection (R-03).

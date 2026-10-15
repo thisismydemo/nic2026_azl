@@ -29,9 +29,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '..\..\..\shared\powershell\NIC26.Automation') -Force
 $cfgArgs = @{ Scope = 'azure-local' }; if ($Path) { $cfgArgs.Path = $Path }
-$v = (Get-NIC26Config @cfgArgs).values
+$config = Get-NIC26Config @cfgArgs
+$v = $config.values
 $hi = $v.hybrid_identity
-$tags = @{ project = 'nic26'; purpose = 'hybrid-identity-sofs'; 'managed-by' = 'script' }
+$tags = @{ project = (Get-NIC26NamingContext -Config $config).Project; purpose = 'hybrid-identity-sofs'; 'managed-by' = 'script' }
 if (-not $Execute) {
     Write-Information "Set-HybridIdentityAd: would ensure the join/test-user secrets in $($v.kv_ops_name) and run the AD setup (OU=$($hi.ou_root), join account $($hi.join_account), $(@($hi.server_ous).Count) server OUs) on $($hi.dc_vm_name) by Run Command (what-if; pass -Execute to apply)." -InformationAction Continue
     return
@@ -76,7 +77,7 @@ $forest = Get-ADForest
 if ($p.upnSuffix -and $forest.UPNSuffixes -notcontains $p.upnSuffix) { Set-ADForest -Identity $forest -UPNSuffixes @{ Add = $p.upnSuffix } }
 $jp = ConvertTo-SecureString $p.joinPw -AsPlainText -Force
 if (-not (Get-ADUser -Filter "SamAccountName -eq '$($p.joinAccount)'" -ErrorAction SilentlyContinue)) {
-    New-ADUser -Name $p.joinAccount -SamAccountName $p.joinAccount -UserPrincipalName $p.joinUpn -Path $ouUsers -AccountPassword $jp -Enabled $true -PasswordNeverExpires $true -CannotChangePassword $true -Description 'Domain join for the NIC26 server OUs only'
+    New-ADUser -Name $p.joinAccount -SamAccountName $p.joinAccount -UserPrincipalName $p.joinUpn -Path $ouUsers -AccountPassword $jp -Enabled $true -PasswordNeverExpires $true -CannotChangePassword $true -Description 'Domain join for the server OUs only'
 } else { Set-ADAccountPassword -Identity $p.joinAccount -Reset -NewPassword $jp }
 $acct = "$($d.NetBIOSName)\$($p.joinAccount)"
 $sid = (Get-ADUser $p.joinAccount).SID
@@ -106,7 +107,7 @@ foreach ($u in $p.users) {
 '@
 $null = Set-AzContext -Subscription $v.subscriptions.identity -Tenant $v.tenant_id -WarningAction SilentlyContinue -WhatIf:$false
 $dc = Get-AzVM -ResourceGroupName $hi.dc_resource_group -Name $hi.dc_vm_name
-$rcName = 'nic26-hybrid-identity-ad'
+$rcName = "$($config.values.token)-hybrid-identity-ad"
 try {
     $null = Set-AzVMRunCommand -ResourceGroupName $dc.ResourceGroupName -VMName $dc.Name -RunCommandName $rcName -Location $dc.Location -SourceScript $dcScript -ProtectedParameter @(@{ Name = 'Payload'; Value = $payload }) -AsyncExecution:$false -TimeoutInSecond 900
     $iv = (Get-AzVMRunCommand -ResourceGroupName $dc.ResourceGroupName -VMName $dc.Name -RunCommandName $rcName -Expand InstanceView).InstanceView

@@ -50,6 +50,7 @@ manage_pim_in_iac: false
 enabled_stages: [S1, S2, S3, S4, S5, S6, S7]
 jump_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-local-admin-username
 jump_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-jump-local-admin-password
+jump_admin_username: jumpadmin   # used only to seed the username secret on the first run (not Administrator)
 
 # --- identity and groups (section 6.1) --------------------------------------------------------------------------------
 entra_groups:
@@ -186,12 +187,16 @@ qos:
 
 logical_networks:
   - name: lnet-iic-nic26-compute-vlan110-eus
+    purpose: workload-vms
+    nsg: nsg-iic-nic26-azl-compute-eus-01
     vlan_id: 110
     subnet: 192.168.110.0/24
     gateway: 192.168.110.1
     ip_pool: { start: 192.168.110.20, end: 192.168.110.99 }
     dns_servers: [10.100.4.36, 10.100.4.37]
   - name: lnet-iic-nic26-avd-vlan120-eus
+    purpose: avd-session-hosts
+    nsg: nsg-iic-nic26-azl-avd-eus-01
     vlan_id: 120
     subnet: 192.168.120.0/24
     gateway: 192.168.120.1
@@ -204,7 +209,261 @@ storage:
   storage_paths:
     - { name: sp-nic26-m2-vmstore-01, volume: csv-nic26-m2-vmstore-01, path: C:\ClusterStorage\csv-nic26-m2-vmstore-01\vms }
 
+# --- SDN enabled by Arc, network security groups and the VM management target (cluster-configure/sdn-network) -----------
+# vm_switch_name: the Hyper-V switch the compute intent created (Get-VMSwitch on a node). Every NSG ends with an explicit
+# deny (an empty NSG blocks all inbound traffic); a logical network names its NSG in `nsg`.
+sdn:
+  enabled: true
+  prefix: nic26
+  nc_fqdn: nic26-NC.contoso.com
+  nc_ip: 192.0.2.24
+  vm_switch_name: ConvergedSwitch(compute)
+network_security_groups:
+  - name: nsg-iic-nic26-azl-compute-eus-01
+    rules:
+      - { name: nsgsr-allow-rdp-admin-in, priority: 110, direction: Inbound, access: Allow, protocol: Tcp, source: [192.0.2.128/26], destination: ['*'], ports: ['3389'] }
+      - { name: nsgsr-deny-all-in, priority: 4000, direction: Inbound, access: Deny, protocol: '*', source: ['*'], destination: ['*'], ports: ['*'] }
+  - name: nsg-iic-nic26-azl-avd-eus-01
+    rules:
+      - { name: nsgsr-allow-rdpshortpath-in, priority: 100, direction: Inbound, access: Allow, protocol: Udp, source: [192.0.2.192/26], destination: ['*'], ports: ['3390'] }
+      - { name: nsgsr-deny-all-in, priority: 4000, direction: Inbound, access: Deny, protocol: '*', source: ['*'], destination: ['*'], ports: ['*'] }
+vm_management:
+  resource_group: rg-iic-nic26-azl-eus-01
+  custom_location: cl-iic-nic26-azl-eus-01
+
 
 # --- secret references (names only) --------------------------------------------------------------------------------------
 secret_refs:
   arb_application_secret: keyvault://kv-iic-nic26-azl-eus-01/DefaultARBApplication
+
+# --- optional blocks (uncomment and adapt; every value is a neutral placeholder) ----------------------------------------------
+# # Shared values can be overridden for this scope.
+# tags:
+#   workload: azure-local                              # merged over the shared tags on everything this scope creates
+# secret_name_prefix: example-nic26-                   # prefix of Key Vault secret names
+# remoting_credential_base: example-nic26-clus01-cluster-admin   # ops-vault secret pair (-username / -password) the demo scripts remote to the cluster with
+# log_analytics_workspace_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-mon-eus-01/providers/Microsoft.OperationalInsights/workspaces/law-iic-nic26-eus-01
+# action_group_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-iic-nic26-azl-mon-eus-01/providers/Microsoft.Insights/actionGroups/ag-iic-nic26-ops-eus-01
+# # --- Day-2 monitoring (cluster-configure/monitoring) ---
+# create_workspace: true                               # create the Log Analytics workspace of this scope
+# manage_insights_dcr_in_iac: true                     # author the Insights DCR in IaC
+# insights_sampling_seconds: 60
+# insights_extra_event_channels:
+#   - 'Microsoft-Windows-FailoverClustering/Operational!*[System[(Level=1 or Level=2 or Level=3)]]'
+# enable_recommended_metric_alerts: true
+# enable_health_alert_routing: true
+# alert_evaluation_frequency: PT5M                     # how often the alert rules run (ISO 8601)
+# alert_window_size: PT15M                             # window each rule evaluates
+# node_heartbeat_minutes: 10                           # minutes without a node heartbeat before the alert fires
+# enable_vm_insights_dcr: true
+# vm_insights_scope_tags:                              # Enable-VmInsights.ps1: machines carrying one of these tag values
+#   workload: [azure-local, sofs-fslogix]
+# observability_agent:                                 # Azure Copilot Observability Agent prerequisites (preview), on demand
+#   amw_name: amw-iic-nic26-eus-01
+#   resource_group: rg-iic-nic26-azl-mon-eus-01
+#   associate_subscriptions: [azure_local]             # keys of the shared 'subscriptions' map
+#   issue_contributors:
+#     - { name: presenter, object_id: 00000000-0000-0000-0000-000000000000, type: User }
+# # --- Day-2 update management (cluster-configure/update-manager) ---
+# maintenance_window:
+#   start_date_time: '2027-01-17 02:00'
+#   duration: '03:00'
+#   time_zone: 'UTC'
+#   recur_every: 'Week Sunday'
+# patch_classifications: [Critical, Security, UpdateRollup, Definition]
+# reboot_setting: IfRequired
+# dynamic_scope_tags:
+#   workload: [azure-local, sofs-fslogix]
+# dynamic_scope_os_types: [Windows]
+# dynamic_scope_resource_types: [microsoft.hybridcompute/machines, microsoft.compute/virtualmachines]
+# assessment_scope_tags:
+#   workload: [azure-local, sofs-fslogix, identity]
+# solution_update:                                     # Invoke-SolutionUpdate.ps1: solution update with additional content (SBE)
+#   import_folder: 'C:\ClusterStorage\Infrastructure_1\Shares\SU1_Infrastructure_1\import'
+#   package_type: SBE
+#   version: 5.0.0.0
+#   monitor_node: nic26-01-n02
+# # --- Day-2 backup and Site Recovery (cluster-configure/backup-asr) ---
+# backup_azure_vms:                                    # Azure VMs protected with the tier-1 backup policy
+#   - { resource_group: rg-iic-nic26-azl-mgmt-eus-01, name: vm-iic-nic26-sync-eus-01 }
+# backup_policy:                                       # tuning of the Azure VM backup policy (defaults shown)
+#   schedule_run_time_utc: '02:00'
+#   retention_days: 30
+#   instant_restore_days: 2
+# asr_policy:                                          # tuning of the Site Recovery replication policy (defaults shown)
+#   recovery_point_retention_hours: 24
+#   replication_frequency_seconds: 300
+#   app_consistent_snapshot_frequency_hours: 1
+# asr:                                                 # Hyper-V-to-Azure replication of Azure Local VMs
+#   vault_resource_group: rg-iic-nic26-azl-bcdr-eus-01
+#   vault_name: rsv-iic-nic26-azl-eus-01
+#   hyperv_site_name: hvsite-iic-nic26-azl-eus-01
+#   replication_policy_name: asrpol-iic-nic26-tier1-eus-01
+#   cache_storage_account: stiicnic26asrcacheeus01
+#   recovery_resource_group: rg-iic-nic26-azl-dr-eus-01
+#   network_resource_group: rg-iic-nic26-azl-net-eus-01
+#   vnet_name: vnet-iic-nic26-azl-eus-01
+#   recovery_subnet_name: snet-iic-nic26-asr
+#   test_subnet_name: snet-iic-nic26-asr-test
+#   recovery_plan_name: rp-iic-nic26-tier1-01
+#   protected_vms:
+#     - { name: vm-iic-nic26-app-azl-03, target_vm_size: Standard_D2s_v4, os_type: Windows }
+# # --- other Day-2 solution tuning (defaults shown) ---
+# pim_assignments:                                     # access-pim: eligible rows (entra_groups key, built-in role name)
+#   - { group: azl_admins, role: Azure Stack HCI Administrator }
+#   - { group: azl_operators, role: Azure Stack HCI VM Contributor }
+# vm_switch_name: ConvergedSwitch(compute)             # platform: the switch of the compute intent
+# marketplace_images:                                  # platform: marketplace images downloaded as Azure Local VM images
+#   - { key: ws2025, publisher: microsoftwindowsserver, offer: windowsserver, sku: 2025-datacenter-azure-edition, os_type: Windows, version: '', hyper_v_generation: V2 }
+# enable_network_security_group: false                 # platform: create the Azure Local NSG
+# enforcement_mode: Default                            # policy: Default | DoNotEnforce
+# assign_insights_policies: true
+# # --- cluster deployment tuning (cluster-deploy; defaults shown) ---
+# networking_type: switchedMultiServerDeployment
+# networking_pattern: custom
+# rdma_protocol: ''                                    # '' | RoCEv2 | iWARP | RoCE
+# storage_configuration_mode: InfraOnly                # Express | InfraOnly | KeepStorage
+# logs_retention_days: 30
+# assign_hci_rp_role: false
+# local_admin_secret_name: ''                          # cluster Key Vault secret names; empty = <cluster_name>-LocalAdminCredential
+# witness_key_secret_name: ''                          # empty = <cluster_name>-WitnessStorageKey
+# security_settings:
+#   drift_control_enforced: true
+#   credential_guard_enforced: true
+#   smb_signing_enforced: true
+#   smb_cluster_encryption: true
+#   bitlocker_boot_volume: true
+#   bitlocker_data_volumes: true
+#   wdac_enforced: true
+# observability:
+#   streaming_data_client: true
+#   eu_location: false
+#   episodic_data_upload: true
+# # --- Azure Local VM images and workload VMs (platform/scripts/New-VmImageCli.ps1, demo/azure-local/scripts/New-WorkloadVm.ps1) ---
+# vm_images:
+#   - { name: img-iic-nic26-ws2025-dc, source: marketplace, os_type: Windows, publisher: microsoftwindowsserver, offer: windowsserver, sku: 2025-datacenter-azure-edition, version: latest, storage_path: sp-nic26-m2-vmstore-01, workload: azure-local }
+# workload_vms:
+#   local_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-workload-local-admin-username
+#   local_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-azl-workload-local-admin-password
+#   local_admin_username: example-admin                # written to the vault only when the username secret does not exist yet
+#   workload_tag: azure-local                          # value of the workload tag on the VMs, NICs and disks
+#   vms:
+#     - { name: vm-iic-nic26-app-azl-01, computer_name: nic26-app-01, tier: app, vcpu: 2, memory_mb: 8192, image: img-iic-nic26-ws2025-dc, logical_network: lnet-iic-nic26-compute-vlan110-eus, nsg: nsg-iic-nic26-azl-compute-eus-01, ip_address: 192.168.110.21, storage_path: sp-nic26-m2-vmstore-01, data_disks: [] }
+# demo_vm_lifecycle:                                   # demo/azure-local/scripts/Invoke-ArcVmLifecycleDemo.ps1 (-Stage Create | Show | Remove)
+#   name: vm-iic-nic26-demo-azl-01
+#   computer_name: nic26-demo-01
+#   rehearsal_vm: vm-iic-nic26-demo-azl-02
+#   rehearsal_computer_name: nic26-demo-02
+#   rehearsal_purpose_tag: demo-lifecycle
+#   image: img-iic-nic26-ws2025-dc
+#   logical_network: lnet-iic-nic26-compute-vlan110-eus
+#   storage_path: sp-nic26-m2-vmstore-01
+#   vcpu: 2
+#   memory_mb: 4096
+#   security_type: TrustedLaunch
+#   workload_tag: demo-vm-lifecycle
+# # --- screen hygiene of the demo scripts ---
+# screen_hidden_terms: [example]                       # extra literal terms the screen-hygiene filter masks
+
+# --- optional blocks, continued: SOFS for FSLogix, GPU and hybrid identity (every value is a neutral placeholder) ---------------
+# sofs_cluster:                                        # automation/azure-local/workloads/sofs/scripts (Invoke-SofsBuild.ps1)
+#   image: img-iic-nic26-ws2025-dc
+#   logical_network: lnet-iic-nic26-compute-vlan110-eus
+#   security_type: TrustedLaunch
+#   workload_tag: sofs-fslogix
+#   local_admin_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-sofs-local-admin-username
+#   local_admin_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-sofs-local-admin-password
+#   vms:
+#     - { name: vm-iic-nic26-sofs-01, computer_name: nic26-sofs-01, preferred_node: nic26-01-n01, vcpu: 4, memory_mb: 8192, ip_address: 192.168.110.31, storage_path: sp-nic26-m2-vmstore-01, data_disk_count: 4, data_disk_size_gb: 256 }
+#     - { name: vm-iic-nic26-sofs-02, computer_name: nic26-sofs-02, preferred_node: nic26-01-n02, vcpu: 4, memory_mb: 8192, ip_address: 192.168.110.32, storage_path: sp-nic26-m2-vmstore-01, data_disk_count: 4, data_disk_size_gb: 256 }
+#   affinity_rule: aff-nic26-sofs-differentnode
+#   domain:
+#     fqdn: contoso.com
+#     netbios: CONTOSO
+#     ou_path: OU=SOFS,OU=Servers,DC=contoso,DC=com
+#     users_ou_path: OU=Users,DC=contoso,DC=com
+#     join_username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-ad-domainjoin-username
+#     join_password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-ad-domainjoin-password
+#     dc_vm: { subscription_key: identity, resource_group: rg-example-identity-eus-01, name: vm-example-dc-eus-01 }
+#   admin_account:
+#     sam_account_name: svc-nic26-sofsadmin
+#     username_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-ad-sofsadmin-username
+#     password_secret: keyvault://kv-iic-nic26-ops-eus-01/iic-nic26-ad-sofsadmin-password
+#   groups: { admins: grp-nic26-sofs-admins, fslogix_users: grp-nic26-fslogix-users, fslogix_ops: grp-nic26-fslogix-ops }
+#   guest_cluster:
+#     name: nic26-sofs-cl
+#     management_point: Distributed
+#     witness_storage_account: stiicnic26witeus01
+#     witness_resource_group: rg-iic-nic26-azl-eus-01
+#     witness_endpoint: core.windows.net
+#   s2d:
+#     pool_name: S2D on nic26-sofs-cl
+#     volume_name: FSLogixData
+#     volume_size_gb: 720
+#     data_copies: 2
+#     hw_timeout_ms: 30000
+#   sofs_role_name: nic26-sofs
+#   test_client_vm: { subscription_key: azure_local, resource_group: rg-iic-nic26-azl-mgmt-eus-01, name: vm-iic-nic26-sync-eus-01 }
+#   shares:
+#     - { name: Profiles, folder: Profiles, continuously_available: true, encrypt_data: true, caching_mode: None, folder_enumeration_mode: AccessBased }
+# gpu:                                                 # cluster-configure/gpu (Initialize-GpuHost.ps1, Set-VmGpuAssignment.ps1)
+#   assignment: dda
+#   model: Example GPU
+#   pci_hardware_id: PCI\VEN_0000&DEV_0000
+#   mitigation_driver:
+#     url: https://example.invalid/gpu-passthrough/mitigation.zip
+#     sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+#     inf: example_azure_stack_base.inf
+#     host_folder: C:\ProgramData\example\gpu
+#   guest_driver:
+#     version: "0.0"
+#     url: https://example.invalid/gpu-driver/guest-driver.exe
+#   hosts:
+#     - { node: nic26-01-n01, location_path: "PCIROOT(00)#PCI(0000)#PCI(0000)" }
+#   vms:
+#     - { name: vm-iic-nic26-avd-azl-03, computer_name: nic26-avd-al03, vcpu: 8, memory_mb: 32768, storage_path: sp-nic26-m2-vmstore-01, preferred_node: nic26-01-n01 }
+# hybrid_identity:                                     # landing-zones/azure-local (New-EntraConnectServer.ps1, Set-HybridIdentityAd.ps1, Set-HybridIdentitySync.ps1)
+#   dc_vm_name: vm-example-dc-eus-01
+#   dc_resource_group: rg-example-identity-eus-01
+#   identity_nsg_name: nsg-example-identity-eus-01
+#   ou_root: EXAMPLE
+#   server_ous: [SOFS, AVD, Sync]
+#   upn_suffix: contoso.com
+#   join_account: svc-nic26-domainjoin
+#   join_username_secret: iic-nic26-ad-domainjoin-username
+#   join_password_secret: iic-nic26-ad-domainjoin-password
+#   groups:
+#     - { name: grp-nic26-fslogix-users, description: "FSLogix profile users" }
+#   test_users: { prefix: avd-hybrid-0, count: 2, password_secret_format: "iic-nic26-avd-hybrid-0{0}-password", groups: [grp-nic26-fslogix-users] }
+#   sync_server:
+#     vm_name: vm-iic-nic26-sync-eus-01
+#     computer_name: nic26-sync-01
+#     resource_group: rg-iic-nic26-azl-mgmt-eus-01
+#     vm_size: Standard_D2s_v6
+#     image_sku: 2025-datacenter-azure-edition
+#     os_disk_gb: 128
+#     private_ip: 192.0.2.68
+#     vnet_resource_group: rg-iic-nic26-azl-net-eus-01
+#     vnet_name: vnet-iic-nic26-azl-eus-01
+#     subnet_name: snet-iic-nic26-mgmt
+#     mgmt_nsg_name: nsg-iic-nic26-mgmt-eus-01
+#     ou: Sync
+#     admin_username_secret: iic-nic26-sync-local-admin-username
+#     admin_password_secret: iic-nic26-sync-local-admin-password
+#     entra_connect_msi_url: https://download.microsoft.com/download/example/AzureADConnect.msi
+#   cloud_sync:
+#     cloud_account_upn: svc-nic26-cloudsync@contoso.onmicrosoft.com
+#     cloud_account_display_name: svc-nic26-cloudsync
+#     cloud_account_usage_location: US
+#     cloud_account_username_secret: iic-nic26-cloudsync-username
+#     cloud_account_password_secret: iic-nic26-cloudsync-password
+#     hybrid_identity_admin_role_id: 00000000-0000-0000-0000-000000000000
+#     gmsa_name: gmsa-nic26-cs
+#     agent_installer_url: https://download.msappproxy.net/Subscription/00000000-0000-0000-0000-000000000000/Connector/provisioningAgentInstaller
+#     agent_version: '1.1.0.0'
+#     agent_install_dir: 'C:\Install\CloudSync'
+#     application_template_id: 00000000-0000-0000-0000-000000000000
+#     configuration_name: contoso.com
+#     password_hash_sync: true
+#     delete_threshold: 50
+#     notification_email_enabled: false

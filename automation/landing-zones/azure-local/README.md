@@ -121,7 +121,7 @@ ConvertTo-NIC26BicepParam -Solution . -Config $cfg -Execute      # -> bicep/main
 ConvertTo-NIC26TfVars     -Solution . -Config $cfg -Execute      # -> terraform/terraform.generated.tfvars.json
 
 .\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg                       # WHAT-IF of S0..S9 (default, Bicep)
-.\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg -Tool Terraform -BackendConfig ..\..\..\environment\azure-local\tf-backend.hcl
+.\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg -Tool Terraform   # state location from terraform_backend in the environment file; -BackendConfig <file> overrides it
 .\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg -Stage S0 -Execute    # owner approval first
 .\scripts\Invoke-LzAzureLocalDeploy.ps1 -Config $cfg -Stage S1,S4,S2,S3,S5,S6,S7 -Execute
 .\scripts\Test-LandingZone.ps1 -Config $cfg -ExpectDnsPrivate              # S9, read-only, exit code = failed checks

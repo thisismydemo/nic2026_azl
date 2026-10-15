@@ -79,4 +79,5 @@ terraform_backend:
   resource_group_name: rg-iic-nic26-azl-sec-eus-01
   storage_account_name: stiicnic26tfstateeus01
   container_name: tfstate
+  # key_prefix: example        # optional folder in the container: the state key is <key_prefix>/<solution name>.tfstate
   use_azuread_auth: true
